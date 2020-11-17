@@ -303,7 +303,8 @@ class Gen3Controller(LeafSystem):
         p = X.translation()
         pd = (J@qd)[3:]
 
-        RPY = RollPitchYaw(X.rotation())
+        R = X.rotation()
+        RPY = RollPitchYaw(R)
         rpy = RPY.vector()
         w = (J@qd)[:3]
         rpyd = RPY.CalcRpyDtFromAngularVelocityInParent(w)
@@ -321,6 +322,7 @@ class Gen3Controller(LeafSystem):
         pd_nom = rom_state[9:]
        
         RPY_nom = RollPitchYaw(rpy_nom)
+        R_nom = RotationMatrix(RPY_nom)
         w_nom = RPY_nom.CalcAngularVelocityInParentFromRpyDt(rpyd_nom)
 
         x_nom = np.hstack([rpy_nom, p_nom])
@@ -333,7 +335,9 @@ class Gen3Controller(LeafSystem):
         xdd_nom = np.hstack([wd_nom, pdd_nom])
 
         # End-effector errors
-        x_tilde = np.hstack([RPY.CalcAngularVelocityInParentFromRpyDt(rpy - rpy_nom),
+        rpy_tilde = RollPitchYaw(RotationMatrix(RollPitchYaw(rpy-rpy_nom))).vector()  # converting to Rotation matrix and back
+                                                                                      # helps avoid strangeness around pi,-pi.
+        x_tilde = np.hstack([RPY.CalcAngularVelocityInParentFromRpyDt(rpy_tilde),
                              p - p_nom])
         xd_tilde = xd - xd_nom
 
@@ -370,7 +374,6 @@ class Gen3Controller(LeafSystem):
         #self.AddEndEffectorForceCost(Jbar, tau, f_des, weight=10.0)
 
 
-        print(x)
         # s.t. M*qdd + Cqd + tau_g = tau
         self.AddDynamicsConstraint(M, qdd, Cqd, tau_g, tau)
 

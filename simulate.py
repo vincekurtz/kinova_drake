@@ -25,12 +25,12 @@ x0 = np.array([3*np.pi/4,
                0.5])
 
 # Target end-effector pose
-x_target = np.array([3*np.pi/4,  
+x_target = np.array([np.pi,  
                      0,
-                     np.pi-0.1,
-                    -0.2,
-                     0.5,
-                     0.5])
+                     np.pi,
+                    -0.5,
+                     0.0,
+                     0.2])
 
 show_diagram = False
 make_plots = True
