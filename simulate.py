@@ -28,7 +28,7 @@ x0 = np.array([3*np.pi/4,
 x_target = np.array([np.pi,  
                      0,
                      np.pi,
-                    -0.5,
+                     0.5,
                      0.0,
                      0.2])
 
@@ -144,7 +144,9 @@ plant_logger.set_name("plant_logger")
 
 V_logger = LogOutput(controller.GetOutputPort("simulation_function"),builder)
 V_logger.set_name("V_logger")
-V_logger.set_publish_period(0.01)
+
+err_logger = LogOutput(controller.GetOutputPort("error"),builder)
+err_logger.set_name("error_logger")
 
 # Compile the diagram: no adding control blocks from here on out
 diagram = builder.Build()
@@ -213,11 +215,8 @@ if make_plots:
     plt.ylabel("End Effector Velocity")
 
     plt.figure()  # Simulation function and error comparison
-    plt.plot(V_logger.sample_times(), V_logger.data().T, linewidth='2',label="Simulation Function")
-    p_sim = plant_logger.data()[:3,:].T
-    p_des_sim = rom_logger.data()[:3,:].T
-    err = np.linalg.norm((p_sim - p_des_sim),axis=1)**2
-    plt.plot(t,err, linewidth='2',label="Output Error")
+    plt.plot(t, V_logger.data().T, linewidth='2',label="Simulation Function")
+    plt.plot(t, err_logger.data().T, linewidth='2',label="Output Error")
 
     # Error bound is initial simulation function value, scaled by minimum eigenvalue of Kp
     #err_bound = V_logger.data()[0,0]/np.min(np.linalg.eigvals(controller.Kp))

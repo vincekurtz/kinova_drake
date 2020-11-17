@@ -79,6 +79,13 @@ class Gen3Controller(LeafSystem):
                 "simulation_function",
                 BasicVector(1),
                 self.DoCalcSimFcnOutput)
+        
+        # Output tracking error x_tilde
+        self.err = 0
+        self.DeclareVectorOutputPort(
+                "error",
+                BasicVector(1),
+                self.DoCalcErrOutput)
 
         # Relevant frames
         self.world_frame = self.plant.world_frame()
@@ -270,6 +277,12 @@ class Gen3Controller(LeafSystem):
         Output the current value of the simulation function.
         """
         output.SetFromVector([self.V])
+    
+    def DoCalcErrOutput(self, context, output):
+        """
+        Output the current value of the simulation function.
+        """
+        output.SetFromVector([self.err])
         
     def DoCalcArmOutput(self, context, output):
         """
@@ -392,4 +405,5 @@ class Gen3Controller(LeafSystem):
         self.V = 0.5*xd_tilde.T@Lambda@xd_tilde + 0.5*x_tilde.T@Kp@x_tilde
         self.x = x
         self.xd = xd
+        self.err = x_tilde.T@x_tilde
 
