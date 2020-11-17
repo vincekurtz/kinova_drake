@@ -305,19 +305,36 @@ class Gen3Controller(LeafSystem):
 
         RPY = RollPitchYaw(X.rotation())
         rpy = RPY.vector()
-        rpyd = RPY.CalcRpyDtFromAngularVelocityInParent((J@qd)[:3])
+        w = (J@qd)[:3]
+        rpyd = RPY.CalcRpyDtFromAngularVelocityInParent(w)
 
         x = np.hstack([rpy, p])
-        xd = np.hstack([rpyd, pd])
+        xd = np.hstack([w, pd])
 
         # Desired end-effector state 
-        x_xd_nom = self.EvalVectorInput(context,1).get_value()
-        x_nom = x_xd_nom[:6]
-        xd_nom = x_xd_nom[6:]
-        xdd_nom = self.EvalVectorInput(context,2).get_value()
+        rom_state = self.EvalVectorInput(context,1).get_value()
+        rom_input = self.EvalVectorInput(context,2).get_value()
+
+        rpy_nom = rom_state[:3]
+        p_nom = rom_state[3:6]
+        rpyd_nom = rom_state[6:9]
+        pd_nom = rom_state[9:]
+       
+        RPY_nom = RollPitchYaw(rpy_nom)
+        w_nom = RPY_nom.CalcAngularVelocityInParentFromRpyDt(rpyd_nom)
+
+        x_nom = np.hstack([rpy_nom, p_nom])
+        xd_nom = np.hstack([w_nom, pd_nom])
+
+        rpydd_nom = rom_input[:3]
+        pdd_nom = rom_input[3:]
+        wd_nom = RPY_nom.CalcAngularVelocityInParentFromRpyDt(rpydd_nom)
+        
+        xdd_nom = np.hstack([wd_nom, pdd_nom])
 
         # End-effector errors
-        x_tilde = x - x_nom
+        x_tilde = np.hstack([RPY.CalcAngularVelocityInParentFromRpyDt(rpy - rpy_nom),
+                             p - p_nom])
         xd_tilde = xd - xd_nom
 
         # Additional Dynamics Terms
