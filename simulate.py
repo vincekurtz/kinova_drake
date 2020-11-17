@@ -7,6 +7,36 @@ from pydrake.all import *
 from reduced_order_model import ReducedOrderModelPlant
 from controller import Gen3Controller
 
+############## Setup Parameters #################
+
+sim_time = 5.0
+dt = 2e-3
+target_realtime_rate = 1.0
+
+# Initial joint angles
+q0 = np.array([0.0,0,np.pi/2,-np.pi/2,0.0,0,0])
+
+# initial end-effector pose
+x0 = np.array([-np.pi/2,  
+               -np.pi/2,
+               np.pi/2,
+               0.0,
+               0.6,
+               0.7])
+
+# Target end-effector pose
+x_target = np.array([-np.pi/2,  
+                     -np.pi/2,
+                     np.pi/2,
+                     0.3,
+                     0.6,
+                     0.7])
+
+show_diagram = False
+make_plots = False
+
+#################################################
+
 # Find the (local) description file relative to drake
 robot_description_path = "./model/urdf/GEN3_URDF_V12.urdf"
 drake_path = getDrakePath()
@@ -16,7 +46,6 @@ robot_description_file = "drake/" + os.path.relpath(robot_description_path, star
 robot_urdf = FindResourceOrThrow(robot_description_file)
 builder = DiagramBuilder()
 scene_graph = builder.AddSystem(SceneGraph())
-dt = 2e-3
 plant = builder.AddSystem(MultibodyPlant(time_step=dt))
 plant.RegisterAsSourceForSceneGraph(scene_graph)
 gen3 = Parser(plant=plant).AddModelFromFile(robot_urdf,"gen3")
@@ -99,9 +128,7 @@ builder.Connect(rom_ctrl.get_output_port(), controller.GetInputPort("rom_input")
 
 # Set desired RoM state  
 # TODO: replace with some sort of finite state machine
-p_nom = np.array([-np.pi/2,-np.pi/4,np.pi/4,0.5,0.5,0.7])
-pd_nom = np.array([0,0,0,0,0,0])
-rom_target = builder.AddSystem(ConstantVectorSource(np.hstack([p_nom,pd_nom])))
+rom_target = builder.AddSystem(ConstantVectorSource(np.hstack([x_target,np.zeros(6)])))
 builder.Connect(rom_target.get_output_port(),rom_ctrl.get_input_port_desired_state())
 
 # Set up the Visualizer
@@ -125,79 +152,78 @@ diagram.set_name("diagram")
 diagram_context = diagram.CreateDefaultContext()
 
 # Visualize the diagram
-#plt.figure()
-#plot_system_graphviz(diagram,max_depth=2)
-#plt.show()
+if show_diagram:
+    plt.figure()
+    plot_system_graphviz(diagram,max_depth=2)
+    plt.show()
 
 # Simulator setup
 simulator = Simulator(diagram, diagram_context)
-simulator.set_target_realtime_rate(1.0)
+simulator.set_target_realtime_rate(target_realtime_rate)
 simulator.set_publish_every_time_step(False)
 
 # Set initial states
 plant_context = diagram.GetMutableSubsystemContext(plant, diagram_context)
-plant.SetPositions(plant_context, gen3, np.array([0.0,0,np.pi/2,-np.pi/2,0.0,0,0]))   # Manipulator arm
+plant.SetPositions(plant_context, gen3, q0)   # Manipulator arm
 plant.SetVelocities(plant_context, gen3, np.zeros(7))
 
-rom_p0 = np.array([0.0,0.5,0.7])
-rom_rpy0 = np.array([-np.pi/2,-np.pi/2,np.pi/2])
 rom_context = diagram.GetMutableSubsystemContext(rom, diagram_context)
-rom_context.SetContinuousState(np.hstack([rom_rpy0,rom_p0,np.zeros(6,)]))
+rom_context.SetContinuousState(np.hstack([x0,np.zeros(6,)]))
 
 # Run the simulation
 simulator.Initialize()
-simulator.AdvanceTo(5.00)
+simulator.AdvanceTo(sim_time)
 
 # Make some plots
-t = rom_logger.sample_times()
+if make_plots:
+    t = rom_logger.sample_times()
 
-plt.figure()  # End effector rpy and angular velocity comparison
-plt.subplot(2,1,1)
-plt.plot(t, rom_logger.data()[:3,:].T,linewidth='2',linestyle='--')
-plt.gca().set_prop_cycle(None)  # reset the color cycle
-plt.plot(t, plant_logger.data()[:3,:].T,linewidth='2')
-#plt.legend(['RoM - x','RoM - y','RoM - z','Plant - x','Plant - y','Plant - z'])
-plt.xlabel("time (s)")
-plt.ylabel("End Effector RPY")
+    plt.figure()  # End effector rpy and angular velocity comparison
+    plt.subplot(2,1,1)
+    plt.plot(t, rom_logger.data()[:3,:].T,linewidth='2',linestyle='--')
+    plt.gca().set_prop_cycle(None)  # reset the color cycle
+    plt.plot(t, plant_logger.data()[:3,:].T,linewidth='2')
+    #plt.legend(['RoM - x','RoM - y','RoM - z','Plant - x','Plant - y','Plant - z'])
+    plt.xlabel("time (s)")
+    plt.ylabel("End Effector RPY")
 
-plt.subplot(2,1,2)
-plt.plot(t, rom_logger.data()[6:9,:].T,linewidth='2',linestyle='--')
-plt.gca().set_prop_cycle(None)  # reset the color cycle
-plt.plot(t, plant_logger.data()[6:9,:].T,linewidth='2')
-#plt.legend(['RoM - x','RoM - y','RoM - z','Plant - x','Plant - y','Plant - z'])
-plt.xlabel("time (s)")
-plt.ylabel("End Effector Angular Velocity")
+    plt.subplot(2,1,2)
+    plt.plot(t, rom_logger.data()[6:9,:].T,linewidth='2',linestyle='--')
+    plt.gca().set_prop_cycle(None)  # reset the color cycle
+    plt.plot(t, plant_logger.data()[6:9,:].T,linewidth='2')
+    #plt.legend(['RoM - x','RoM - y','RoM - z','Plant - x','Plant - y','Plant - z'])
+    plt.xlabel("time (s)")
+    plt.ylabel("End Effector Angular Velocity")
 
-plt.figure()  # End effector position and velocity comparison
-plt.subplot(2,1,1)
-plt.plot(t, rom_logger.data()[3:6,:].T,linewidth='2',linestyle='--')
-plt.gca().set_prop_cycle(None)  # reset the color cycle
-plt.plot(t, plant_logger.data()[3:6,:].T,linewidth='2')
-#plt.legend(['RoM - x','RoM - y','RoM - z','Plant - x','Plant - y','Plant - z'])
-plt.xlabel("time (s)")
-plt.ylabel("End Effector Position")
+    plt.figure()  # End effector position and velocity comparison
+    plt.subplot(2,1,1)
+    plt.plot(t, rom_logger.data()[3:6,:].T,linewidth='2',linestyle='--')
+    plt.gca().set_prop_cycle(None)  # reset the color cycle
+    plt.plot(t, plant_logger.data()[3:6,:].T,linewidth='2')
+    #plt.legend(['RoM - x','RoM - y','RoM - z','Plant - x','Plant - y','Plant - z'])
+    plt.xlabel("time (s)")
+    plt.ylabel("End Effector Position")
 
-plt.subplot(2,1,2)
-plt.plot(t, rom_logger.data()[9:,:].T,linewidth='2',linestyle='--')
-plt.gca().set_prop_cycle(None)  # reset the color cycle
-plt.plot(t, plant_logger.data()[9:,:].T,linewidth='2')
-#plt.legend(['RoM - x','RoM - y','RoM - z','Plant - x','Plant - y','Plant - z'])
-plt.xlabel("time (s)")
-plt.ylabel("End Effector Velocity")
+    plt.subplot(2,1,2)
+    plt.plot(t, rom_logger.data()[9:,:].T,linewidth='2',linestyle='--')
+    plt.gca().set_prop_cycle(None)  # reset the color cycle
+    plt.plot(t, plant_logger.data()[9:,:].T,linewidth='2')
+    #plt.legend(['RoM - x','RoM - y','RoM - z','Plant - x','Plant - y','Plant - z'])
+    plt.xlabel("time (s)")
+    plt.ylabel("End Effector Velocity")
 
-plt.figure()  # Simulation function and error comparison
-plt.plot(V_logger.sample_times(), V_logger.data().T, linewidth='2',label="Simulation Function")
-p_sim = plant_logger.data()[:3,:].T
-p_des_sim = rom_logger.data()[:3,:].T
-err = np.linalg.norm((p_sim - p_des_sim),axis=1)**2
-plt.plot(t,err, linewidth='2',label="Output Error")
+    plt.figure()  # Simulation function and error comparison
+    plt.plot(V_logger.sample_times(), V_logger.data().T, linewidth='2',label="Simulation Function")
+    p_sim = plant_logger.data()[:3,:].T
+    p_des_sim = rom_logger.data()[:3,:].T
+    err = np.linalg.norm((p_sim - p_des_sim),axis=1)**2
+    plt.plot(t,err, linewidth='2',label="Output Error")
 
-# Error bound is initial simulation function value, scaled by minimum eigenvalue of Kp
-err_bound = V_logger.data()[0,0]/np.min(np.linalg.eigvals(controller.Kp))
-plt.hlines(err_bound,t[0],t[-1],label="Error Bound",color="grey",linewidth=2,linestyle="--")
+    # Error bound is initial simulation function value, scaled by minimum eigenvalue of Kp
+    err_bound = V_logger.data()[0,0]/np.min(np.linalg.eigvals(controller.Kp))
+    plt.hlines(err_bound,t[0],t[-1],label="Error Bound",color="grey",linewidth=2,linestyle="--")
 
-plt.xlabel("time (s)")
-plt.legend()
+    plt.xlabel("time (s)")
+    plt.legend()
 
-
-plt.show()
+    plt.show()

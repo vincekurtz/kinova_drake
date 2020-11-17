@@ -310,15 +310,15 @@ class Gen3Controller(LeafSystem):
         qdd = self.mp.NewContinuousVariables(self.plant.num_velocities(), 1, 'qdd')
        
         # min || qdd - qdd_nom ||^2
-        qdd_nom = 10.0*qd
+        qdd_nom = 100.0*qd
         self.mp.AddQuadraticErrorCost(Q=np.eye(self.plant.num_velocities()),
                                       x_desired=qdd_nom,
                                       vars=qdd)
         
         # min || tau ||^2
-        self.mp.AddQuadraticErrorCost(Q=np.eye(self.plant.num_actuators()),
-                                      x_desired=np.zeros(self.plant.num_actuators()),
-                                      vars=tau)
+        #self.mp.AddQuadraticErrorCost(Q=np.eye(self.plant.num_actuators()),
+        #                              x_desired=np.zeros(self.plant.num_actuators()),
+        #                              vars=tau)
 
         # s.t. M*qdd + Cqd + tau_g = tau
         self.AddDynamicsConstraint(M, qdd, Cqd, tau_g, tau)
