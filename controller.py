@@ -55,23 +55,25 @@ class Gen3Controller(LeafSystem):
                 BasicVector(self.nu_arm),
                 self.DoCalcArmOutput)
 
-        # Input for RoM state x_rom = [p_des,pd_des]
+        # Input for RoM state x_rom = [x_des,xd_des]
         self.DeclareVectorInputPort(
                 "rom_state",
                 BasicVector(12))
 
-        # Input for RoM input u_rom = [pdd_des]
+        # Input for RoM input u_rom = [xdd_des]
         self.DeclareVectorInputPort(
                 "rom_input",
                 BasicVector(6))
 
-        # Output end effector state [p_des,pd_des]
+        # Output end effector state [x,xd]
+        self.x = np.zeros(6)
+        self.xd = np.zeros(6)
         self.DeclareVectorOutputPort(
                 "end_effector",
                 BasicVector(12),
                 self.DoCalcEndEffectorOutput)
 
-        # Output simulation function V([q,qd],[p_des,pd_des])
+        # Output simulation function V
         self.V = 0
         self.DeclareVectorOutputPort(
                 "simulation_function",
@@ -93,7 +95,7 @@ class Gen3Controller(LeafSystem):
 
         to the whole-body QP. 
         """
-        Aeq = np.hstack([M, np.eye(len(tau))])
+        Aeq = np.hstack([M, -np.eye(len(tau))])
         beq = -Cqd - tau_g
         x = np.vstack([qdd, tau])
 
@@ -247,16 +249,7 @@ class Gen3Controller(LeafSystem):
         This method is called at every timestep, and records
         the current end effector state [p,pd].
         """
-        pass
-        #self.UpdateStoredContext(context)
-        #qd = self.plant.GetVelocities(self.context, self.arm_model_index)
-
-        #p = self.CalcEndEffectorPose()
-        #J = self.CalcEndEffectorJacobian()
-
-        #pd = J @ qd
-
-        #output.SetFromVector(np.hstack([p,pd]))
+        output.SetFromVector(np.hstack([self.x,self.xd]))
 
     def DoCalcSimFcnOutput(self, context, output):
         """
@@ -300,8 +293,8 @@ class Gen3Controller(LeafSystem):
         Q = J@Minv@C - Jd
         
         # Desired end-effector force (really wrench)
-        Kp = 10*np.eye(3)
-        Kd = 1*np.eye(3)
+        Kp = 100*np.eye(3)
+        Kd = 50*np.eye(3)
         f_des = Lambda@xdd_nom + Lambda@Q@(qd - Jbar@xd_tilde) + Jbar.T@tau_g - Kp@x_tilde - Kd@xd_tilde
 
         # Solve QP to find corresponding joint torques
@@ -310,7 +303,7 @@ class Gen3Controller(LeafSystem):
         qdd = self.mp.NewContinuousVariables(self.plant.num_velocities(), 1, 'qdd')
        
         # min || qdd - qdd_nom ||^2
-        qdd_nom = 100.0*qd
+        qdd_nom = -1.0*qd
         self.mp.AddQuadraticErrorCost(Q=np.eye(self.plant.num_velocities()),
                                       x_desired=qdd_nom,
                                       vars=qdd)
@@ -333,4 +326,9 @@ class Gen3Controller(LeafSystem):
         tau = result.GetSolution(tau)
         
         output.SetFromVector(tau)
+
+        # Record stuff for plots
+        self.V = 0.5*xd_tilde.T@Lambda@xd_tilde + 0.5*x_tilde.T@Kp@x_tilde
+        self.x = np.hstack([np.zeros(3),x])
+        self.xd = np.hstack([np.zeros(3),xd])
 

@@ -33,7 +33,7 @@ x_target = np.array([-np.pi/2,
                      0.7])
 
 show_diagram = False
-make_plots = False
+make_plots = True
 
 #################################################
 
