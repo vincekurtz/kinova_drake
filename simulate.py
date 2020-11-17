@@ -14,23 +14,23 @@ dt = 2e-3
 target_realtime_rate = 1.0
 
 # Initial joint angles
-q0 = np.array([0.0,0,np.pi/2,-np.pi/2,0.0,0,0])
+q0 = np.array([0.0,-np.pi/4,np.pi/2,-np.pi/2,0.0,-np.pi/2,0])
 
 # initial end-effector pose
-x0 = np.array([-np.pi/2,  
-               -np.pi/2,
+x0 = np.array([3*np.pi/4,  
+               0,
                np.pi/2,
-               0.0,
-               0.6,
-               0.7])
+               -0.2,
+               0.3,
+               0.5])
 
 # Target end-effector pose
-x_target = np.array([-np.pi/2,  
-                     -np.pi/2,
-                     np.pi/2,
-                     0.3,
-                     0.6,
-                     0.7])
+x_target = np.array([3*np.pi/4,  
+                     0,
+                     np.pi/2+0.5,
+                    -0.2,
+                     0.5,
+                     0.5])
 
 show_diagram = False
 make_plots = True
@@ -82,7 +82,7 @@ ee_frame = GeometryFrame("ee")
 scene_graph.RegisterFrame(ee_source, ee_frame)
 
 ee_shape = Sphere(0.03)
-#ee_shape = Mesh("/home/vjkurtz/projects/kinova_drake/model/meshes/base_link.obj")
+ee_shape = Mesh(os.path.abspath("./model/meshes/base_link.obj"))
 ee_color = np.array([0.1,0.1,0.1,0.4])
 X_ee = RigidTransform()
 
@@ -220,8 +220,8 @@ if make_plots:
     plt.plot(t,err, linewidth='2',label="Output Error")
 
     # Error bound is initial simulation function value, scaled by minimum eigenvalue of Kp
-    err_bound = V_logger.data()[0,0]/np.min(np.linalg.eigvals(controller.Kp))
-    plt.hlines(err_bound,t[0],t[-1],label="Error Bound",color="grey",linewidth=2,linestyle="--")
+    #err_bound = V_logger.data()[0,0]/np.min(np.linalg.eigvals(controller.Kp))
+    #plt.hlines(err_bound,t[0],t[-1],label="Error Bound",color="grey",linewidth=2,linestyle="--")
 
     plt.xlabel("time (s)")
     plt.legend()

@@ -100,6 +100,20 @@ class Gen3Controller(LeafSystem):
         x = np.vstack([qdd, tau])
 
         return self.mp.AddLinearEqualityConstraint(Aeq, beq, x)
+        
+    def AddEndEffectorForceCost(self, Jbar, tau, f_des, weight=1.0):
+        """
+        Add a quadratic cost
+
+            w*|| Jbar'*tau - f_des ||^2
+
+        to the whole-body QP
+        """
+        # We'll write as 1/2 x'*Q*x + c'*x
+        Q = Jbar@Jbar.T
+        c = -(f_des.T@Jbar.T)[np.newaxis].T
+
+        return self.mp.AddQuadraticCost(Q,c,tau)
     
     def UpdateStoredContext(self, context):
         """
@@ -262,6 +276,18 @@ class Gen3Controller(LeafSystem):
         This method is called at every timestep, and determines
         output torques to control the robot arm. 
         """
+        ################## Tuning Parameters #################
+
+        Kp_p = 100
+        Kd_p = 50
+
+        Kp_rpy = 1.0
+        Kd_rpy = 0.5
+
+        Kd_qd = 1.0
+
+        ######################################################
+
         self.UpdateStoredContext(context)
         q = self.plant.GetPositions(self.context, self.arm_model_index)
         qd = self.plant.GetVelocities(self.context, self.arm_model_index)
@@ -271,16 +297,24 @@ class Gen3Controller(LeafSystem):
         C = self.CalcCoriolisMatrix()
 
         # Current end-effector state
-        p, J, Jdqd = self.CalcFramePositionQuantities(self.end_effector_frame)
-        Jd = self.CalcFramePositionJacobianDot(self.end_effector_frame_autodiff)
-        x = p.flatten()
-        xd = J@qd
+        X, J, Jdqd = self.CalcFramePoseQuantities(self.end_effector_frame)
+        Jd = self.CalcFramePoseJacobianDot(self.end_effector_frame_autodiff)
+
+        p = X.translation()
+        pd = (J@qd)[3:]
+
+        RPY = RollPitchYaw(X.rotation())
+        rpy = RPY.vector()
+        rpyd = RPY.CalcRpyDtFromAngularVelocityInParent((J@qd)[:3])
+
+        x = np.hstack([rpy, p])
+        xd = np.hstack([rpyd, pd])
 
         # Desired end-effector state 
         x_xd_nom = self.EvalVectorInput(context,1).get_value()
-        x_nom = x_xd_nom[3:6]
-        xd_nom = x_xd_nom[9:]
-        xdd_nom = self.EvalVectorInput(context,2).get_value()[3:]
+        x_nom = x_xd_nom[:6]
+        xd_nom = x_xd_nom[6:]
+        xdd_nom = self.EvalVectorInput(context,2).get_value()
 
         # End-effector errors
         x_tilde = x - x_nom
@@ -293,8 +327,10 @@ class Gen3Controller(LeafSystem):
         Q = J@Minv@C - Jd
         
         # Desired end-effector force (really wrench)
-        Kp = 100*np.eye(3)
-        Kd = 50*np.eye(3)
+        Kp = np.block([[Kp_rpy*np.eye(3), np.zeros((3,3))],
+                       [np.zeros((3,3)),  Kp_p*np.eye(3) ]])
+        Kd = np.block([[Kd_rpy*np.eye(3), np.zeros((3,3))],
+                       [np.zeros((3,3)),  Kd_p*np.eye(3) ]])
         f_des = Lambda@xdd_nom + Lambda@Q@(qd - Jbar@xd_tilde) + Jbar.T@tau_g - Kp@x_tilde - Kd@xd_tilde
 
         # Solve QP to find corresponding joint torques
@@ -303,16 +339,21 @@ class Gen3Controller(LeafSystem):
         qdd = self.mp.NewContinuousVariables(self.plant.num_velocities(), 1, 'qdd')
        
         # min || qdd - qdd_nom ||^2
-        qdd_nom = -1.0*qd
-        self.mp.AddQuadraticErrorCost(Q=np.eye(self.plant.num_velocities()),
+        qdd_nom = -Kd_qd*qd
+        self.mp.AddQuadraticErrorCost(Q=1e-2*np.eye(self.plant.num_velocities()),
                                       x_desired=qdd_nom,
                                       vars=qdd)
         
         # min || tau ||^2
-        #self.mp.AddQuadraticErrorCost(Q=np.eye(self.plant.num_actuators()),
+        #self.mp.AddQuadraticErrorCost(Q=1e-2*np.eye(self.plant.num_actuators()),
         #                              x_desired=np.zeros(self.plant.num_actuators()),
         #                              vars=tau)
 
+        # min w*|| Jbar'*tau - f_des ||
+        #self.AddEndEffectorForceCost(Jbar, tau, f_des, weight=10.0)
+
+
+        print(x)
         # s.t. M*qdd + Cqd + tau_g = tau
         self.AddDynamicsConstraint(M, qdd, Cqd, tau_g, tau)
 
@@ -329,6 +370,6 @@ class Gen3Controller(LeafSystem):
 
         # Record stuff for plots
         self.V = 0.5*xd_tilde.T@Lambda@xd_tilde + 0.5*x_tilde.T@Kp@x_tilde
-        self.x = np.hstack([np.zeros(3),x])
-        self.xd = np.hstack([np.zeros(3),xd])
+        self.x = x
+        self.xd = xd
 
