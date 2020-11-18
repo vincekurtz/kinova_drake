@@ -10,7 +10,7 @@ from controller import Gen3Controller
 ############## Setup Parameters #################
 
 sim_time = 5.0
-dt = 2e-3
+dt = 1e-3
 target_realtime_rate = 1.0
 
 # Initial joint angles
@@ -26,11 +26,13 @@ x0 = np.array([3*np.pi/4,
 
 # Target end-effector pose
 x_target = np.array([np.pi,  
-                     0,
+                     1.0,
                      np.pi,
                      0.5,
-                     0.0,
+                     0.5,
                      0.2])
+
+include_gripper = False
 
 show_diagram = False
 make_plots = True
@@ -38,17 +40,27 @@ make_plots = True
 #################################################
 
 # Find the (local) description file relative to drake
-robot_description_path = "./model/urdf/GEN3_URDF_V12.urdf"
+robot_description_path = "./models/gen3_7dof/urdf/GEN3_URDF_V12.urdf"
 drake_path = getDrakePath()
 robot_description_file = "drake/" + os.path.relpath(robot_description_path, start=drake_path)
 
-# Load the kuka model from a urdf file
+# Load the robot arm model from a urdf file
 robot_urdf = FindResourceOrThrow(robot_description_file)
 builder = DiagramBuilder()
 scene_graph = builder.AddSystem(SceneGraph())
 plant = builder.AddSystem(MultibodyPlant(time_step=dt))
 plant.RegisterAsSourceForSceneGraph(scene_graph)
 gen3 = Parser(plant=plant).AddModelFromFile(robot_urdf,"gen3")
+
+# Load the gripper model from a urdf file
+if include_gripper:
+    gripper_file = "drake/" + os.path.relpath("./models/hande_gripper/urdf/robotiq_hande.urdf", start=drake_path)
+    gripper_urdf = FindResourceOrThrow(gripper_file)
+    gripper = Parser(plant=plant).AddModelFromFile(gripper_urdf,"gripper")
+
+    # Fix the gripper to the manipulator arm
+    X_EE = RigidTransform()
+    plant.WeldFrames(plant.GetFrameByName("end_effector_link",gen3), plant.GetFrameByName("hande_robotiq_hande_base_link", gripper), X_EE)
 
 # Fix the base of the manipulator to the world
 plant.WeldFrames(plant.world_frame(),plant.GetFrameByName("base_link",gen3))
@@ -82,7 +94,7 @@ ee_frame = GeometryFrame("ee")
 scene_graph.RegisterFrame(ee_source, ee_frame)
 
 ee_shape = Sphere(0.03)
-ee_shape = Mesh(os.path.abspath("./model/meshes/base_link.obj"))
+ee_shape = Mesh(os.path.abspath("./models/hande_gripper/meshes/hand-e.obj"),scale=1e-3)
 ee_color = np.array([0.1,0.1,0.1,0.4])
 X_ee = RigidTransform()
 
@@ -113,12 +125,17 @@ builder.Connect(
 
 ctrl = Gen3Controller(plant,dt)
 controller = builder.AddSystem(ctrl)
-builder.Connect(                              # First input to controller is [q;qd] for the arm
-        plant.get_state_output_port(gen3),
-        controller.get_input_port(0))
-builder.Connect(                              # First controller output is torques to the arm
-        controller.get_output_port(0),
+builder.Connect(
+        plant.get_state_output_port(),
+        controller.GetInputPort("arm_state"))
+builder.Connect(
+        controller.GetOutputPort("arm_torques"),
         plant.get_actuation_input_port(gen3))
+
+if include_gripper:
+    builder.Connect(
+            controller.GetOutputPort("gripper_forces"),
+            plant.get_actuation_input_port(gripper))
 
 builder.Connect(rom_ctrl.get_output_port(), rom.GetInputPort("u"))
 builder.Connect(rom.GetOutputPort("x"), rom_ctrl.get_input_port_estimated_state())

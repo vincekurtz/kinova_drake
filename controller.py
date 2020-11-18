@@ -26,34 +26,37 @@ class Gen3Controller(LeafSystem):
         self.plant = plant
         self.context = self.plant.CreateDefaultContext()  # stores q, qd
 
-        self.solver = GurobiSolver()
-
-        # Tuning parameters
-        self.Kp = np.block([[  0.0*np.eye(3)  , np.zeros((3,3))],
-                            [np.zeros((3,3)),  10.0*np.eye(3)  ]])
-        self.Kd = np.block([[  0.0*np.eye(3)  , np.zeros((3,3))],
-                            [np.zeros((3,3)),  20.0*np.eye(3)  ]])
+        self.solver = OsqpSolver()
 
         # AutoDiff plant and context for values that require automatic differentiation
         self.plant_autodiff = plant.ToAutoDiffXd()
         self.context_autodiff = self.plant_autodiff.CreateDefaultContext()
 
-        # Robot arm dimensions
-        self.arm_model_index = self.plant.GetModelInstanceByName("gen3")
-        self.np_arm = self.plant.num_positions(self.arm_model_index)
-        self.nv_arm = self.plant.num_velocities(self.arm_model_index)
-        self.nu_arm = 7
+        self.arm_index = self.plant.GetModelInstanceByName("gen3")
 
-        # First input port takes in robot arm state ([q;qd])
+        # Test whether a gripper is attached
+        try:
+            self.gripper_index = self.plant.GetModelInstanceByName("gripper")
+            self.has_gripper = True
+        except RuntimeError:
+            self.has_gripper = False
+
+        # First input port takes in robot state ([q;qd])
         self.DeclareVectorInputPort(
                 "arm_state",
-                BasicVector(self.np_arm + self.nv_arm))
+                BasicVector(self.plant.num_positions()+self.plant.num_velocities()))
         
         # First output port maps to torques on robot arm
         self.DeclareVectorOutputPort(
                 "arm_torques",
-                BasicVector(self.nu_arm),
+                BasicVector(7),
                 self.DoCalcArmOutput)
+
+        # Second output port maps to gripper forces
+        self.DeclareVectorOutputPort(
+                "gripper_forces",
+                BasicVector(2),
+                self.DoCalcGripperOutput)
 
         # Input for RoM state x_rom = [x_des,xd_des]
         self.DeclareVectorInputPort(
@@ -94,15 +97,15 @@ class Gen3Controller(LeafSystem):
         self.world_frame_autodiff = self.plant_autodiff.world_frame()
         self.end_effector_frame_autodiff = self.plant_autodiff.GetFrameByName("end_effector_link")
 
-    def AddDynamicsConstraint(self, M, qdd, Cqd, tau_g, tau):
+    def AddDynamicsConstraint(self, M, qdd, Cqd, tau_g, S, tau):
         """
         Add a linear dynamics constraint
 
-            M*qdd + Cqd + tau_g = tau
+            M*qdd + Cqd + tau_g = S.T*tau
 
         to the whole-body QP. 
         """
-        Aeq = np.hstack([M, -np.eye(len(tau))])
+        Aeq = np.hstack([M, -S.T])
         beq = -Cqd - tau_g
         x = np.vstack([qdd, tau])
 
@@ -283,6 +286,13 @@ class Gen3Controller(LeafSystem):
         Output the current value of the simulation function.
         """
         output.SetFromVector([self.err])
+
+    def DoCalcGripperOutput(self, context, output):
+        """
+        This method is called at every timestep, and determines
+        output torques to control the gripper.
+        """
+        pass
         
     def DoCalcArmOutput(self, context, output):
         """
@@ -291,8 +301,8 @@ class Gen3Controller(LeafSystem):
         """
         ################## Tuning Parameters #################
 
-        Kp_p = 100
-        Kd_p = 50
+        Kp_p = 50
+        Kd_p = 20
 
         Kp_rpy = 1.0
         Kd_rpy = 0.5
@@ -302,11 +312,11 @@ class Gen3Controller(LeafSystem):
         ######################################################
 
         self.UpdateStoredContext(context)
-        q = self.plant.GetPositions(self.context, self.arm_model_index)
-        qd = self.plant.GetVelocities(self.context, self.arm_model_index)
+        q = self.plant.GetPositions(self.context)
+        qd = self.plant.GetVelocities(self.context)
 
         # Dynamics Computations 
-        M, Cqd, tau_g, _ = self.CalcDynamics()
+        M, Cqd, tau_g, S = self.CalcDynamics()
         C = self.CalcCoriolisMatrix()
 
         # Current end-effector state
@@ -374,7 +384,7 @@ class Gen3Controller(LeafSystem):
        
         # min || qdd - qdd_nom ||^2
         qdd_nom = -Kd_qd*qd
-        self.mp.AddQuadraticErrorCost(Q=1e-2*np.eye(self.plant.num_velocities()),
+        self.mp.AddQuadraticErrorCost(Q=1.0*np.eye(self.plant.num_velocities()),
                                       x_desired=qdd_nom,
                                       vars=qdd)
         
@@ -384,21 +394,29 @@ class Gen3Controller(LeafSystem):
         #                              vars=tau)
 
         # min w*|| Jbar'*tau - f_des ||
-        #self.AddEndEffectorForceCost(Jbar, tau, f_des, weight=10.0)
-
+        #self.AddEndEffectorForceCost(Jbar, tau, f_des, weight=1000.0)
 
         # s.t. M*qdd + Cqd + tau_g = tau
-        self.AddDynamicsConstraint(M, qdd, Cqd, tau_g, tau)
+        self.AddDynamicsConstraint(M, qdd, Cqd, tau_g, S, tau)
+        
 
         # s.t. Jbar'*tau = f_des
         self.mp.AddLinearEqualityConstraint(Aeq=Jbar.T,
                                             beq=f_des,
                                             vars=tau)
 
+        # s.t. tau_min <= tau <= tau_max
+        #tau_min = -50
+        #tau_max = 50
+        #self.mp.AddLinearConstraint(A=np.eye(self.plant.num_actuators()),
+        #                            lb=tau_min*np.ones(self.plant.num_actuators()),
+        #                            ub=tau_max*np.ones(self.plant.num_actuators()),
+        #                            vars=tau)
+
         result = self.solver.Solve(self.mp)
         assert result.is_success()
         tau = result.GetSolution(tau)
-        
+       
         output.SetFromVector(tau)
 
         # Record stuff for plots
@@ -406,4 +424,7 @@ class Gen3Controller(LeafSystem):
         self.x = x
         self.xd = xd
         self.err = x_tilde.T@x_tilde
+
+        #Vdot = xd_tilde.T@(Jbar.T@tau - Jbar.T@tau_g + Lambda@Q@(Jbar@xd_tilde - qd) - Lambda@xdd_nom + Kp@x_tilde)
+        #print(Vdot <= 0)
 
