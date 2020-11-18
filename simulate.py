@@ -32,7 +32,7 @@ x_target = np.array([np.pi,
                      0.5,
                      0.2])
 
-include_gripper = False
+include_gripper = True
 
 show_diagram = False
 make_plots = True
@@ -54,7 +54,7 @@ gen3 = Parser(plant=plant).AddModelFromFile(robot_urdf,"gen3")
 
 # Load the gripper model from a urdf file
 if include_gripper:
-    gripper_file = "drake/" + os.path.relpath("./models/hande_gripper/urdf/robotiq_hande.urdf", start=drake_path)
+    gripper_file = "drake/" + os.path.relpath("./models/hande_gripper/urdf/robotiq_hande_static.urdf", start=drake_path)
     gripper_urdf = FindResourceOrThrow(gripper_file)
     gripper = Parser(plant=plant).AddModelFromFile(gripper_urdf,"gripper")
 
@@ -93,8 +93,7 @@ ee_source = scene_graph.RegisterSource("ee")
 ee_frame = GeometryFrame("ee")
 scene_graph.RegisterFrame(ee_source, ee_frame)
 
-ee_shape = Sphere(0.03)
-ee_shape = Mesh(os.path.abspath("./models/hande_gripper/meshes/hand-e.obj"),scale=1e-3)
+ee_shape = Mesh(os.path.abspath("./models/hande_gripper/meshes/hand-e_with_fingers.obj"),scale=1e-3)
 ee_color = np.array([0.1,0.1,0.1,0.4])
 X_ee = RigidTransform()
 
@@ -132,10 +131,10 @@ builder.Connect(
         controller.GetOutputPort("arm_torques"),
         plant.get_actuation_input_port(gen3))
 
-if include_gripper:
-    builder.Connect(
-            controller.GetOutputPort("gripper_forces"),
-            plant.get_actuation_input_port(gripper))
+#if include_gripper:
+#    builder.Connect(
+#            controller.GetOutputPort("gripper_forces"),
+#            plant.get_actuation_input_port(gripper))
 
 builder.Connect(rom_ctrl.get_output_port(), rom.GetInputPort("u"))
 builder.Connect(rom.GetOutputPort("x"), rom_ctrl.get_input_port_estimated_state())
