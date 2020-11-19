@@ -10,32 +10,32 @@ from controller import Gen3Controller
 ############## Setup Parameters #################
 
 sim_time = 5.0
-dt = 1e-3
+dt = 2e-3
 target_realtime_rate = 1.0
 
 # Initial joint angles
-q0 = np.array([0.0,-np.pi/4,np.pi/2,-np.pi/2,0.0,-np.pi/2,0])
+q0 = np.array([0.0,0,np.pi/2,-np.pi/2,0.0,-np.pi/2,0])
 
 # initial end-effector pose
-x0 = np.array([3*np.pi/4,  
+x0 = np.array([np.pi,  
                0,
                np.pi/2,
-               -0.2,
+               0.0,
                0.3,
-               0.5])
+               0.55])
 
 # Target end-effector pose
 x_target = np.array([np.pi,  
-                     1.0,
-                     np.pi,
-                     0.5,
-                     0.5,
-                     0.2])
+                     0.0,
+                     np.pi/2,
+                     0.0,
+                     0.3,
+                     0.1])
 
 include_gripper = True
 
 show_diagram = False
-make_plots = True
+make_plots = False
 
 #################################################
 
@@ -60,7 +60,7 @@ if include_gripper:
 
     # Fix the gripper to the manipulator arm
     X_EE = RigidTransform()
-    plant.WeldFrames(plant.GetFrameByName("end_effector_link",gen3), plant.GetFrameByName("hande_robotiq_hande_base_link", gripper), X_EE)
+    plant.WeldFrames(plant.GetFrameByName("end_effector_link",gen3), plant.GetFrameByName("hande_base_link", gripper), X_EE)
 
 # Fix the base of the manipulator to the world
 plant.WeldFrames(plant.world_frame(),plant.GetFrameByName("base_link",gen3))
@@ -148,7 +148,9 @@ rom_target = builder.AddSystem(ConstantVectorSource(np.hstack([x_target,np.zeros
 builder.Connect(rom_target.get_output_port(),rom_ctrl.get_input_port_desired_state())
 
 # Set up the Visualizer
-DrakeVisualizer().AddToBuilder(builder=builder, scene_graph=scene_graph)
+visualizer_params = DrakeVisualizerParams(role=Role.kIllustration)  # kProximity for collision geometry,
+                                                                    # kIllustration for visual geometry
+DrakeVisualizer().AddToBuilder(builder=builder, scene_graph=scene_graph, params=visualizer_params)
 ConnectContactResultsToDrakeVisualizer(builder, plant)
 
 # Add loggers

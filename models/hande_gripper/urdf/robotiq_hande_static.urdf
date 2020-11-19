@@ -1,6 +1,6 @@
 <?xml version="1.0" ?>
 <robot name="robotiq_hande">
-    <link name="hande_robotiq_hande_base_link">
+    <link name="hande_base_link">
         <inertial>
             <origin rpy="0 0 0" xyz="0 0 0.04607"/>
             <mass value="0.86387"/>
@@ -13,9 +13,9 @@
             </geometry>
         </visual>
         <collision>
-            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <origin rpy="0 0 0" xyz="0 0 0.052"/>
             <geometry>
-                <mesh filename="../meshes/hand-e.obj" scale="0.001 0.001 0.001"/>
+                <cylinder radius="0.038" length="0.092" />
             </geometry>
         </collision>
     </link>
@@ -26,15 +26,15 @@
             <inertia ixx="13567E-9" ixy="0" ixz="0" iyy="15784E-9" iyz="0" izz="7478E-9"/>
         </inertial>
         <visual>
-            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <origin rpy="0 0 0" xyz="0.0 0 0"/>
             <geometry>
                 <mesh filename="../meshes/finger_1.obj" scale="0.001 0.001 0.001"/>
             </geometry>
         </visual>
         <collision>
-            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <origin rpy="0 0 0" xyz="0.028 0 0.037"/>
             <geometry>
-                <mesh filename="../meshes/finger_1.obj" scale="0.001 0.001 0.001"/>
+                <box size="0.007 0.02 0.02"/>
             </geometry>
         </collision>
     </link>
@@ -51,22 +51,22 @@
             </geometry>
         </visual>
         <collision>
-            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <origin rpy="0 0 0" xyz="-0.028 0 0.037"/>
             <geometry>
-                <mesh filename="../meshes/finger_2.obj" scale="0.001 0.001 0.001"/>
+                <box size="0.007 0.02 0.02"/>
             </geometry>
         </collision>
     </link>
     <joint name="hande_joint_left_finger" type="fixed">
         <origin rpy="0 0 0" xyz="0 0 0.099"/>
-        <parent link="hande_robotiq_hande_base_link"/>
+        <parent link="hande_base_link"/>
         <child link="hande_left_finger"/>
         <axis xyz="-1 0 0"/>
         <limit effort="130" lower="0" upper="0.025" velocity="0.15"/>
     </joint>
     <joint name="hande_joint_right_finger" type="fixed">
         <origin rpy="0 0 0" xyz="0 0 0.099"/>
-        <parent link="hande_robotiq_hande_base_link"/>
+        <parent link="hande_base_link"/>
         <child link="hande_right_finger"/>
         <axis xyz="1 0 0"/>
         <limit effort="130" lower="0" upper="0.025" velocity="0.15"/>
