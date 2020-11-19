@@ -292,7 +292,8 @@ class Gen3Controller(LeafSystem):
         This method is called at every timestep, and determines
         output torques to control the gripper.
         """
-        pass
+        f = -0.1*np.ones(2)
+        output.SetFromVector(f)
         
     def DoCalcArmOutput(self, context, output):
         """
@@ -416,7 +417,9 @@ class Gen3Controller(LeafSystem):
         result = self.solver.Solve(self.mp)
         assert result.is_success()
         tau = result.GetSolution(tau)
-       
+
+        tau = tau[:-2]   # the last two elements have to do with the gripper. We'll ignore those here
+                         # and set them in DoCalcGripperOutput
         output.SetFromVector(tau)
 
         # Record stuff for plots

@@ -54,7 +54,7 @@ gen3 = Parser(plant=plant).AddModelFromFile(robot_urdf,"gen3")
 
 # Load the gripper model from a urdf file
 if include_gripper:
-    gripper_file = "drake/" + os.path.relpath("./models/hande_gripper/urdf/robotiq_hande_static.urdf", start=drake_path)
+    gripper_file = "drake/" + os.path.relpath("./models/hande_gripper/urdf/robotiq_hande.urdf", start=drake_path)
     gripper_urdf = FindResourceOrThrow(gripper_file)
     gripper = Parser(plant=plant).AddModelFromFile(gripper_urdf,"gripper")
 
@@ -131,10 +131,10 @@ builder.Connect(
         controller.GetOutputPort("arm_torques"),
         plant.get_actuation_input_port(gen3))
 
-#if include_gripper:
-#    builder.Connect(
-#            controller.GetOutputPort("gripper_forces"),
-#            plant.get_actuation_input_port(gripper))
+if include_gripper:
+    builder.Connect(
+            controller.GetOutputPort("gripper_forces"),
+            plant.get_actuation_input_port(gripper))
 
 builder.Connect(rom_ctrl.get_output_port(), rom.GetInputPort("u"))
 builder.Connect(rom.GetOutputPort("x"), rom_ctrl.get_input_port_estimated_state())
