@@ -6,6 +6,7 @@ import os
 from pydrake.all import *
 from reduced_order_model import ReducedOrderModelPlant
 from controller import Gen3Controller
+from planner import SimplePlanner
 
 ############## Setup Parameters #################
 
@@ -30,7 +31,7 @@ x_target = np.array([np.pi,
                      np.pi/2,
                      0.0,
                      0.3,
-                     0.1])
+                     0.2])
 
 include_manipuland = True
 
@@ -160,9 +161,8 @@ builder.Connect(rom.GetOutputPort("x"), controller.GetInputPort("rom_state"))
 builder.Connect(rom_ctrl.get_output_port(), controller.GetInputPort("rom_input"))
 
 # Set desired RoM state  
-# TODO: replace with some sort of finite state machine
-rom_target = builder.AddSystem(ConstantVectorSource(np.hstack([x_target,np.zeros(6)])))
-builder.Connect(rom_target.get_output_port(),rom_ctrl.get_input_port_desired_state())
+rom_planner = builder.AddSystem(SimplePlanner())
+builder.Connect(rom_planner.GetOutputPort("end_effector_setpoint"),rom_ctrl.get_input_port_desired_state())
 
 # Set up the Visualizer
 visualizer_params = DrakeVisualizerParams(role=Role.kIllustration)  # kProximity for collision geometry,
