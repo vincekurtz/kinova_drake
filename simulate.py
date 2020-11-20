@@ -97,7 +97,8 @@ plant.RegisterVisualGeometry(
 
 # Load an object to manipulate
 if include_manipuland:
-    manipuland_sdf = FindResourceOrThrow("drake/manipulation/models/ycb/sdf/003_cracker_box.sdf")
+    manipuland_sdf = FindResourceOrThrow("drake/examples/manipulation_station/models/061_foam_brick.sdf")
+    #manipuland_sdf = FindResourceOrThrow("drake/manipulation/models/ycb/sdf/003_cracker_box.sdf")
     manipuland = Parser(plant=plant).AddModelFromFile(manipuland_sdf,"manipuland")
 
 c_plant.Finalize()
@@ -160,9 +161,14 @@ builder.Connect(rom.GetOutputPort("x"), rom_ctrl.get_input_port_estimated_state(
 builder.Connect(rom.GetOutputPort("x"), controller.GetInputPort("rom_state"))
 builder.Connect(rom_ctrl.get_output_port(), controller.GetInputPort("rom_input"))
 
-# Set desired RoM state  
+# Set desired RoM and gripper state  
 rom_planner = builder.AddSystem(SimplePlanner())
-builder.Connect(rom_planner.GetOutputPort("end_effector_setpoint"),rom_ctrl.get_input_port_desired_state())
+builder.Connect(
+        rom_planner.GetOutputPort("end_effector_setpoint"),
+        rom_ctrl.get_input_port_desired_state())
+builder.Connect(
+        rom_planner.GetOutputPort("gripper_command"),
+        controller.GetInputPort("gripper_command"))
 
 # Set up the Visualizer
 visualizer_params = DrakeVisualizerParams(role=Role.kIllustration)  # kProximity for collision geometry,

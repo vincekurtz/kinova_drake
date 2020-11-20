@@ -17,9 +17,8 @@ class SimplePlanner(LeafSystem):
                                      0.0,
                                      np.pi/2,
                                      0.0,
-                                     0.3,
-                                     0.5])
-
+                                     0.4,
+                                     0.15])
         self.target_twist = np.zeros(6)
 
         self.DeclareVectorOutputPort(
@@ -27,9 +26,24 @@ class SimplePlanner(LeafSystem):
                 BasicVector(12),
                 self.SetEndEffectorOutput)
 
+        self.DeclareAbstractOutputPort(
+                "gripper_command",
+                lambda : AbstractValue.Make(True),
+                self.SetGripperOutput)
+
     def SetEndEffectorOutput(self, context, output):
+        if context.get_time() > 3.5:
+            self.target_pose += np.array([0,0,0,0,0,0.0001])
         target_state = np.hstack([self.target_pose, self.target_twist])
         output.SetFromVector(target_state)
+
+    def SetGripperOutput(self, context, output):
+        gripper_closed = False
+
+        if context.get_time() > 3.5:
+            gripper_closed = True
+
+        output.set_value(gripper_closed)
 
 
 

@@ -36,10 +36,10 @@ class Gen3Controller(LeafSystem):
         self.gripper_index = self.plant.GetModelInstanceByName("gripper")
 
         # First input port takes in robot state ([q;qd])
-        self.DeclareVectorInputPort(
-                "arm_state",
-                BasicVector(self.plant.num_positions(self.arm_index)
-                            +self.plant.num_velocities(self.arm_index)))
+        self.arm_state_port = self.DeclareVectorInputPort(
+                                      "arm_state",
+                                      BasicVector(self.plant.num_positions(self.arm_index)
+                                                  +self.plant.num_velocities(self.arm_index)))
         
         # First output port maps to torques on robot arm
         self.DeclareVectorOutputPort(
@@ -48,9 +48,9 @@ class Gen3Controller(LeafSystem):
                 self.DoCalcArmOutput)
 
         # Second input port takes in gripper states
-        self.DeclareVectorInputPort(
-                "gripper_state",
-                BasicVector(4))
+        self.grip_state_port = self.DeclareVectorInputPort(
+                                      "gripper_state",
+                                      BasicVector(4))
 
         # Second output port maps to gripper forces
         self.DeclareVectorOutputPort(
@@ -59,14 +59,19 @@ class Gen3Controller(LeafSystem):
                 self.DoCalcGripperOutput)
 
         # Input for RoM state x_rom = [x_des,xd_des]
-        self.DeclareVectorInputPort(
-                "rom_state",
-                BasicVector(12))
+        self.rom_state_port = self.DeclareVectorInputPort(
+                                     "rom_state",
+                                     BasicVector(12))
 
         # Input for RoM input u_rom = [xdd_des]
-        self.DeclareVectorInputPort(
-                "rom_input",
-                BasicVector(6))
+        self.rom_input_port = self.DeclareVectorInputPort(
+                                      "rom_input",
+                                      BasicVector(6))
+
+        # Input for gripper (open or closed)
+        self.grip_cmd_port = self.DeclareAbstractInputPort(
+                                     "gripper_command",
+                                     AbstractValue.Make(True))
 
         # Output end effector state [x,xd]
         self.x = np.zeros(6)
@@ -130,8 +135,8 @@ class Gen3Controller(LeafSystem):
         Use the data in the given input context to update self.context.
         This should be called at the beginning of each timestep.
         """
-        arm_state = self.EvalVectorInput(context, 0).get_value()
-        gripper_state = self.EvalVectorInput(context, 1).get_value()
+        arm_state = self.arm_state_port.Eval(context)
+        gripper_state = self.grip_state_port.Eval(context)
       
         q_arm = arm_state[:self.plant.num_positions(self.arm_index)]
         q_gripper = gripper_state[:self.plant.num_positions(self.gripper_index)]
@@ -300,7 +305,25 @@ class Gen3Controller(LeafSystem):
         This method is called at every timestep, and determines
         output torques to control the gripper.
         """
-        f = -0.1*np.ones(2)
+        # Tuning gains
+        Kp = 10
+        Kd = 1
+
+        # Get gripper command
+        gripper_closed = self.grip_cmd_port.Eval(context)
+        if gripper_closed:
+            q_nom = np.array([0.024,0.024])
+        else:
+            q_nom = np.array([-0.015,-0.015])
+
+        v_nom = np.array([0,0])
+
+        # Get current gripper state
+        qv = self.grip_state_port.Eval(context)
+        q = qv[:2];  v = qv[2:]
+
+        # Set output with pd controller
+        f = -Kp*(q-q_nom) - Kd*(v-v_nom)
         output.SetFromVector(f)
         
     def DoCalcArmOutput(self, context, output):
@@ -345,8 +368,8 @@ class Gen3Controller(LeafSystem):
         xd = np.hstack([w, pd])
 
         # Desired end-effector state 
-        rom_state = self.EvalVectorInput(context,2).get_value()
-        rom_input = self.EvalVectorInput(context,3).get_value()
+        rom_state = self.rom_state_port.Eval(context)
+        rom_input = self.rom_input_port.Eval(context)
 
         rpy_nom = rom_state[:3]
         p_nom = rom_state[3:6]
