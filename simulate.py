@@ -32,7 +32,7 @@ x_target = np.array([np.pi,
                      0.3,
                      0.1])
 
-include_gripper = True
+include_manipuland = True
 
 show_diagram = False
 make_plots = False
@@ -44,26 +44,35 @@ robot_description_path = "./models/gen3_7dof/urdf/GEN3_URDF_V12.urdf"
 drake_path = getDrakePath()
 robot_description_file = "drake/" + os.path.relpath(robot_description_path, start=drake_path)
 
-# Load the robot arm model from a urdf file
-robot_urdf = FindResourceOrThrow(robot_description_file)
+# Set up the diagram and MultibodyPlant
 builder = DiagramBuilder()
 scene_graph = builder.AddSystem(SceneGraph())
 plant = builder.AddSystem(MultibodyPlant(time_step=dt))
 plant.RegisterAsSourceForSceneGraph(scene_graph)
+
+# Create a "controllable" plant, which has access only to the robot arm and gripper,
+# and not any data about other objects in the scene
+c_plant = MultibodyPlant(time_step=dt)
+
+# Load the robot arm model from a urdf file
+robot_urdf = FindResourceOrThrow(robot_description_file)
 gen3 = Parser(plant=plant).AddModelFromFile(robot_urdf,"gen3")
+c_gen3 = Parser(plant=c_plant).AddModelFromFile(robot_urdf,"gen3")
 
 # Load the gripper model from a urdf file
-if include_gripper:
-    gripper_file = "drake/" + os.path.relpath("./models/hande_gripper/urdf/robotiq_hande.urdf", start=drake_path)
-    gripper_urdf = FindResourceOrThrow(gripper_file)
-    gripper = Parser(plant=plant).AddModelFromFile(gripper_urdf,"gripper")
+gripper_file = "drake/" + os.path.relpath("./models/hande_gripper/urdf/robotiq_hande.urdf", start=drake_path)
+gripper_urdf = FindResourceOrThrow(gripper_file)
+gripper = Parser(plant=plant).AddModelFromFile(gripper_urdf,"gripper")
+c_gripper = Parser(plant=c_plant).AddModelFromFile(gripper_urdf,"gripper")
 
-    # Fix the gripper to the manipulator arm
-    X_EE = RigidTransform()
-    plant.WeldFrames(plant.GetFrameByName("end_effector_link",gen3), plant.GetFrameByName("hande_base_link", gripper), X_EE)
+# Fix the gripper to the manipulator arm
+X_EE = RigidTransform()
+plant.WeldFrames(plant.GetFrameByName("end_effector_link",gen3), plant.GetFrameByName("hande_base_link", gripper), X_EE)
+c_plant.WeldFrames(c_plant.GetFrameByName("end_effector_link",c_gen3), c_plant.GetFrameByName("hande_base_link", c_gripper), X_EE)
 
 # Fix the base of the manipulator to the world
 plant.WeldFrames(plant.world_frame(),plant.GetFrameByName("base_link",gen3))
+c_plant.WeldFrames(c_plant.world_frame(),c_plant.GetFrameByName("base_link",c_gen3))
 
 # Add a flat ground with friction
 X_BG = RigidTransform()
@@ -85,6 +94,12 @@ plant.RegisterVisualGeometry(
 
 #plant.set_contact_model(ContactModel.kHydroelasticWithFallback)
 
+# Load an object to manipulate
+if include_manipuland:
+    manipuland_sdf = FindResourceOrThrow("drake/manipulation/models/ycb/sdf/003_cracker_box.sdf")
+    manipuland = Parser(plant=plant).AddModelFromFile(manipuland_sdf,"manipuland")
+
+c_plant.Finalize()
 plant.Finalize()
 assert plant.geometry_source_is_registered()
 
@@ -122,19 +137,21 @@ builder.Connect(
         rom.GetOutputPort("ee_geometry"),
         scene_graph.get_source_pose_port(ee_source))
 
-ctrl = Gen3Controller(plant,dt)
-controller = builder.AddSystem(ctrl)
+ctrl = Gen3Controller(c_plant,dt)     # we use c_plant, which doesn't include objects in 
+controller = builder.AddSystem(ctrl)  # the workspace, for dynamics computations
 builder.Connect(
-        plant.get_state_output_port(),
+        plant.get_state_output_port(gen3),
         controller.GetInputPort("arm_state"))
 builder.Connect(
         controller.GetOutputPort("arm_torques"),
         plant.get_actuation_input_port(gen3))
 
-if include_gripper:
-    builder.Connect(
-            controller.GetOutputPort("gripper_forces"),
-            plant.get_actuation_input_port(gripper))
+builder.Connect(
+        plant.get_state_output_port(gripper),
+        controller.GetInputPort("gripper_state"))
+builder.Connect(
+        controller.GetOutputPort("gripper_forces"),
+        plant.get_actuation_input_port(gripper))
 
 builder.Connect(rom_ctrl.get_output_port(), rom.GetInputPort("u"))
 builder.Connect(rom.GetOutputPort("x"), rom_ctrl.get_input_port_estimated_state())
@@ -189,6 +206,9 @@ plant.SetVelocities(plant_context, gen3, np.zeros(7))
 
 rom_context = diagram.GetMutableSubsystemContext(rom, diagram_context)
 rom_context.SetContinuousState(np.hstack([x0,np.zeros(6,)]))
+
+if include_manipuland:
+    plant.SetPositions(plant_context, manipuland, np.array([0,0,0,1,0,0.4,0.04]))
 
 # Run the simulation
 simulator.Initialize()

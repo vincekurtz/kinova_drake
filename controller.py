@@ -33,24 +33,24 @@ class Gen3Controller(LeafSystem):
         self.context_autodiff = self.plant_autodiff.CreateDefaultContext()
 
         self.arm_index = self.plant.GetModelInstanceByName("gen3")
-
-        # Test whether a gripper is attached
-        try:
-            self.gripper_index = self.plant.GetModelInstanceByName("gripper")
-            self.has_gripper = True
-        except RuntimeError:
-            self.has_gripper = False
+        self.gripper_index = self.plant.GetModelInstanceByName("gripper")
 
         # First input port takes in robot state ([q;qd])
         self.DeclareVectorInputPort(
                 "arm_state",
-                BasicVector(self.plant.num_positions()+self.plant.num_velocities()))
+                BasicVector(self.plant.num_positions(self.arm_index)
+                            +self.plant.num_velocities(self.arm_index)))
         
         # First output port maps to torques on robot arm
         self.DeclareVectorOutputPort(
                 "arm_torques",
                 BasicVector(7),
                 self.DoCalcArmOutput)
+
+        # Second input port takes in gripper states
+        self.DeclareVectorInputPort(
+                "gripper_state",
+                BasicVector(4))
 
         # Second output port maps to gripper forces
         self.DeclareVectorOutputPort(
@@ -130,9 +130,17 @@ class Gen3Controller(LeafSystem):
         Use the data in the given input context to update self.context.
         This should be called at the beginning of each timestep.
         """
-        state = self.EvalVectorInput(context, 0).get_value()
-        q = state[:self.plant.num_positions()]
-        qd = state[-self.plant.num_velocities():]
+        arm_state = self.EvalVectorInput(context, 0).get_value()
+        gripper_state = self.EvalVectorInput(context, 1).get_value()
+      
+        q_arm = arm_state[:self.plant.num_positions(self.arm_index)]
+        q_gripper = gripper_state[:self.plant.num_positions(self.gripper_index)]
+
+        qd_arm = arm_state[self.plant.num_positions(self.arm_index):]
+        qd_gripper = gripper_state[self.plant.num_positions(self.gripper_index):]
+
+        q = np.hstack([q_arm,q_gripper])
+        qd = np.hstack([qd_arm,qd_gripper])
 
         self.plant.SetPositions(self.context, q)
         self.plant.SetVelocities(self.context, qd)
@@ -308,7 +316,7 @@ class Gen3Controller(LeafSystem):
         Kp_rpy = 1.0
         Kd_rpy = 0.5
 
-        Kd_qd = 1.0
+        Kd_qd = 100.0
 
         ######################################################
 
@@ -337,8 +345,8 @@ class Gen3Controller(LeafSystem):
         xd = np.hstack([w, pd])
 
         # Desired end-effector state 
-        rom_state = self.EvalVectorInput(context,1).get_value()
-        rom_input = self.EvalVectorInput(context,2).get_value()
+        rom_state = self.EvalVectorInput(context,2).get_value()
+        rom_input = self.EvalVectorInput(context,3).get_value()
 
         rpy_nom = rom_state[:3]
         p_nom = rom_state[3:6]
