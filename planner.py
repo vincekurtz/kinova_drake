@@ -2,6 +2,7 @@
 
 from pydrake.all import *
 import numpy as np
+import tkinter as tk
 
 class SimplePlanner(LeafSystem):
     """
@@ -13,14 +14,19 @@ class SimplePlanner(LeafSystem):
     def __init__(self):
         LeafSystem.__init__(self)
 
-        self.target_pose = np.array([np.pi,  
-                                     0.0,
-                                     np.pi/2,
-                                     0.0,
-                                     0.4,
-                                     0.15])
-        self.target_twist = np.zeros(6)
+        # Set nominal poses and gripper state
+        self.pose_nom = np.array([np.pi,  
+                                  0.0,
+                                  np.pi/2,
+                                  0.0,
+                                  0.3,
+                                  0.55])
+        self.twist_nom = np.zeros(6)
 
+        self.gripper_closed = False
+
+
+        # Declare Drake input and output ports
         self.DeclareVectorOutputPort(
                 "end_effector_setpoint",
                 BasicVector(12),
@@ -31,19 +37,99 @@ class SimplePlanner(LeafSystem):
                 lambda : AbstractValue.Make(True),
                 self.SetGripperOutput)
 
+        # Set up interactive window using Tkinter
+        self.window = tk.Tk()
+        self.window.title("Planner")
+
+        self.DeclarePeriodicPublish(0.01, 0.0)   # schedule window updates via self.DoPublish
+
+        self.roll = tk.Scale(self.window, 
+                     from_=-2*np.pi, 
+                     to=2*np.pi,
+                     resolution=-1,
+                     label="Roll",
+                     length=400,
+                     orient=tk.HORIZONTAL)
+        self.roll.pack()
+        self.roll.set(self.pose_nom[0])
+
+        self.pitch = tk.Scale(self.window, 
+                     from_=-np.pi/2+0.3,    # restrictive pitch limits to 
+                     to=np.pi/2-0.3,        # avoid gimbal lock issues
+                     resolution=-1,
+                     label="Pitch",
+                     length=400,
+                     orient=tk.HORIZONTAL)
+        self.pitch.pack()
+        self.pitch.set(self.pose_nom[1])
+
+        self.yaw = tk.Scale(self.window, 
+                     from_=-2*np.pi, 
+                     to=2*np.pi,
+                     resolution=-1,
+                     label="Yaw",
+                     length=400,
+                     orient=tk.HORIZONTAL)
+        self.yaw.pack()
+        self.yaw.set(self.pose_nom[2])
+
+        self.x = tk.Scale(self.window, 
+                     from_=-0.5, 
+                     to=0.5,
+                     resolution=-1,
+                     label="X",
+                     length=400,
+                     orient=tk.HORIZONTAL)
+        self.x.pack()
+        self.x.set(self.pose_nom[3])
+
+        self.y = tk.Scale(self.window, 
+                     from_=-0.5, 
+                     to=0.5,
+                     resolution=-1,
+                     label="Y",
+                     length=400,
+                     orient=tk.HORIZONTAL)
+        self.y.pack()
+        self.y.set(self.pose_nom[4])
+
+        self.z = tk.Scale(self.window, 
+                     from_=0.0, 
+                     to=0.7,
+                     resolution=-1,
+                     label="Z",
+                     length=400,
+                     orient=tk.HORIZONTAL)
+        self.z.pack()
+        self.z.set(self.pose_nom[5])
+
+        self.gripper_button = tk.Button(self.window,
+                                    text="Toggle Gripper",
+                                    state=tk.NORMAL,
+                                    command=self.toggle_gripper_state)
+        self.gripper_button.pack()
+
+    def toggle_gripper_state(self):
+        self.gripper_button.configure(state=tk.NORMAL)
+        self.gripper_closed = not self.gripper_closed
+
+    def DoPublish(self, context, output):
+        self.window.update_idletasks()
+        self.window.update()
+
     def SetEndEffectorOutput(self, context, output):
-        if context.get_time() > 3.5:
-            self.target_pose += np.array([0,0,0,0,0,0.0001])
-        target_state = np.hstack([self.target_pose, self.target_twist])
+        target_state = np.hstack([
+            self.roll.get(),
+            self.pitch.get(),
+            self.yaw.get(),
+            self.x.get(),
+            self.y.get(),
+            self.z.get(),
+            self.twist_nom])
         output.SetFromVector(target_state)
 
     def SetGripperOutput(self, context, output):
-        gripper_closed = False
-
-        if context.get_time() > 3.5:
-            gripper_closed = True
-
-        output.set_value(gripper_closed)
+        output.set_value(self.gripper_closed)
 
 
 

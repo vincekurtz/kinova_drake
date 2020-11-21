@@ -10,7 +10,7 @@ from planner import SimplePlanner
 
 ############## Setup Parameters #################
 
-sim_time = 5.0
+sim_time = np.inf
 dt = 2e-3
 target_realtime_rate = 1.0
 
