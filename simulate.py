@@ -6,7 +6,7 @@ import os
 from pydrake.all import *
 from reduced_order_model import ReducedOrderModelPlant
 from controller import Gen3Controller
-from planner import SimplePlanner
+from planner import GuiPlanner
 
 ############## Setup Parameters #################
 
@@ -162,7 +162,7 @@ builder.Connect(rom.GetOutputPort("x"), controller.GetInputPort("rom_state"))
 builder.Connect(rom_ctrl.get_output_port(), controller.GetInputPort("rom_input"))
 
 # Set desired RoM and gripper state  
-rom_planner = builder.AddSystem(SimplePlanner())
+rom_planner = builder.AddSystem(GuiPlanner())
 builder.Connect(
         rom_planner.GetOutputPort("end_effector_setpoint"),
         rom_ctrl.get_input_port_desired_state())

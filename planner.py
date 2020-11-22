@@ -4,12 +4,14 @@ from pydrake.all import *
 import numpy as np
 import tkinter as tk
 
-class SimplePlanner(LeafSystem):
+class GuiPlanner(LeafSystem):
     """
     This is a simple system block with no inputs. It simply outpus
 
         1) A desired end-effector pose [roll;pitch;yaw;x;y;z] (and pose dot)
         2) A desired gripper state (open or closed)
+
+    Based on user input from a gui.
     """
     def __init__(self):
         LeafSystem.__init__(self)
@@ -109,8 +111,22 @@ class SimplePlanner(LeafSystem):
                                     command=self.toggle_gripper_state)
         self.gripper_button.pack()
 
+        self.reset_button = tk.Button(self.window,
+                                    text="Reset",
+                                    state=tk.NORMAL,
+                                    command=self.reset)
+        self.reset_button.pack()
+
+    def reset(self):
+        self.gripper_closed = False
+        self.roll.set(self.pose_nom[0])
+        self.pitch.set(self.pose_nom[1])
+        self.yaw.set(self.pose_nom[2])
+        self.x.set(self.pose_nom[3])
+        self.y.set(self.pose_nom[4])
+        self.z.set(self.pose_nom[5])
+
     def toggle_gripper_state(self):
-        self.gripper_button.configure(state=tk.NORMAL)
         self.gripper_closed = not self.gripper_closed
 
     def DoPublish(self, context, output):

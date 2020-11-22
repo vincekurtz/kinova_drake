@@ -306,8 +306,8 @@ class Gen3Controller(LeafSystem):
         output torques to control the gripper.
         """
         # Tuning gains
-        Kp = 10
-        Kd = 1
+        Kp = 100
+        Kd = 10
 
         # Get gripper command
         gripper_closed = self.grip_cmd_port.Eval(context)
