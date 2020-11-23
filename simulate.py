@@ -11,7 +11,7 @@ from planner import GuiPlanner
 ############## Setup Parameters #################
 
 sim_time = np.inf
-dt = 2e-3
+dt = 5e-3
 target_realtime_rate = 1.0
 
 # Initial joint angles

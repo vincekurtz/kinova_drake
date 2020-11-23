@@ -102,6 +102,50 @@ class Gen3Controller(LeafSystem):
         self.world_frame_autodiff = self.plant_autodiff.world_frame()
         self.end_effector_frame_autodiff = self.plant_autodiff.GetFrameByName("end_effector_link")
 
+        # Get joint angle and velocity limits based on the plant, which in
+        # turn were loaded from a urdf
+        self.GetJointLimits()
+
+    def GetJointLimits(self):
+        """
+        Iterate through self.plant to establish joint angle
+        and velocity limits. 
+
+        Sets:
+
+            self.q_min
+            self.q_max
+            self.qd_min
+            self.qd_max
+
+        """
+        q_min = []
+        q_max = []
+        qd_min = []
+        qd_max = []
+
+        joint_indices = self.plant.GetJointIndices(self.arm_index)
+
+        for idx in joint_indices:
+            joint = self.plant.get_joint(idx)
+            
+            if joint.type_name() == "revolute":  # ignore the joint welded to the world
+                q_min.append(joint.position_lower_limit())
+                q_max.append(joint.position_upper_limit())
+                qd_min.append(joint.velocity_lower_limit())
+                qd_max.append(joint.velocity_upper_limit())
+
+        # Add (nonexistant) joint limits for the gripper
+        q_min.extend([-np.inf, -np.inf])
+        q_max.extend([np.inf, np.inf])
+        qd_min.extend([-np.inf, -np.inf])
+        qd_max.extend([np.inf, np.inf])
+
+        self.q_min = np.array(q_min)
+        self.q_max = np.array(q_max)
+        self.qd_min = np.array(qd_min)
+        self.qd_max = np.array(qd_max)
+
     def AddDynamicsConstraint(self, M, qdd, Cqd, tau_g, S, tau):
         """
         Add a linear dynamics constraint
@@ -353,16 +397,20 @@ class Gen3Controller(LeafSystem):
         """
         ################## Tuning Parameters #################
 
-        Kp_p = 50
-        Kd_p = 20
+        Kp_p = 50      # End effector position stiffness
+        Kd_p = 20      # and damping
 
-        Kp_rpy = 1.0
-        Kd_rpy = 0.5
+        Kp_rpy = 1.0   # End effector orientation stiffness
+        Kd_rpy = 0.5   # and damping
 
-        Kd_qd = 1.0
+        Kd_qd = 1.0    # Joint velocity damping
 
-        w_qd = 1e-3
-        w_f = 1000
+        w_qd = 1e-3    # joint velocity damping weight
+        w_f = 1000     # task-space force tracking weight
+
+        alpha_qd = lambda h : 10*h  # CBF class-K functions
+        alpha_q = lambda h : 10*h
+        beta_q = lambda h : 10*h
 
         ######################################################
 
@@ -456,11 +504,8 @@ class Gen3Controller(LeafSystem):
       
         # s.t. qdd >= -alpha_qd*(qd - qd_min)   (joint angle CBF constraint)
         #     -qdd >= -alpha_qd*(qd_max - qd)
-        alpha_qd = 10
-        qd_min = -1
-        qd_max = 1
-        ah_qd_min = alpha_qd*(qd-qd_min)
-        ah_qd_max = alpha_qd*(qd_max-qd)
+        ah_qd_min = alpha_qd(qd - self.qd_min)
+        ah_qd_max = alpha_qd(self.qd_max - qd)
         self.AddJointVelCBFConstraint(qdd, ah_qd_min, ah_qd_max)
 
         # s.t. Jbar'*tau = f_des
