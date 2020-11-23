@@ -129,6 +129,26 @@ class Gen3Controller(LeafSystem):
         c = -(f_des.T@Jbar.T)[np.newaxis].T
 
         return self.mp.AddQuadraticCost(Q,c,tau)
+        
+    def AddJointVelCBFConstraint(self, qdd, ah_qd_min, ah_qd_max):
+        """
+        Add a CBF constraint which enforces joint limits
+
+            qdd >= -ah_qd_min
+           -qdd >= -ah_qd_max
+
+        where 
+            
+            ah_qd_min = alpha(qd - qd_min)
+            qh_qd_max = alpha(qd_max - qd)
+
+        for some class-K function alpha.
+        """
+        A = np.eye(self.plant.num_velocities())
+        lb = -ah_qd_min
+        ub = ah_qd_max
+
+        return self.mp.AddLinearConstraint(A=A,lb=lb,ub=ub,vars=qdd)
     
     def UpdateStoredContext(self, context):
         """
@@ -339,7 +359,10 @@ class Gen3Controller(LeafSystem):
         Kp_rpy = 1.0
         Kd_rpy = 0.5
 
-        Kd_qd = 100.0
+        Kd_qd = 1.0
+
+        w_qd = 1e-3
+        w_f = 1000
 
         ######################################################
 
@@ -414,9 +437,9 @@ class Gen3Controller(LeafSystem):
         tau = self.mp.NewContinuousVariables(self.plant.num_actuators(), 1, 'tau')
         qdd = self.mp.NewContinuousVariables(self.plant.num_velocities(), 1, 'qdd')
        
-        # min || qdd - qdd_nom ||^2
+        # min w_qd*|| qdd - qdd_nom ||^2
         qdd_nom = -Kd_qd*qd
-        self.mp.AddQuadraticErrorCost(Q=1.0*np.eye(self.plant.num_velocities()),
+        self.mp.AddQuadraticErrorCost(Q=w_qd*np.eye(self.plant.num_velocities()),
                                       x_desired=qdd_nom,
                                       vars=qdd)
         
@@ -425,17 +448,25 @@ class Gen3Controller(LeafSystem):
         #                              x_desired=np.zeros(self.plant.num_actuators()),
         #                              vars=tau)
 
-        # min w*|| Jbar'*tau - f_des ||
-        #self.AddEndEffectorForceCost(Jbar, tau, f_des, weight=1000.0)
+        # min w_f*|| Jbar'*tau - f_des ||
+        self.AddEndEffectorForceCost(Jbar, tau, f_des, weight=w_f)
 
         # s.t. M*qdd + Cqd + tau_g = tau
         self.AddDynamicsConstraint(M, qdd, Cqd, tau_g, S, tau)
-        
+      
+        # s.t. qdd >= -alpha_qd*(qd - qd_min)   (joint angle CBF constraint)
+        #     -qdd >= -alpha_qd*(qd_max - qd)
+        alpha_qd = 10
+        qd_min = -1
+        qd_max = 1
+        ah_qd_min = alpha_qd*(qd-qd_min)
+        ah_qd_max = alpha_qd*(qd_max-qd)
+        self.AddJointVelCBFConstraint(qdd, ah_qd_min, ah_qd_max)
 
         # s.t. Jbar'*tau = f_des
-        self.mp.AddLinearEqualityConstraint(Aeq=Jbar.T,
-                                            beq=f_des,
-                                            vars=tau)
+        #self.mp.AddLinearEqualityConstraint(Aeq=Jbar.T,
+        #                                    beq=f_des,
+        #                                    vars=tau)
 
         # s.t. tau_min <= tau <= tau_max
         #tau_min = -50

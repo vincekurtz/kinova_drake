@@ -18,22 +18,14 @@ target_realtime_rate = 1.0
 q0 = np.array([0.0,0,np.pi/2,-np.pi/2,0.0,-np.pi/2,0])
 
 # initial end-effector pose
-x0 = np.array([np.pi,  
+x0 = np.array([np.pi-0.5,  
                0,
                np.pi/2,
-               0.0,
+               0.2,
                0.3,
-               0.55])
+               0.5])
 
-# Target end-effector pose
-x_target = np.array([np.pi,  
-                     0.0,
-                     np.pi/2,
-                     0.0,
-                     0.3,
-                     0.2])
-
-include_manipuland = True
+include_manipuland = False
 
 show_diagram = False
 make_plots = False
@@ -218,7 +210,10 @@ if include_manipuland:
 
 # Run the simulation
 simulator.Initialize()
-simulator.AdvanceTo(sim_time)
+try:
+    simulator.AdvanceTo(sim_time)
+except KeyboardInterrupt:
+    print("Simulation stopped via KeyboardInterrupt")
 
 # Make some plots
 if make_plots:
@@ -259,7 +254,7 @@ if make_plots:
     plt.ylabel("End Effector Velocity")
 
     plt.figure()  # Simulation function and error comparison
-    plt.plot(t, V_logger.data().T, linewidth='2',label="Simulation Function")
+    plt.plot(t, V_logger.data().T, linewidth='2',label="Storage Function")
     plt.plot(t, err_logger.data().T, linewidth='2',label="Output Error")
 
     # Error bound is initial simulation function value, scaled by minimum eigenvalue of Kp

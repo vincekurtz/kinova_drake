@@ -17,12 +17,12 @@ class GuiPlanner(LeafSystem):
         LeafSystem.__init__(self)
 
         # Set nominal poses and gripper state
-        self.pose_nom = np.array([np.pi,  
+        self.pose_nom = np.array([np.pi-0.5,  
                                   0.0,
                                   np.pi/2,
-                                  0.0,
-                                  0.3,
-                                  0.55])
+                                  0.2,
+                                  0.4,
+                                  0.50])
         self.twist_nom = np.zeros(6)
 
         self.gripper_closed = False
