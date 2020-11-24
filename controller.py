@@ -409,8 +409,8 @@ class Gen3Controller(LeafSystem):
         w_f = 1000     # task-space force tracking weight
 
         alpha_qd = lambda h : 10*h  # CBF class-K functions
-        alpha_q = lambda h : 10*h
-        beta_q = lambda h : 10*h
+        alpha_q = lambda h : 1*h
+        beta_q = lambda h : 1*h
 
         ######################################################
 
@@ -502,11 +502,20 @@ class Gen3Controller(LeafSystem):
         # s.t. M*qdd + Cqd + tau_g = tau
         self.AddDynamicsConstraint(M, qdd, Cqd, tau_g, S, tau)
       
-        # s.t. qdd >= -alpha_qd*(qd - qd_min)   (joint angle CBF constraint)
-        #     -qdd >= -alpha_qd*(qd_max - qd)
-        ah_qd_min = alpha_qd(qd - self.qd_min)
-        ah_qd_max = alpha_qd(self.qd_max - qd)
-        self.AddJointVelCBFConstraint(qdd, ah_qd_min, ah_qd_max)
+        # s.t. qdd >= -alpha_qd(qd - qd_min)   (joint velocity CBF constraint)
+        #     -qdd >= -alpha_qd(qd_max - qd)
+        #ah_qd_min = alpha_qd(qd - self.qd_min)
+        #ah_qd_max = alpha_qd(self.qd_max - qd)
+        #self.AddJointVelCBFConstraint(qdd, ah_qd_min, ah_qd_max)
+        
+        # s.t. qdd >= -beta_q( qd + alpha_q(q - q_min) )   (joint angle CBF constraint)
+        #     -qdd >= -beta_q( alpha_q(q_max - q) - qd )
+        ah_q_min = beta_q( qd + alpha_q(q - self.q_min) )
+        ah_q_max = beta_q( alpha_q(self.q_max - q) - qd )
+        self.AddJointVelCBFConstraint(qdd, ah_q_min, ah_q_max)
+
+        if any(self.q_min >= q) or any(q >= self.q_max):
+            print("joint constraint violation!")
 
         # s.t. Jbar'*tau = f_des
         #self.mp.AddLinearEqualityConstraint(Aeq=Jbar.T,
