@@ -6,12 +6,12 @@ import os
 from pydrake.all import *
 from reduced_order_model import ReducedOrderModelPlant
 from controller import Gen3Controller
-from planner import GuiPlanner
+from planners import GuiPlanner, SimplePlanner
 
 ############## Setup Parameters #################
 
-sim_time = np.inf
-dt = 1e-3
+sim_time = 15
+dt = 4e-3
 target_realtime_rate = 1.0
 
 # Initial joint angles
@@ -28,7 +28,7 @@ x0 = np.array([np.pi-0.5,
 include_manipuland = False
 
 show_diagram = False
-make_plots = False
+make_plots = True
 
 #################################################
 
@@ -111,7 +111,8 @@ ee_geometry.set_illustration_properties(MakePhongIllustrationProperties(ee_color
 scene_graph.RegisterGeometry(ee_source, ee_frame.id(), ee_geometry)
 
 # Create planner block, which determines target end-effector setpoints and gripper state
-rom_planner = builder.AddSystem(GuiPlanner())
+rom_planner = builder.AddSystem(SimplePlanner())
+#rom_planner = builder.AddSystem(GuiPlanner())
 rom_planner.set_name("High-level Planner")
 
 # Create reduced-order model (double integrator)

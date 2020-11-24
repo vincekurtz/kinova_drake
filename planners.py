@@ -4,17 +4,62 @@ from pydrake.all import *
 import numpy as np
 import tkinter as tk
 
-class GuiPlanner(LeafSystem):
+class SimplePlanner(LeafSystem):
+    """ This is a simple system block with no inputs. It simply outpus
+
+        1) A desired end-effector pose [roll;pitch;yaw;x;y;z] (and pose dot)
+        2) A desired gripper state (open or closed)
     """
+    def __init__(self):
+        LeafSystem.__init__(self)
+        
+        # Declare Drake input and output ports
+        self.DeclareVectorOutputPort(
+                "end_effector_setpoint",
+                BasicVector(12),
+                self.SetEndEffectorOutput)
+
+        self.DeclareAbstractOutputPort(
+                "gripper_command",
+                lambda : AbstractValue.Make(True),
+                self.SetGripperOutput)
+
+    def SetEndEffectorOutput(self, context, output):
+        if context.get_time() < 5:
+            target_pose = np.array([np.pi-0.5,  
+                                    0.0,
+                                    np.pi/2,
+                                    0.1,
+                                    0.5,
+                                    0.50])
+        else:
+            target_pose = np.array([np.pi-0.5,  
+                                    0.0,
+                                    np.pi/2,
+                                    0.0,
+                                   -0.5,
+                                    0.50])
+        target_twist = np.zeros(6)
+
+        target_state = np.hstack([target_pose,target_twist])
+        output.SetFromVector(target_state)
+
+    def SetGripperOutput(self, context, output):
+        gripper_closed = False
+        output.set_value(gripper_closed)
+
+
+class GuiPlanner(SimplePlanner):
+    """ 
     This is a simple system block with no inputs. It simply outpus
 
         1) A desired end-effector pose [roll;pitch;yaw;x;y;z] (and pose dot)
         2) A desired gripper state (open or closed)
 
-    Based on user input from a gui.
+    based on user input from a gui.
     """
     def __init__(self):
-        LeafSystem.__init__(self)
+        SimplePlanner.__init__(self)
 
         # Set nominal poses and gripper state
         self.pose_nom = np.array([np.pi-0.5,  
@@ -26,18 +71,6 @@ class GuiPlanner(LeafSystem):
         self.twist_nom = np.zeros(6)
 
         self.gripper_closed = False
-
-
-        # Declare Drake input and output ports
-        self.DeclareVectorOutputPort(
-                "end_effector_setpoint",
-                BasicVector(12),
-                self.SetEndEffectorOutput)
-
-        self.DeclareAbstractOutputPort(
-                "gripper_command",
-                lambda : AbstractValue.Make(True),
-                self.SetGripperOutput)
 
         # Set up interactive window using Tkinter
         self.window = tk.Tk()

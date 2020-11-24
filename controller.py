@@ -437,7 +437,6 @@ class Gen3Controller(LeafSystem):
         Kd_qd = 1.0    # Joint velocity damping
 
         w_qd = 1e-3    # joint velocity damping weight
-        w_f = 1000     # task-space force tracking weight
         w_xdd = 10     # desired RoM input tracking weight
 
         alpha_qd = lambda h : 10*h  # CBF class-K functions
@@ -445,10 +444,16 @@ class Gen3Controller(LeafSystem):
         beta_q = lambda h : 1*h
 
         ######################################################
-
+        
         self.UpdateStoredContext(context)
         q = self.plant.GetPositions(self.context)
         qd = self.plant.GetVelocities(self.context)
+
+        # Unpack PD gains 
+        Kp = np.block([[Kp_rpy*np.eye(3), np.zeros((3,3))],
+                       [np.zeros((3,3)),  Kp_p*np.eye(3) ]])
+        Kd = np.block([[Kd_rpy*np.eye(3), np.zeros((3,3))],
+                       [np.zeros((3,3)),  Kd_p*np.eye(3) ]])
 
         # Dynamics Computations 
         M, Cqd, tau_g, S = self.CalcDynamics()
@@ -504,13 +509,6 @@ class Gen3Controller(LeafSystem):
         Lambda = np.linalg.inv(J@Minv@J.T)
         Jbar = Minv@J.T@Lambda
         Q = J@Minv@C - Jd
-        
-        # Desired end-effector force (really wrench)
-        Kp = np.block([[Kp_rpy*np.eye(3), np.zeros((3,3))],
-                       [np.zeros((3,3)),  Kp_p*np.eye(3) ]])
-        Kd = np.block([[Kd_rpy*np.eye(3), np.zeros((3,3))],
-                       [np.zeros((3,3)),  Kd_p*np.eye(3) ]])
-        #f_des = Lambda@xdd_target + Lambda@Q@(qd - Jbar@xd_tilde) + Jbar.T@tau_g - Kp@x_tilde - Kd@xd_tilde
 
         # Solve QP to find joint torques and input to RoM
         self.mp = MathematicalProgram()
@@ -542,9 +540,9 @@ class Gen3Controller(LeafSystem):
       
         # s.t. qdd >= -alpha_qd(qd - qd_min)   (joint velocity CBF constraint)
         #     -qdd >= -alpha_qd(qd_max - qd)
-        #ah_qd_min = alpha_qd(qd - self.qd_min)
-        #ah_qd_max = alpha_qd(self.qd_max - qd)
-        #self.AddJointVelCBFConstraint(qdd, ah_qd_min, ah_qd_max)
+        ah_qd_min = alpha_qd(qd - self.qd_min)
+        ah_qd_max = alpha_qd(self.qd_max - qd)
+        self.AddJointVelCBFConstraint(qdd, ah_qd_min, ah_qd_max)
         
         # s.t. qdd >= -beta_q( qd + alpha_q(q - q_min) )   (joint angle CBF constraint)
         #     -qdd >= -beta_q( alpha_q(q_max - q) - qd )
