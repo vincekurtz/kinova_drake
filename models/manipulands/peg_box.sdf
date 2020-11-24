@@ -1,0 +1,103 @@
+<?xml version="1.0"?>
+<sdf version='1.6'>
+<model name="peg_box">
+  <link name="base_link">
+    <inertial>
+      <pose frame=''>0 0 0.025 0 0 0 </pose>
+      <mass>1.0</mass>
+        <inertia>
+          <ixx>1.17e-5</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>1.9e-5</iyy>
+          <iyz>0</iyz>
+          <izz>1.9e-5</izz>
+        </inertia>
+    </inertial>
+
+    <visual name='top'>
+      <pose frame=''>0 0.0855 0.075 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.33 0.13 0.15</size>
+        </box>
+      </geometry>
+      <material>
+        <diffuse>0.502 0.0 0.125 1.0</diffuse>
+      </material>
+    </visual>
+    <collision name='top_collision'>
+      <pose frame=''>0 0.0855 0.075 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.33 0.13 0.15</size>
+        </box>
+      </geometry>
+    </collision>
+    
+    <visual name='bottom'>
+      <pose frame=''>0 -0.0855 0.075 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.33 0.13 0.15</size>
+        </box>
+      </geometry>
+      <material>
+        <diffuse>0.502 0.0 0.125 1.0</diffuse>
+      </material>
+    </visual>
+    <collision name='bottom_collision'>
+      <pose frame=''>0 -0.0855 0.075 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.33 0.13 0.15</size>
+        </box>
+      </geometry>
+    </collision>
+    
+    <visual name='left'>
+      <pose frame=''>-0.0855 0.0 0.075 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.13 0.33 0.15</size>
+        </box>
+      </geometry>
+      <material>
+        <diffuse>0.502 0.0 0.125 1.0</diffuse>
+      </material>
+    </visual>
+    <collision name='left_collision'>
+      <pose frame=''>-0.0855 0.0 0.075 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.13 0.33 0.15</size>
+        </box>
+      </geometry>
+    </collision>
+
+    <visual name='right'>
+      <pose frame=''>0.0855 0.0 0.075 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.13 0.33 0.15</size>
+        </box>
+      </geometry>
+      <material>
+        <diffuse>0.502 0.0 0.125 1.0</diffuse>
+      </material>
+    </visual>
+    <collision name='right_collision'>
+      <pose frame=''>0.0855 0.0 0.075 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.13 0.33 0.15</size>
+        </box>
+      </geometry>
+      <material>
+        <diffuse>0.502 0.0 0.125 1.0</diffuse>
+      </material>
+    </collision>
+
+   </link>
+</model>
+</sdf>

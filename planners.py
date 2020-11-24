@@ -62,7 +62,7 @@ class GuiPlanner(SimplePlanner):
         SimplePlanner.__init__(self)
 
         # Set nominal poses and gripper state
-        self.pose_nom = np.array([np.pi-0.5,  
+        self.pose_nom = np.array([np.pi,  
                                   0.0,
                                   np.pi/2,
                                   0.2,
@@ -180,5 +180,72 @@ class GuiPlanner(SimplePlanner):
     def SetGripperOutput(self, context, output):
         output.set_value(self.gripper_closed)
 
+class PegPlanner(SimplePlanner):
+    """ 
+    This is a simple system block with no inputs. It simply outpus
 
+        1) A desired end-effector pose [roll;pitch;yaw;x;y;z] (and pose dot)
+        2) A desired gripper state (open or closed)
+
+    for a simple peg insertion task.
+    """
+    def __init__(self):
+        SimplePlanner.__init__(self)
+
+        self.gripper_closed = False
+
+        self.pregrasp = np.array([3*np.pi/2,  
+                                  0.0,
+                                  np.pi/2,
+                                  0.2,
+                                  0.5,
+                                  0.12])
+        
+        self.grasp = np.array([3*np.pi/2,  
+                               0.0,
+                               np.pi/2,
+                               0.1,
+                               0.5,
+                               0.12])
+        
+        self.predrop = np.array([3*np.pi/2,  
+                                 0.0,
+                                 np.pi/2,
+                                 -0.385,
+                                 0.5,
+                                 0.4])
+        self.drop = np.array([3*np.pi/2,  
+                              0.0,
+                              np.pi/2,
+                              -0.385,
+                              0.5,
+                              0.22])
+
+    def SetGripperOutput(self, context, output):
+        output.set_value(self.gripper_closed)
+    
+    def SetEndEffectorOutput(self, context, output):
+        # We'll go through a pre-scheduled simple sequence of moves
+        t = context.get_time()
+
+        if t < 5:
+            # Go to pre-grasp position
+            target_pose = self.pregrasp
+        elif (t < 8):
+            # Go to grasp position
+            target_pose = self.grasp
+        elif (t < 14):
+            # Close gripper and go to pre-drop position
+            self.gripper_closed = True
+            target_pose = self.predrop
+        elif (t < 20):
+            # Move to the drop position
+            target_pose = self.drop
+        else:
+            # Drop the peg and go home
+            self.gripper_closed = False
+            target_pose = self.pregrasp
+
+        target_state = np.hstack([target_pose, np.zeros(6)])
+        output.SetFromVector(target_state)
 

@@ -6,11 +6,11 @@ import os
 from pydrake.all import *
 from reduced_order_model import ReducedOrderModelPlant
 from controller import Gen3Controller
-from planners import GuiPlanner, SimplePlanner
+from planners import GuiPlanner, SimplePlanner, PegPlanner
 
 ############## Setup Parameters #################
 
-sim_time = 15
+sim_time = np.inf
 dt = 4e-3
 target_realtime_rate = 1.0
 
@@ -25,10 +25,13 @@ x0 = np.array([np.pi-0.5,
                0.3,
                0.5])
 
-include_manipuland = False
+# High-level planner
+planner = "peg"    # must be one of "gui", "peg", or "simple"
+
+include_manipuland = True
 
 show_diagram = False
-make_plots = True
+make_plots = False
 
 #################################################
 
@@ -89,9 +92,17 @@ plant.RegisterVisualGeometry(
 
 # Load an object to manipulate
 if include_manipuland:
-    manipuland_sdf = FindResourceOrThrow("drake/examples/manipulation_station/models/061_foam_brick.sdf")
+    #manipuland_sdf = FindResourceOrThrow("drake/examples/manipulation_station/models/061_foam_brick.sdf")
     #manipuland_sdf = FindResourceOrThrow("drake/manipulation/models/ycb/sdf/003_cracker_box.sdf")
+    #manipuland_sdf = FindResourceOrThrow("drake/manipulation/models/ycb/sdf/009_gelatin_box.sdf")
+    manipuland_sdf = "./models/manipulands/peg.sdf"
     manipuland = Parser(plant=plant).AddModelFromFile(manipuland_sdf,"manipuland")
+
+    box_urdf = "./models/manipulands/peg_box.sdf"
+    box = Parser(plant=plant).AddModelFromFile(box_urdf,"box")
+    X_box = RigidTransform()
+    X_box.set_translation(np.array([-0.5,0.5,0]))
+    plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base_link",box), X_box)
 
 c_plant.Finalize()
 plant.Finalize()
@@ -111,8 +122,14 @@ ee_geometry.set_illustration_properties(MakePhongIllustrationProperties(ee_color
 scene_graph.RegisterGeometry(ee_source, ee_frame.id(), ee_geometry)
 
 # Create planner block, which determines target end-effector setpoints and gripper state
-rom_planner = builder.AddSystem(SimplePlanner())
-#rom_planner = builder.AddSystem(GuiPlanner())
+if planner == "simple":
+    rom_planner = builder.AddSystem(SimplePlanner())
+elif planner == "gui":
+    rom_planner = builder.AddSystem(GuiPlanner())
+elif planner == "peg":
+    rom_planner = builder.AddSystem(PegPlanner())
+else:
+    raise ValueError("Invalid planner %s" % planner)
 rom_planner.set_name("High-level Planner")
 
 # Create reduced-order model (double integrator)
@@ -223,7 +240,7 @@ rom_context = diagram.GetMutableSubsystemContext(rom, diagram_context)
 rom_context.SetContinuousState(np.hstack([x0,np.zeros(6,)]))
 
 if include_manipuland:
-    plant.SetPositions(plant_context, manipuland, np.array([0,0,0,1,0,0.4,0.04]))
+    plant.SetPositions(plant_context, manipuland, np.array([0.7,0,0.7,0,-0.0,0.5,0.1]))
 
 # Run the simulation
 simulator.Initialize()

@@ -434,7 +434,7 @@ class Gen3Controller(LeafSystem):
         Kp_rpy = 1.0   # End effector orientation stiffness
         Kd_rpy = 0.5   # and damping
 
-        Kd_qd = 1.0    # Joint velocity damping
+        Kd_qd = 10.0    # Joint velocity damping
 
         w_qd = 1e-3    # joint velocity damping weight
         w_xdd = 10     # desired RoM input tracking weight

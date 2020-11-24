@@ -1,0 +1,140 @@
+<?xml version="1.0"?>
+<sdf version='1.6'>
+<model name="dumbell">
+  <link name="base_link">
+    <inertial>
+      <pose frame=''>0 0 0.1 0 0 0 </pose>
+      <mass>0.528</mass>
+        <inertia>
+          <ixx>1.17e-5</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>1.9e-5</iyy>
+          <iyz>0</iyz>
+          <izz>1.9e-5</izz>
+        </inertia>
+    </inertial>
+    <visual name='base_box'>
+      <pose frame=''>0 0 0.1 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.15 0.2 0.15</size>
+        </box>
+      </geometry>
+      <material>
+        <diffuse>0.31 0.01 0.13 1.0</diffuse>
+      </material>
+    </visual>
+    <!--
+      This places contact spheres on the corners of the visual box and a
+      *slightly* smaller inset contact box (centered on the visual origin). This
+      accounts for issues in the contact computation providing stable table
+      contact *and* supports grasping.
+
+      When the box is in stable contact with the ground plane, the corner
+      spheres will provide fixed contact points (simulating distributed contact
+      points around the face).  However, for arbitrary grip configuration, the
+      slightly inset box will provide contact with a *slight* offset (in this
+      case a deviation of 0.0005 m from the visual surface).
+     -->
+    <collision name='box_collision'>
+      <pose>0 0 0.1 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.145 0.15 0.145</size>
+        </box>
+      </geometry>
+      <material>
+        <diffuse>0 1 0 1.0</diffuse>
+      </material>
+    </collision>
+    <collision name='point_collision1'>
+      <pose>0.075 0.1 0.02 0 0 0</pose>
+      <geometry>
+        <sphere><radius>1e-7</radius></sphere>
+      </geometry>
+    </collision>
+    <collision name='point_collision2'>
+      <pose>0.075 -0.1 0.02 0 0 0</pose>
+      <geometry>
+        <sphere><radius>1e-7</radius></sphere>
+      </geometry>
+    </collision>
+    <collision name='point_collision3'>
+      <pose>-0.075 0.1 0.02 0 0 0</pose>
+      <geometry>
+        <sphere><radius>1e-7</radius></sphere>
+      </geometry>
+    </collision>
+    <collision name='point_collision4'>
+      <pose>-0.075 -0.1 0.02 0 0 0</pose>
+      <geometry>
+        <sphere><radius>1e-7</radius></sphere>
+      </geometry>
+    </collision>
+    
+    <visual name='handle_top'>
+      <pose frame=''>0 0 0.25 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.03 0.15 0.03</size>
+        </box>
+      </geometry>
+      <material>
+        <diffuse>0.31 0.01 0.13 1.0</diffuse>
+      </material>
+    </visual>
+    <collision name='handle_top_collision'>
+      <pose frame="">0 0 0.25 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.03 0.15 0.03</size>
+        </box>
+      </geometry>
+    </collision>
+
+
+    <visual name='handle_left'>
+      <pose frame=''>0.0 0.08 0.215 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.03 0.03 0.10</size>
+        </box>
+      </geometry>
+      <material>
+        <diffuse>0.31 0.01 0.13 1.0</diffuse>
+      </material>
+    </visual>
+    <collision name='handle_left_collision'>
+      <pose frame=''>0.0 0.08 0.215 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.03 0.03 0.10</size>
+        </box>
+      </geometry>
+    </collision>
+    
+    <visual name='handle_right'>
+      <pose frame=''>0.0 -0.08 0.215 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.03 0.03 0.10</size>
+        </box>
+      </geometry>
+      <material>
+        <diffuse>0.31 0.01 0.13 1.0</diffuse>
+      </material>
+    </visual>
+    <collision name='handle_right_collision'>
+      <pose frame=''>0.0 -0.08 0.215 0 0 0</pose>
+      <geometry>
+        <box> 
+          <size>0.03 0.03 0.10</size>
+        </box>
+      </geometry>
+    </collision>
+
+
+   </link>
+</model>
+</sdf>
