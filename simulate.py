@@ -11,7 +11,7 @@ from planner import GuiPlanner
 ############## Setup Parameters #################
 
 sim_time = np.inf
-dt = 5e-3
+dt = 1e-3
 target_realtime_rate = 1.0
 
 # Initial joint angles
@@ -139,10 +139,7 @@ builder.Connect(                                        # planner sends gripper 
         controller.GetInputPort("gripper_command"))
 
 builder.Connect(                                # RoM PD controller sends target end-effector
-        rom_ctrl.get_output_port(),             # accelerations to the RoM and the whole-body
-        rom.GetInputPort("u"))                  # controller
-builder.Connect(
-        rom_ctrl.get_output_port(), 
+        rom_ctrl.get_output_port(),             # accelerations to the whole-body controller
         controller.GetInputPort("rom_input"))
 
 builder.Connect(                                    # RoM plant sends RoM state (end-effector
@@ -158,6 +155,10 @@ builder.Connect(                                  # whole-body controller sends 
 builder.Connect(
         controller.GetOutputPort("gripper_forces"),
         plant.get_actuation_input_port(gripper))
+
+builder.Connect(                                        # whole-body controller sends resolved
+        controller.GetOutputPort("resolved_rom_input"), # RoM inputs (consistent with joint
+        rom.GetInputPort("u"))                          # limits, etc) to the RoM
 
 builder.Connect(                                # whole-body plant sends arm and gripper
         plant.get_state_output_port(gen3),      # state to the whole-body controller.

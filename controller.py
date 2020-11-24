@@ -69,7 +69,11 @@ class Gen3Controller(LeafSystem):
                                       BasicVector(6))
 
         # Output port for resolved RoM input
-        #TODO
+        self.xdd_nom = np.zeros(6)
+        self.DeclareVectorOutputPort(
+                "resolved_rom_input",
+                BasicVector(6),
+                self.SetRomOutput)
 
         # Input port for gripper command (open or closed)
         self.grip_cmd_port = self.DeclareAbstractInputPort(
@@ -148,6 +152,27 @@ class Gen3Controller(LeafSystem):
         self.q_max = np.array(q_max)
         self.qd_min = np.array(qd_min)
         self.qd_max = np.array(qd_max)
+        
+    def AddTaskForceConstraint(self, Jbar, tau, Lambda, xdd_nom, Q, qd, 
+                                            xd_tilde, tau_g, Kp, x_tilde, Kd):
+        """
+        Add a linear constraint
+        
+            Jbar'*tau = f_des
+
+        to the whole-body QP, where 
+
+            f_des = Lambda*xdd_nom + Lambda*Q*(qd - Jbar*xd_tilde) + Jbar.T*tau_g 
+                                                            - Kp*x_tilde - Kd*xd_tilde
+
+        are desired task-space forces and both tau and xdd_nom are optimization variables
+        """
+        # we'll write as A*x = b
+        A = np.hstack([Jbar.T, -Lambda])
+        x = np.vstack([tau,xdd_nom])
+        b = Lambda@Q@(qd-Jbar@xd_tilde) + Jbar.T@tau_g - Kp@x_tilde - Kd@xd_tilde
+
+        return self.mp.AddLinearEqualityConstraint(A,b,x)
 
     def AddDynamicsConstraint(self, M, qdd, Cqd, tau_g, S, tau):
         """
@@ -367,6 +392,9 @@ class Gen3Controller(LeafSystem):
         """
         output.SetFromVector([self.err])
 
+    def SetRomOutput(self, context, output):
+        output.SetFromVector(self.xdd_nom)
+
     def DoCalcGripperOutput(self, context, output):
         """
         This method is called at every timestep, and determines
@@ -381,7 +409,7 @@ class Gen3Controller(LeafSystem):
         if gripper_closed:
             q_nom = np.array([0.024,0.024])
         else:
-            q_nom = np.array([-0.015,-0.015])
+            q_nom = np.array([-0.0,-0.0])
 
         v_nom = np.array([0,0])
 
@@ -410,6 +438,7 @@ class Gen3Controller(LeafSystem):
 
         w_qd = 1e-3    # joint velocity damping weight
         w_f = 1000     # task-space force tracking weight
+        w_xdd = 10     # desired RoM input tracking weight
 
         alpha_qd = lambda h : 10*h  # CBF class-K functions
         alpha_q = lambda h : 1*h
@@ -461,7 +490,7 @@ class Gen3Controller(LeafSystem):
         pdd_nom = rom_input[3:]
         wd_nom = RPY_nom.CalcAngularVelocityInParentFromRpyDt(rpydd_nom)
         
-        xdd_nom = np.hstack([wd_nom, pdd_nom])
+        xdd_target = np.hstack([wd_nom, pdd_nom])
 
         # End-effector errors
         rpy_tilde = RollPitchYaw(RotationMatrix(RollPitchYaw(rpy-rpy_nom))).vector()  # converting to Rotation matrix and back
@@ -481,18 +510,24 @@ class Gen3Controller(LeafSystem):
                        [np.zeros((3,3)),  Kp_p*np.eye(3) ]])
         Kd = np.block([[Kd_rpy*np.eye(3), np.zeros((3,3))],
                        [np.zeros((3,3)),  Kd_p*np.eye(3) ]])
-        f_des = Lambda@xdd_nom + Lambda@Q@(qd - Jbar@xd_tilde) + Jbar.T@tau_g - Kp@x_tilde - Kd@xd_tilde
+        #f_des = Lambda@xdd_target + Lambda@Q@(qd - Jbar@xd_tilde) + Jbar.T@tau_g - Kp@x_tilde - Kd@xd_tilde
 
-        # Solve QP to find corresponding joint torques
+        # Solve QP to find joint torques and input to RoM
         self.mp = MathematicalProgram()
         tau = self.mp.NewContinuousVariables(self.plant.num_actuators(), 1, 'tau')
         qdd = self.mp.NewContinuousVariables(self.plant.num_velocities(), 1, 'qdd')
+        xdd_nom = self.mp.NewContinuousVariables(6,1,'xdd_nom')
        
         # min w_qd*|| qdd - qdd_nom ||^2
         qdd_nom = -Kd_qd*qd
         self.mp.AddQuadraticErrorCost(Q=w_qd*np.eye(self.plant.num_velocities()),
                                       x_desired=qdd_nom,
                                       vars=qdd)
+
+        # min w_xdd*|| xdd_nom - xdd_target ||^2
+        self.mp.AddQuadraticErrorCost(Q=w_xdd*np.eye(6),
+                                      x_desired=xdd_target,
+                                      vars=xdd_nom)
         
         # min || tau ||^2
         #self.mp.AddQuadraticErrorCost(Q=1e-2*np.eye(self.plant.num_actuators()),
@@ -500,7 +535,7 @@ class Gen3Controller(LeafSystem):
         #                              vars=tau)
 
         # min w_f*|| Jbar'*tau - f_des ||
-        self.AddEndEffectorForceCost(Jbar, tau, f_des, weight=w_f)
+        #self.AddEndEffectorForceCost(Jbar, tau, f_des, weight=w_f)
 
         # s.t. M*qdd + Cqd + tau_g = tau
         self.AddDynamicsConstraint(M, qdd, Cqd, tau_g, S, tau)
@@ -516,9 +551,12 @@ class Gen3Controller(LeafSystem):
         ah_q_min = beta_q( qd + alpha_q(q - self.q_min) )
         ah_q_max = beta_q( alpha_q(self.q_max - q) - qd )
         self.AddJointVelCBFConstraint(qdd, ah_q_min, ah_q_max)
-
-        if any(self.q_min >= q) or any(q >= self.q_max):
-            print("joint constraint violation!")
+        
+        # s.t. Jbar'*tau = f_des, where
+        # f_des = Lambda*xdd_nom + Lambda*Q*(qd - Jbar*xd_tilde) + Jbar.T*tau_g 
+        #                                                   - Kp*x_tilde - Kd*xd_tilde
+        self.AddTaskForceConstraint(Jbar, tau, Lambda, xdd_nom, Q, qd, 
+                                       xd_tilde, tau_g, Kp, x_tilde, Kd)
 
         # s.t. Jbar'*tau = f_des
         #self.mp.AddLinearEqualityConstraint(Aeq=Jbar.T,
@@ -536,7 +574,16 @@ class Gen3Controller(LeafSystem):
         result = self.solver.Solve(self.mp)
         assert result.is_success()
         tau = result.GetSolution(tau)
+        xdd_nom = result.GetSolution(xdd_nom)
 
+        # Convert RoM rotational input from angular acceleration to RPYddt
+        # for sending to the RoM
+        wd_nom = xdd_nom[:3]
+        pdd_nom = xdd_nom[3:]
+        rpydd_nom = RPY_nom.CalcRpyDtFromAngularVelocityInParent(wd_nom)
+        self.xdd_nom = np.hstack([rpydd_nom,pdd_nom])
+
+        # Set arm torque outputs
         tau = tau[:-2]   # the last two elements have to do with the gripper. We'll ignore those here
                          # and set them in DoCalcGripperOutput
         output.SetFromVector(tau)
