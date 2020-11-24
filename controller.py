@@ -35,45 +35,48 @@ class Gen3Controller(LeafSystem):
         self.arm_index = self.plant.GetModelInstanceByName("gen3")
         self.gripper_index = self.plant.GetModelInstanceByName("gripper")
 
-        # First input port takes in robot state ([q;qd])
+        # Input port for robot state ([q;qd])
         self.arm_state_port = self.DeclareVectorInputPort(
                                       "arm_state",
                                       BasicVector(self.plant.num_positions(self.arm_index)
                                                   +self.plant.num_velocities(self.arm_index)))
         
-        # First output port maps to torques on robot arm
+        # Output port for torques on robot arm
         self.DeclareVectorOutputPort(
                 "arm_torques",
                 BasicVector(7),
                 self.DoCalcArmOutput)
 
-        # Second input port takes in gripper states
+        # Input port for in gripper states
         self.grip_state_port = self.DeclareVectorInputPort(
                                       "gripper_state",
                                       BasicVector(4))
 
-        # Second output port maps to gripper forces
+        # Output port for gripper forces
         self.DeclareVectorOutputPort(
                 "gripper_forces",
                 BasicVector(2),
                 self.DoCalcGripperOutput)
 
-        # Input for RoM state x_rom = [x_des,xd_des]
+        # Input port for RoM state x_rom = [x_des,xd_des]
         self.rom_state_port = self.DeclareVectorInputPort(
                                      "rom_state",
                                      BasicVector(12))
 
-        # Input for RoM input u_rom = [xdd_des]
+        # Input port for RoM target input u_rom = [xdd_des]
         self.rom_input_port = self.DeclareVectorInputPort(
                                       "rom_input",
                                       BasicVector(6))
 
-        # Input for gripper (open or closed)
+        # Output port for resolved RoM input
+        #TODO
+
+        # Input port for gripper command (open or closed)
         self.grip_cmd_port = self.DeclareAbstractInputPort(
                                      "gripper_command",
                                      AbstractValue.Make(True))
 
-        # Output end effector state [x,xd]
+        # Output port for end effector state [x,xd] (for logging)
         self.x = np.zeros(6)
         self.xd = np.zeros(6)
         self.DeclareVectorOutputPort(
@@ -81,14 +84,14 @@ class Gen3Controller(LeafSystem):
                 BasicVector(12),
                 self.DoCalcEndEffectorOutput)
 
-        # Output simulation function V
+        # Output port for storage function V (for logging)
         self.V = 0
         self.DeclareVectorOutputPort(
-                "simulation_function",
+                "storage_function",
                 BasicVector(1),
-                self.DoCalcSimFcnOutput)
+                self.DoCalcStorageFcnOutput)
         
-        # Output tracking error x_tilde
+        # Output port for  tracking error x_tilde (for logging)
         self.err = 0
         self.DeclareVectorOutputPort(
                 "error",
@@ -352,9 +355,9 @@ class Gen3Controller(LeafSystem):
         """
         output.SetFromVector(np.hstack([self.x,self.xd]))
 
-    def DoCalcSimFcnOutput(self, context, output):
+    def DoCalcStorageFcnOutput(self, context, output):
         """
-        Output the current value of the simulation function.
+        Output the current value of the storage function.
         """
         output.SetFromVector([self.V])
     

@@ -110,6 +110,62 @@ ee_geometry = GeometryInstance(X_ee, ee_shape, "ee")
 ee_geometry.set_illustration_properties(MakePhongIllustrationProperties(ee_color))
 scene_graph.RegisterGeometry(ee_source, ee_frame.id(), ee_geometry)
 
+# Create planner block, which determines target end-effector setpoints and gripper state
+rom_planner = builder.AddSystem(GuiPlanner())
+rom_planner.set_name("High-level Planner")
+
+# Create reduced-order model (double integrator)
+rom_dof = 6   # degrees of freedom in the reduced-order model
+rom = builder.AddSystem(ReducedOrderModelPlant(rom_dof, ee_frame.id()))
+rom.set_name("RoM")
+
+# Create PD controller for reduced-order model
+rom_ctrl = builder.AddSystem(PidController(kp=2*np.ones(rom_dof), 
+                                           ki=np.zeros(rom_dof),
+                                           kd=2*np.ones(rom_dof)))
+rom_ctrl.set_name("RoM_controller")
+
+# Create whole-body controller
+ctrl = Gen3Controller(c_plant,dt)     # we use c_plant, which doesn't include objects in 
+controller = builder.AddSystem(ctrl)  # the workspace, for dynamics computations
+
+# Connect blocks in the control diagram
+builder.Connect(                                            # planner sends target end-effector
+        rom_planner.GetOutputPort("end_effector_setpoint"), # pose to the RoM (PD) controller
+        rom_ctrl.get_input_port_desired_state())
+
+builder.Connect(                                        # planner sends gripper commands 
+        rom_planner.GetOutputPort("gripper_command"),   # directly to the whole-body controller
+        controller.GetInputPort("gripper_command"))
+
+builder.Connect(                                # RoM PD controller sends target end-effector
+        rom_ctrl.get_output_port(),             # accelerations to the RoM and the whole-body
+        rom.GetInputPort("u"))                  # controller
+builder.Connect(
+        rom_ctrl.get_output_port(), 
+        controller.GetInputPort("rom_input"))
+
+builder.Connect(                                    # RoM plant sends RoM state (end-effector
+        rom.GetOutputPort("x"),                     # pose and twist) to the PD controller
+        rom_ctrl.get_input_port_estimated_state())  # and the whole-body controller
+builder.Connect(
+        rom.GetOutputPort("x"), 
+        controller.GetInputPort("rom_state"))
+
+builder.Connect(                                  # whole-body controller sends torques
+        controller.GetOutputPort("arm_torques"),  # to the arm and gripper
+        plant.get_actuation_input_port(gen3))
+builder.Connect(
+        controller.GetOutputPort("gripper_forces"),
+        plant.get_actuation_input_port(gripper))
+
+builder.Connect(                                # whole-body plant sends arm and gripper
+        plant.get_state_output_port(gen3),      # state to the whole-body controller.
+        controller.GetInputPort("arm_state"))
+builder.Connect(
+        plant.get_state_output_port(gripper),
+        controller.GetInputPort("gripper_state"))
+
 # Set up the Scene Graph
 builder.Connect(
         scene_graph.get_query_output_port(),
@@ -117,50 +173,9 @@ builder.Connect(
 builder.Connect(
         plant.get_geometry_poses_output_port(),
         scene_graph.get_source_pose_port(plant.get_source_id()))
-
-# Connect controllers
-rom_dof = 6   # degrees of freedom in the reduced-order model
-rom = builder.AddSystem(ReducedOrderModelPlant(rom_dof, ee_frame.id()))
-rom.set_name("RoM")
-rom_ctrl = builder.AddSystem(PidController(kp=2*np.ones(rom_dof), 
-                                           ki=np.zeros(rom_dof),
-                                           kd=2*np.ones(rom_dof)))
-rom_ctrl.set_name("RoM_controller")
-
 builder.Connect(
         rom.GetOutputPort("ee_geometry"),
         scene_graph.get_source_pose_port(ee_source))
-
-ctrl = Gen3Controller(c_plant,dt)     # we use c_plant, which doesn't include objects in 
-controller = builder.AddSystem(ctrl)  # the workspace, for dynamics computations
-builder.Connect(
-        plant.get_state_output_port(gen3),
-        controller.GetInputPort("arm_state"))
-builder.Connect(
-        controller.GetOutputPort("arm_torques"),
-        plant.get_actuation_input_port(gen3))
-
-builder.Connect(
-        plant.get_state_output_port(gripper),
-        controller.GetInputPort("gripper_state"))
-builder.Connect(
-        controller.GetOutputPort("gripper_forces"),
-        plant.get_actuation_input_port(gripper))
-
-builder.Connect(rom_ctrl.get_output_port(), rom.GetInputPort("u"))
-builder.Connect(rom.GetOutputPort("x"), rom_ctrl.get_input_port_estimated_state())
-
-builder.Connect(rom.GetOutputPort("x"), controller.GetInputPort("rom_state"))
-builder.Connect(rom_ctrl.get_output_port(), controller.GetInputPort("rom_input"))
-
-# Set desired RoM and gripper state  
-rom_planner = builder.AddSystem(GuiPlanner())
-builder.Connect(
-        rom_planner.GetOutputPort("end_effector_setpoint"),
-        rom_ctrl.get_input_port_desired_state())
-builder.Connect(
-        rom_planner.GetOutputPort("gripper_command"),
-        controller.GetInputPort("gripper_command"))
 
 # Set up the Visualizer
 visualizer_params = DrakeVisualizerParams(role=Role.kIllustration)  # kProximity for collision geometry,
@@ -175,7 +190,7 @@ rom_logger.set_name("rom_logger")
 plant_logger = LogOutput(controller.GetOutputPort("end_effector"),builder)
 plant_logger.set_name("plant_logger")
 
-V_logger = LogOutput(controller.GetOutputPort("simulation_function"),builder)
+V_logger = LogOutput(controller.GetOutputPort("storage_function"),builder)
 V_logger.set_name("V_logger")
 
 err_logger = LogOutput(controller.GetOutputPort("error"),builder)
