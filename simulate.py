@@ -11,7 +11,7 @@ from planners import GuiPlanner, SimplePlanner, PegPlanner
 ############## Setup Parameters #################
 
 sim_time = np.inf
-dt = 4e-3
+dt = 3e-3
 target_realtime_rate = 1.0
 
 # Initial joint angles
@@ -26,9 +26,9 @@ x0 = np.array([np.pi-0.5,
                0.5])
 
 # High-level planner
-planner = "peg"    # must be one of "gui", "peg", or "simple"
+planner = "gui"    # must be one of "gui", "peg", or "simple"
 
-include_manipuland = True
+include_manipuland = False
 
 show_diagram = False
 make_plots = False
@@ -200,7 +200,7 @@ builder.Connect(
 visualizer_params = DrakeVisualizerParams(role=Role.kIllustration)  # kProximity for collision geometry,
                                                                     # kIllustration for visual geometry
 DrakeVisualizer().AddToBuilder(builder=builder, scene_graph=scene_graph, params=visualizer_params)
-ConnectContactResultsToDrakeVisualizer(builder, plant)
+#ConnectContactResultsToDrakeVisualizer(builder, plant)
 
 # Add loggers
 rom_logger = LogOutput(rom.GetOutputPort("x"),builder)

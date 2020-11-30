@@ -26,7 +26,8 @@ class Gen3Controller(LeafSystem):
         self.plant = plant
         self.context = self.plant.CreateDefaultContext()  # stores q, qd
 
-        self.solver = OsqpSolver()
+        #self.solver = OsqpSolver()
+        self.solver = GurobiSolver()
 
         # AutoDiff plant and context for values that require automatic differentiation
         self.plant_autodiff = plant.ToAutoDiffXd()
@@ -439,7 +440,7 @@ class Gen3Controller(LeafSystem):
         w_qd = 1e-3    # joint velocity damping weight
         w_xdd = 10     # desired RoM input tracking weight
 
-        alpha_qd = lambda h : 10*h  # CBF class-K functions
+        alpha_qd = lambda h : 1*h  # CBF class-K functions
         alpha_q = lambda h : 1*h
         beta_q = lambda h : 1*h
 
@@ -538,17 +539,17 @@ class Gen3Controller(LeafSystem):
         # s.t. M*qdd + Cqd + tau_g = tau
         self.AddDynamicsConstraint(M, qdd, Cqd, tau_g, S, tau)
       
-        # s.t. qdd >= -alpha_qd(qd - qd_min)   (joint velocity CBF constraint)
-        #     -qdd >= -alpha_qd(qd_max - qd)
-        ah_qd_min = alpha_qd(qd - self.qd_min)
-        ah_qd_max = alpha_qd(self.qd_max - qd)
-        self.AddJointVelCBFConstraint(qdd, ah_qd_min, ah_qd_max)
-        
-        # s.t. qdd >= -beta_q( qd + alpha_q(q - q_min) )   (joint angle CBF constraint)
-        #     -qdd >= -beta_q( alpha_q(q_max - q) - qd )
-        ah_q_min = beta_q( qd + alpha_q(q - self.q_min) )
-        ah_q_max = beta_q( alpha_q(self.q_max - q) - qd )
-        self.AddJointVelCBFConstraint(qdd, ah_q_min, ah_q_max)
+        ## s.t. qdd >= -alpha_qd(qd - qd_min)   (joint velocity CBF constraint)
+        ##     -qdd >= -alpha_qd(qd_max - qd)
+        #ah_qd_min = alpha_qd(qd - self.qd_min)
+        #ah_qd_max = alpha_qd(self.qd_max - qd)
+        #self.AddJointVelCBFConstraint(qdd, ah_qd_min, ah_qd_max)
+        #
+        ## s.t. qdd >= -beta_q( qd + alpha_q(q - q_min) )   (joint angle CBF constraint)
+        ##     -qdd >= -beta_q( alpha_q(q_max - q) - qd )
+        #ah_q_min = beta_q( qd + alpha_q(q - self.q_min) )
+        #ah_q_max = beta_q( alpha_q(self.q_max - q) - qd )
+        #self.AddJointVelCBFConstraint(qdd, ah_q_min, ah_q_max)
         
         # s.t. Jbar'*tau = f_des, where
         # f_des = Lambda*xdd_nom + Lambda*Q*(qd - Jbar*xd_tilde) + Jbar.T*tau_g 
@@ -569,7 +570,9 @@ class Gen3Controller(LeafSystem):
         #                            ub=tau_max*np.ones(self.plant.num_actuators()),
         #                            vars=tau)
 
+
         result = self.solver.Solve(self.mp)
+
         assert result.is_success()
         tau = result.GetSolution(tau)
         xdd_nom = result.GetSolution(xdd_nom)
