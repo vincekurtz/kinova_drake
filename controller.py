@@ -422,8 +422,8 @@ class Gen3Controller(LeafSystem):
         m_hat = theta_hat[0]     # mass
         mc_hat = theta_hat[1:4]  # mass*(position of CoM in end-effector frame)
         c_hat = mc_hat/m_hat
-        print(c_hat)
-
+        print("")
+        print("Estimated:    %s" % c_hat)
 
     def DoCalcGripperOutput(self, context, output):
         """

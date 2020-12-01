@@ -7,6 +7,7 @@ from pydrake.all import *
 from reduced_order_model import ReducedOrderModelPlant
 from controller import Gen3Controller
 from planners import *
+from observer import OmniscientObserver
 
 ############## Setup Parameters #################
 
@@ -149,6 +150,9 @@ rom_ctrl.set_name("RoM_controller")
 ctrl = Gen3Controller(c_plant,dt)     # we use c_plant, which doesn't include objects in 
 controller = builder.AddSystem(ctrl)  # the workspace, for dynamics computations
 
+# Add observer with full state information for everything in the simulation 
+observer = builder.AddSystem(OmniscientObserver(plant))
+
 # Connect blocks in the control diagram
 builder.Connect(                                            # planner sends target end-effector
         rom_planner.GetOutputPort("end_effector_setpoint"), # pose to the RoM (PD) controller
@@ -187,6 +191,10 @@ builder.Connect(
         plant.get_state_output_port(gripper),
         controller.GetInputPort("gripper_state"))
 
+builder.Connect(                          # whole-body plant sends state information
+        plant.get_state_output_port(),    # (including workspace objects) to the observer
+        observer.GetInputPort("state"))
+
 # Set up the Scene Graph
 builder.Connect(
         scene_graph.get_query_output_port(),
@@ -216,6 +224,9 @@ V_logger.set_name("V_logger")
 
 err_logger = LogOutput(controller.GetOutputPort("error"),builder)
 err_logger.set_name("error_logger")
+
+com_gt_logger = LogOutput(observer.GetOutputPort("manipuland_com_gt"),builder)
+com_gt_logger.set_name("CoM_ground_truth")
 
 # Compile the diagram: no adding control blocks from here on out
 diagram = builder.Build()
