@@ -114,6 +114,12 @@ class Gen3Controller(LeafSystem):
         # turn were loaded from a urdf
         self.GetJointLimits()
 
+        # Parameter estimation stuff
+        self.qd_last = np.zeros(self.plant.num_velocities())
+        self.tau_last = np.zeros(self.plant.num_actuators())
+        self.Ys = []
+        self.Fs = []
+
     def GetJointLimits(self):
         """
         Iterate through self.plant to establish joint angle
@@ -396,6 +402,29 @@ class Gen3Controller(LeafSystem):
     def SetRomOutput(self, context, output):
         output.SetFromVector(self.xdd_nom)
 
+    def DoParameterEstimation(self, f, v, a):
+        """
+        Given current estimates of applied spatial forces f,
+        spatial velocities v, and spatial accelerations a, 
+        estimate the (lumped) inertial parameters of the 
+        manipuland. 
+        """
+        y = single_body_regression_matrix(a,v)
+        self.Ys.append(y)
+        self.Fs.append(f)
+
+        Y = np.vstack(self.Ys)
+        F = np.hstack(self.Fs)
+
+        Yinv = np.linalg.inv(Y.T@Y)@Y.T
+        theta_hat = Yinv@F
+
+        m_hat = theta_hat[0]     # mass
+        mc_hat = theta_hat[1:4]  # mass*(position of CoM in end-effector frame)
+        c_hat = mc_hat/m_hat
+        print(c_hat)
+
+
     def DoCalcGripperOutput(self, context, output):
         """
         This method is called at every timestep, and determines
@@ -585,15 +614,26 @@ class Gen3Controller(LeafSystem):
         self.xdd_nom = np.hstack([rpydd_nom,pdd_nom])
 
         # Set arm torque outputs
-        tau = tau[:-2]   # the last two elements have to do with the gripper. We'll ignore those here
-                         # and set them in DoCalcGripperOutput
-        output.SetFromVector(tau)
+        tau_applied = tau[:-2]   # the last two elements have to do with the gripper. We'll ignore those here
+                                 # and set them in DoCalcGripperOutput
+        output.SetFromVector(tau_applied)
 
         # Record stuff for plots
         self.V = 0.5*xd_tilde.T@Lambda@xd_tilde + 0.5*x_tilde.T@Kp@x_tilde
         self.x = x
         self.xd = xd
         self.err = x_tilde.T@x_tilde
+
+        # Do some system ID for the grasped object
+        qdd = (qd - self.qd_last)/self.dt
+        if context.get_time() > 8.5:
+            f = Jbar.T@self.tau_last    # spatial force applied at end-effector frame
+            v = J@qd          # spatial velocity at end-effector frame
+            a = J@qdd + Jdqd  # spatial acceleration at end-effector frame
+            
+            self.DoParameterEstimation(f,v,a)
+        self.qd_last = qd
+        self.tau_last = tau
 
         #Vdot = xd_tilde.T@(Jbar.T@tau - Jbar.T@tau_g + Lambda@Q@(Jbar@xd_tilde - qd) - Lambda@xdd_nom + Kp@x_tilde)
         #print(Vdot <= 0)

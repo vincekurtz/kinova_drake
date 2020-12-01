@@ -6,11 +6,11 @@ import os
 from pydrake.all import *
 from reduced_order_model import ReducedOrderModelPlant
 from controller import Gen3Controller
-from planners import GuiPlanner, SimplePlanner, PegPlanner
+from planners import *
 
 ############## Setup Parameters #################
 
-sim_time = np.inf
+sim_time = 15
 dt = 3e-3
 target_realtime_rate = 1.0
 
@@ -26,9 +26,9 @@ x0 = np.array([np.pi-0.5,
                0.5])
 
 # High-level planner
-planner = "gui"    # must be one of "gui", "peg", or "simple"
+planner = "estimation"    # must be one of "gui", "peg", "estimation", or "simple"
 
-include_manipuland = False
+include_manipuland = True
 
 show_diagram = False
 make_plots = False
@@ -98,11 +98,11 @@ if include_manipuland:
     manipuland_sdf = "./models/manipulands/peg.sdf"
     manipuland = Parser(plant=plant).AddModelFromFile(manipuland_sdf,"manipuland")
 
-    box_urdf = "./models/manipulands/peg_box.sdf"
-    box = Parser(plant=plant).AddModelFromFile(box_urdf,"box")
-    X_box = RigidTransform()
-    X_box.set_translation(np.array([-0.5,0.5,0]))
-    plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base_link",box), X_box)
+    #box_urdf = "./models/manipulands/peg_box.sdf"
+    #box = Parser(plant=plant).AddModelFromFile(box_urdf,"box")
+    #X_box = RigidTransform()
+    #X_box.set_translation(np.array([-0.5,0.5,0]))
+    #plant.WeldFrames(plant.world_frame(), plant.GetFrameByName("base_link",box), X_box)
 
 c_plant.Finalize()
 plant.Finalize()
@@ -128,6 +128,8 @@ elif planner == "gui":
     rom_planner = builder.AddSystem(GuiPlanner())
 elif planner == "peg":
     rom_planner = builder.AddSystem(PegPlanner())
+elif planner == "estimation":
+    rom_planner = builder.AddSystem(EstimationPlanner())
 else:
     raise ValueError("Invalid planner %s" % planner)
 rom_planner.set_name("High-level Planner")
@@ -240,7 +242,7 @@ rom_context = diagram.GetMutableSubsystemContext(rom, diagram_context)
 rom_context.SetContinuousState(np.hstack([x0,np.zeros(6,)]))
 
 if include_manipuland:
-    plant.SetPositions(plant_context, manipuland, np.array([0.7,0,0.7,0,-0.0,0.5,0.1]))
+    plant.SetPositions(plant_context, manipuland, np.array([0.7,0,0.7,0,-0.0,0.5,0.075]))
 
 # Run the simulation
 simulator.Initialize()

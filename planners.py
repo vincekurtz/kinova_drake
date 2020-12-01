@@ -180,6 +180,72 @@ class GuiPlanner(SimplePlanner):
     def SetGripperOutput(self, context, output):
         output.set_value(self.gripper_closed)
 
+class EstimationPlanner(SimplePlanner):
+    """ 
+    This is a simple system block with no inputs. It simply outpus
+
+        1) A desired end-effector pose [roll;pitch;yaw;x;y;z] (and pose dot)
+        2) A desired gripper state (open or closed)
+
+    for a state estimation task, where the robot grasps a peg and then 
+    moves it around to get a state estimate. 
+    """
+    def __init__(self):
+        SimplePlanner.__init__(self)
+
+        self.gripper_closed = False
+
+        self.pregrasp = np.array([3*np.pi/2,  
+                                  0.0,
+                                  np.pi/2,
+                                  0.2,
+                                  0.5,
+                                  0.12])
+        
+        self.grasp = np.array([3*np.pi/2,  
+                               0.0,
+                               np.pi/2,
+                               0.1,
+                               0.5,
+                               0.12])
+        
+        self.target_one = np.array([3*np.pi/2,  
+                                    0.0,
+                                    np.pi/2,
+                                    0.1,
+                                    0.5,
+                                    0.5])
+        self.target_two = np.array([2*np.pi/2,  
+                                    0.0,
+                                    np.pi/2,
+                                    0.3,
+                                    0.2,
+                                    0.5])
+    
+    def SetGripperOutput(self, context, output):
+        output.set_value(self.gripper_closed)
+    
+    def SetEndEffectorOutput(self, context, output):
+        # We'll go through a pre-scheduled simple sequence of moves
+        t = context.get_time()
+
+        if t < 5:
+            # Go to pre-grasp position
+            target_pose = self.pregrasp
+        elif (t < 8):
+            # Go to grasp position
+            target_pose = self.grasp
+        elif (t < 11):
+            # Close gripper and go to first target
+            self.gripper_closed = True
+            target_pose = self.target_one
+        else:
+            # got to second target
+            target_pose = self.target_two
+
+        target_state = np.hstack([target_pose, np.zeros(6)])
+        output.SetFromVector(target_state)
+
 class PegPlanner(SimplePlanner):
     """ 
     This is a simple system block with no inputs. It simply outpus
