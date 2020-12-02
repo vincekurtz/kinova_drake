@@ -35,7 +35,7 @@ class OmniscientObserver(LeafSystem):
     def CalcGTCoM(self, context, output):
         """
         Compute the ground-truth position of the manipulated object's 
-        center of mass in the world frame. 
+        center of mass.
         """
         # Use state info from input to update dynamics info
         state = self.state_port.Eval(context)
@@ -60,7 +60,5 @@ class OmniscientObserver(LeafSystem):
                                                   self.world_frame,
                                                   p_com_world,
                                                   self.ee_frame)
-
-        print("Ground Truth: %s" % p_com_ee.flatten())
         
-        output.SetFromVector(p_com_world)
+        output.SetFromVector(p_com_ee)

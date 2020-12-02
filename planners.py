@@ -193,6 +193,9 @@ class EstimationPlanner(SimplePlanner):
     def __init__(self):
         SimplePlanner.__init__(self)
 
+        # Fix the numpy seed for repeatability
+        np.random.seed(0)
+
         self.gripper_closed = False
 
         self.pregrasp = np.array([3*np.pi/2,  
@@ -209,18 +212,24 @@ class EstimationPlanner(SimplePlanner):
                                0.5,
                                0.12])
         
-        self.target_one = np.array([3*np.pi/2,  
-                                    0.0,
-                                    np.pi/2,
-                                    0.1,
-                                    0.5,
-                                    0.5])
-        self.target_two = np.array([2*np.pi/2,  
-                                    0.0,
-                                    np.pi/2,
-                                    0.3,
-                                    0.2,
-                                    0.5])
+        self.target = np.array([3*np.pi/2,  
+                                0.0,
+                                np.pi/2,
+                                0.1,
+                                0.5,
+                                0.5])
+
+    def GenerateRandomValidTarget(self):
+        """
+        Generate a random target that's in the workspace
+        """
+        target = np.array([np.random.uniform(low=0,high=3*np.pi/2),
+                           0.0,
+                           np.random.uniform(low=-np.pi/2, high=np.pi/2),
+                           np.random.uniform(low=-0.4,high=0.4),
+                           np.random.uniform(low=-0.0,high=0.6),
+                           np.random.uniform(low=0.15,high=0.7)])
+        return target
     
     def SetGripperOutput(self, context, output):
         output.set_value(self.gripper_closed)
@@ -235,13 +244,17 @@ class EstimationPlanner(SimplePlanner):
         elif (t < 8):
             # Go to grasp position
             target_pose = self.grasp
-        elif (t < 11):
-            # Close gripper and go to first target
+        elif (t < 10):
+            # Close gripper and go to target
             self.gripper_closed = True
-            target_pose = self.target_one
+            target_pose = self.target
         else:
-            # got to second target
-            target_pose = self.target_two
+            # Move the target around
+            self.target[0] = 3*np.pi/2 + 1.0*np.sin(2*(t-10))
+            self.target[3] = 0.1 + 0.2*np.sin(2*(t-10))
+            self.target[4] = 0.5 + 0.2*np.cos(2*(t-10))
+            self.target[5] = 0.5 + 0.3*np.sin(3*(t-10))
+            target_pose = self.target
 
         target_state = np.hstack([target_pose, np.zeros(6)])
         output.SetFromVector(target_state)

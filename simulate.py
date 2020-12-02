@@ -11,7 +11,7 @@ from observer import OmniscientObserver
 
 ############## Setup Parameters #################
 
-sim_time = 15
+sim_time = np.inf
 dt = 3e-3
 target_realtime_rate = 1.0
 
@@ -32,7 +32,7 @@ planner = "estimation"    # must be one of "gui", "peg", "estimation", or "simpl
 include_manipuland = True
 
 show_diagram = False
-make_plots = False
+make_plots = True
 
 #################################################
 
@@ -213,20 +213,11 @@ DrakeVisualizer().AddToBuilder(builder=builder, scene_graph=scene_graph, params=
 #ConnectContactResultsToDrakeVisualizer(builder, plant)
 
 # Add loggers
-rom_logger = LogOutput(rom.GetOutputPort("x"),builder)
-rom_logger.set_name("rom_logger")
-
-plant_logger = LogOutput(controller.GetOutputPort("end_effector"),builder)
-plant_logger.set_name("plant_logger")
-
-V_logger = LogOutput(controller.GetOutputPort("storage_function"),builder)
-V_logger.set_name("V_logger")
-
-err_logger = LogOutput(controller.GetOutputPort("error"),builder)
-err_logger.set_name("error_logger")
-
 com_gt_logger = LogOutput(observer.GetOutputPort("manipuland_com_gt"),builder)
 com_gt_logger.set_name("CoM_ground_truth")
+
+com_est_logger = LogOutput(controller.GetOutputPort("manipuland_com_est"),builder)
+com_est_logger.set_name("CoM_estimate")
 
 # Compile the diagram: no adding control blocks from here on out
 diagram = builder.Build()
@@ -264,51 +255,18 @@ except KeyboardInterrupt:
 
 # Make some plots
 if make_plots:
-    t = rom_logger.sample_times()
+    t = com_gt_logger.sample_times()
 
-    plt.figure()  # End effector rpy and angular velocity comparison
-    plt.subplot(2,1,1)
-    plt.plot(t, rom_logger.data()[:3,:].T,linewidth='2',linestyle='--')
-    plt.gca().set_prop_cycle(None)  # reset the color cycle
-    plt.plot(t, plant_logger.data()[:3,:].T,linewidth='2')
-    #plt.legend(['RoM - x','RoM - y','RoM - z','Plant - x','Plant - y','Plant - z'])
+    plt.plot(t, com_gt_logger.data().T, linewidth=2, linestyle="-")
+    plt.gca().set_prop_cycle(None)   # reset color cycle
+    plt.plot(t, com_est_logger.data().T, linewidth=2, linestyle="--")
+    
+    plt.legend(["true x_com", "true y_com", "true z_com",
+                "est x_com", "est y_com", "est z_com"])
+    plt.ylabel("Object Center-of-Mass Position")
     plt.xlabel("time (s)")
-    plt.ylabel("End Effector RPY")
 
-    plt.subplot(2,1,2)
-    plt.plot(t, rom_logger.data()[6:9,:].T,linewidth='2',linestyle='--')
-    plt.gca().set_prop_cycle(None)  # reset the color cycle
-    plt.plot(t, plant_logger.data()[6:9,:].T,linewidth='2')
-    #plt.legend(['RoM - x','RoM - y','RoM - z','Plant - x','Plant - y','Plant - z'])
-    plt.xlabel("time (s)")
-    plt.ylabel("End Effector Angular Velocity")
-
-    plt.figure()  # End effector position and velocity comparison
-    plt.subplot(2,1,1)
-    plt.plot(t, rom_logger.data()[3:6,:].T,linewidth='2',linestyle='--')
-    plt.gca().set_prop_cycle(None)  # reset the color cycle
-    plt.plot(t, plant_logger.data()[3:6,:].T,linewidth='2')
-    #plt.legend(['RoM - x','RoM - y','RoM - z','Plant - x','Plant - y','Plant - z'])
-    plt.xlabel("time (s)")
-    plt.ylabel("End Effector Position")
-
-    plt.subplot(2,1,2)
-    plt.plot(t, rom_logger.data()[9:,:].T,linewidth='2',linestyle='--')
-    plt.gca().set_prop_cycle(None)  # reset the color cycle
-    plt.plot(t, plant_logger.data()[9:,:].T,linewidth='2')
-    #plt.legend(['RoM - x','RoM - y','RoM - z','Plant - x','Plant - y','Plant - z'])
-    plt.xlabel("time (s)")
-    plt.ylabel("End Effector Velocity")
-
-    plt.figure()  # Simulation function and error comparison
-    plt.plot(t, V_logger.data().T, linewidth='2',label="Storage Function")
-    plt.plot(t, err_logger.data().T, linewidth='2',label="Output Error")
-
-    # Error bound is initial simulation function value, scaled by minimum eigenvalue of Kp
-    #err_bound = V_logger.data()[0,0]/np.min(np.linalg.eigvals(controller.Kp))
-    #plt.hlines(err_bound,t[0],t[-1],label="Error Bound",color="grey",linewidth=2,linestyle="--")
-
-    plt.xlabel("time (s)")
-    plt.legend()
+    #plt.ylim((-1,1))
+    plt.xlim(left=8.5)
 
     plt.show()

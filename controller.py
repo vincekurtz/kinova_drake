@@ -96,12 +96,19 @@ class Gen3Controller(LeafSystem):
                 BasicVector(1),
                 self.DoCalcStorageFcnOutput)
         
-        # Output port for  tracking error x_tilde (for logging)
+        # Output port for tracking error x_tilde (for logging)
         self.err = 0
         self.DeclareVectorOutputPort(
                 "error",
                 BasicVector(1),
                 self.DoCalcErrOutput)
+
+        # Output port for object CoM estimate 
+        self.p_com_est = np.zeros(3)
+        self.DeclareVectorOutputPort(
+                "manipuland_com_est",
+                BasicVector(3),
+                self.DoCalcComOutput)
 
         # Relevant frames
         self.world_frame = self.plant.world_frame()
@@ -399,6 +406,9 @@ class Gen3Controller(LeafSystem):
         """
         output.SetFromVector([self.err])
 
+    def DoCalcComOutput(self, context, output):
+        output.SetFromVector(self.p_com_est)
+
     def SetRomOutput(self, context, output):
         output.SetFromVector(self.xdd_nom)
 
@@ -421,9 +431,16 @@ class Gen3Controller(LeafSystem):
 
         m_hat = theta_hat[0]     # mass
         mc_hat = theta_hat[1:4]  # mass*(position of CoM in end-effector frame)
-        c_hat = mc_hat/m_hat
-        print("")
-        print("Estimated:    %s" % c_hat)
+
+        p_com_ee = mc_hat/m_hat  # position of CoM in end-effector frame
+
+        p_com_world = self.plant.CalcPointsPositions(self.context,
+                                                     self.end_effector_frame,
+                                                     p_com_ee,
+                                                     self.world_frame)
+
+        print(m_hat)
+        self.p_com_est = p_com_ee
 
     def DoCalcGripperOutput(self, context, output):
         """
@@ -627,7 +644,7 @@ class Gen3Controller(LeafSystem):
         # Do some system ID for the grasped object
         qdd = (qd - self.qd_last)/self.dt
         if context.get_time() > 8.5:
-            f = Jbar.T@self.tau_last    # spatial force applied at end-effector frame
+            f = Jbar.T@(self.tau_last - tau_g)    # spatial force applied at end-effector frame
             v = J@qd          # spatial velocity at end-effector frame
             a = J@qdd + Jdqd  # spatial acceleration at end-effector frame
             
