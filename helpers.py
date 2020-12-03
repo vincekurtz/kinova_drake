@@ -63,9 +63,7 @@ def single_body_regression_matrix(a,v):
     #
     Y, b = DecomposeAffineExpressions(f,vars=theta)
 
-    print(Y,b)
-
-    return Y
+    return (Y,b)
 
 def mbp_version(a,v):
     
@@ -89,6 +87,10 @@ def mbp_version(a,v):
     # Create plant which consists of a single rigid body
     plant = MultibodyPlant(1.0)  # timestep is irrelevant
     block = plant.AddRigidBody("block", SpatialInertia())
+
+    # gravity off for now
+    #plant.mutable_gravity_field().set_gravity_vector([0,0,0])
+
     plant.Finalize()
 
     # Convert the plant to symbolic form 
@@ -110,8 +112,7 @@ def mbp_version(a,v):
     # Write f as affine in theta: f = Y*theta + b
     Y, b = DecomposeAffineExpressions(f,theta)
 
-    print(Y,b)
-
+    return (Y,b)
 
 def S(p):
     """
@@ -186,5 +187,5 @@ if __name__=="__main__":
     a[5] = 9.81
     v = np.zeros(6) + 0.1
 
-    mbp_version(a,v)
-    single_body_regression_matrix(a,v)
+    print(mbp_version(a,v))
+    print(single_body_regression_matrix(a,v))

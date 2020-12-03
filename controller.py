@@ -419,9 +419,11 @@ class Gen3Controller(LeafSystem):
         estimate the (lumped) inertial parameters of the 
         manipuland. 
         """
-        y = single_body_regression_matrix(a,v)
+        #y, b = single_body_regression_matrix(a,v)
+        y, b = mbp_version(a,v)
+
         self.Ys.append(y)
-        self.Fs.append(f)
+        self.Fs.append(f-b)
 
         Y = np.vstack(self.Ys)
         F = np.hstack(self.Fs)
@@ -440,7 +442,7 @@ class Gen3Controller(LeafSystem):
                                                      p_com_ee,
                                                      self.world_frame)
 
-        print(theta_hat[2])
+        print(theta_hat[1])
         self.p_com_est = p_com_ee
 
     def DoCalcGripperOutput(self, context, output):
@@ -646,7 +648,7 @@ class Gen3Controller(LeafSystem):
         qdd = (qd - self.qd_last)/self.dt
         #if context.get_time() > 8.5:
         if context.get_time() > 0.1:
-            f = Jbar.T@(self.tau_last)    # spatial force applied at end-effector frame
+            f = Jbar.T@(self.tau_last - tau_g)    # spatial force applied at end-effector frame
             v = J@qd          # spatial velocity at end-effector frame
             a = J@qdd + Jdqd  # spatial acceleration at end-effector frame
             

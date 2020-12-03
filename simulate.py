@@ -19,12 +19,12 @@ target_realtime_rate = 1.0
 q0 = np.array([0.0,0,np.pi/2,-np.pi/2,0.0,-np.pi/2,0])
 
 # initial end-effector pose
-x0 = np.array([np.pi-0.5,  
+x0 = np.array([np.pi,  
                0,
                np.pi/2,
-               0.2,
+               0.0,
                0.3,
-               0.5])
+               0.55])
 
 # High-level planner
 planner = "estimation"    # must be one of "gui", "peg", "estimation", or "simple"
@@ -52,8 +52,8 @@ plant.RegisterAsSourceForSceneGraph(scene_graph)
 c_plant = MultibodyPlant(time_step=dt)
 
 # Turn off gravity
-plant.mutable_gravity_field().set_gravity_vector([0,0,0])
-c_plant.mutable_gravity_field().set_gravity_vector([0,0,0])
+#plant.mutable_gravity_field().set_gravity_vector([0,0,0])
+#c_plant.mutable_gravity_field().set_gravity_vector([0,0,0])
 
 # Load the robot arm model from a urdf file
 robot_urdf = FindResourceOrThrow(robot_description_file)
