@@ -11,7 +11,7 @@ from observer import OmniscientObserver
 
 ############## Setup Parameters #################
 
-sim_time = np.inf
+sim_time = 15
 dt = 3e-3
 target_realtime_rate = 1.0
 
@@ -50,6 +50,10 @@ plant.RegisterAsSourceForSceneGraph(scene_graph)
 # Create a "controllable" plant, which has access only to the robot arm and gripper,
 # and not any data about other objects in the scene
 c_plant = MultibodyPlant(time_step=dt)
+
+# Turn off gravity
+plant.mutable_gravity_field().set_gravity_vector([0,0,0])
+c_plant.mutable_gravity_field().set_gravity_vector([0,0,0])
 
 # Load the robot arm model from a urdf file
 robot_urdf = FindResourceOrThrow(robot_description_file)
@@ -98,6 +102,11 @@ if include_manipuland:
     #manipuland_sdf = FindResourceOrThrow("drake/manipulation/models/ycb/sdf/009_gelatin_box.sdf")
     manipuland_sdf = "./models/manipulands/peg.sdf"
     manipuland = Parser(plant=plant).AddModelFromFile(manipuland_sdf,"manipuland")
+
+    #DEBUG: weld manipuland to the gripper
+    X = RigidTransform()
+    X.set_translation(np.array([0.02,-0.05,0.2]))
+    plant.WeldFrames(plant.GetFrameByName("end_effector_link",gen3),plant.GetFrameByName("base_link",manipuland),X)
 
     #box_urdf = "./models/manipulands/peg_box.sdf"
     #box = Parser(plant=plant).AddModelFromFile(box_urdf,"box")
@@ -244,7 +253,8 @@ rom_context = diagram.GetMutableSubsystemContext(rom, diagram_context)
 rom_context.SetContinuousState(np.hstack([x0,np.zeros(6,)]))
 
 if include_manipuland:
-    plant.SetPositions(plant_context, manipuland, np.array([0.7,0,0.7,0,-0.0,0.5,0.075]))
+    pass
+    #plant.SetPositions(plant_context, manipuland, np.array([0.7,0,0.7,0,-0.0,0.5,0.075]))
 
 # Run the simulation
 simulator.Initialize()
@@ -266,7 +276,7 @@ if make_plots:
     plt.ylabel("Object Center-of-Mass Position")
     plt.xlabel("time (s)")
 
-    #plt.ylim((-1,1))
-    plt.xlim(left=8.5)
+    plt.ylim((-1,1))
+    #plt.xlim(left=8.5)
 
     plt.show()

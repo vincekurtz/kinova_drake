@@ -250,7 +250,7 @@ class EstimationPlanner(SimplePlanner):
             target_pose = self.target
         else:
             # Move the target around
-            self.target[0] = 3*np.pi/2 + 1.0*np.sin(2*(t-10))
+            self.target[0] = 3*np.pi/2 + 2.0*np.sin(2*(t-10))
             self.target[3] = 0.1 + 0.2*np.sin(2*(t-10))
             self.target[4] = 0.5 + 0.2*np.cos(2*(t-10))
             self.target[5] = 0.5 + 0.3*np.sin(3*(t-10))

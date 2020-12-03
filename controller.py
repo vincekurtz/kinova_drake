@@ -643,8 +643,9 @@ class Gen3Controller(LeafSystem):
 
         # Do some system ID for the grasped object
         qdd = (qd - self.qd_last)/self.dt
-        if context.get_time() > 8.5:
-            f = Jbar.T@(self.tau_last - tau_g)    # spatial force applied at end-effector frame
+        #if context.get_time() > 8.5:
+        if context.get_time() > 0.1:
+            f = Jbar.T@(self.tau_last)    # spatial force applied at end-effector frame
             v = J@qd          # spatial velocity at end-effector frame
             a = J@qdd + Jdqd  # spatial acceleration at end-effector frame
             
