@@ -429,17 +429,18 @@ class Gen3Controller(LeafSystem):
         Yinv = np.linalg.inv(Y.T@Y)@Y.T
         theta_hat = Yinv@F
 
-        m_hat = theta_hat[0]     # mass
-        mc_hat = theta_hat[1:4]  # mass*(position of CoM in end-effector frame)
+        #m_hat = theta_hat[0]     # mass
+        #mc_hat = theta_hat[1:4]  # mass*(position of CoM in end-effector frame)
 
-        p_com_ee = mc_hat/m_hat  # position of CoM in end-effector frame
+        #p_com_ee = mc_hat/m_hat  # position of CoM in end-effector frame
+        p_com_ee = theta_hat[0:3]
 
         p_com_world = self.plant.CalcPointsPositions(self.context,
                                                      self.end_effector_frame,
                                                      p_com_ee,
                                                      self.world_frame)
 
-        print(m_hat)
+        print(theta_hat[2])
         self.p_com_est = p_com_ee
 
     def DoCalcGripperOutput(self, context, output):
