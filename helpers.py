@@ -63,7 +63,55 @@ def single_body_regression_matrix(a,v):
     #
     Y, b = DecomposeAffineExpressions(f,vars=theta)
 
+    print(Y,b)
+
     return Y
+
+def mbp_version(a,v):
+    
+    # Define variables theta
+    m = 1.0                          # assume mass is 1
+    m_com = MakeVectorVariable(3,"m_com")
+    Ixx = Variable("Ixx")            # rotational inerta *about end-effector frame*
+    Iyy = Variable("Iyy")            # (not CoM frame)
+    Izz = Variable("Izz")
+    Ixy = Variable("Ixy")
+    Ixz = Variable("Ixz")
+    Iyz = Variable("Iyz")
+    theta = np.hstack([m_com, Ixx, Iyy, Izz, Ixy, Ixz, Iyz])
+
+    # Spatial inertia of the object
+    I = SpatialInertia_[Expression](
+            m,
+            m_com,
+            UnitInertia_[Expression](Ixx,Iyy,Izz,Ixy,Ixz,Iyz))
+
+    # Create plant which consists of a single rigid body
+    plant = MultibodyPlant(1.0)  # timestep is irrelevant
+    block = plant.AddRigidBody("block", SpatialInertia())
+    plant.Finalize()
+
+    # Convert the plant to symbolic form 
+    sym_plant = plant.ToSymbolic()
+    sym_context = sym_plant.CreateDefaultContext()
+
+    # Set velocities from input
+    sym_plant.SetVelocities(sym_context,v)   # from v
+
+    # Set the spatial inertia of the symbolic plant to the symbolic version
+    # (based on variables theta)
+    sym_block = sym_plant.GetBodyByName("block")
+    sym_block.SetSpatialInertiaInBodyFrame(sym_context, I)
+
+    # Run inverse dynamics to get applied spatial forces consistent with acceleration a
+    f_ext = MultibodyForces_[Expression](sym_plant)  # zero
+    f = sym_plant.CalcInverseDynamics(sym_context, a, f_ext)
+
+    # Write f as affine in theta: f = Y*theta + b
+    Y, b = DecomposeAffineExpressions(f,theta)
+
+    print(Y,b)
+
 
 def S(p):
     """
@@ -133,3 +181,10 @@ def jacobian2(function, x):
 
     return np.vstack(yds).reshape(y_ad.shape + (-1,))
 
+if __name__=="__main__":
+    a = np.zeros(6)
+    a[5] = 9.81
+    v = np.zeros(6) + 0.1
+
+    mbp_version(a,v)
+    single_body_regression_matrix(a,v)
