@@ -431,25 +431,49 @@ class Gen3Controller(LeafSystem):
         self.Ys.append(y)
         self.Fs.append(f-b)
 
-        Y = np.vstack(self.Ys)
-        F = np.hstack(self.Fs)
+        if len(self.Ys) >= 10:
 
-        Yinv = np.linalg.inv(Y.T@Y)@Y.T
-        theta_hat = Yinv@F
+            Y = np.vstack(self.Ys)
+            F = np.hstack(self.Fs)
 
-        m_hat = theta_hat[0]     # mass
-        mc_hat = theta_hat[1:4]  # mass*(position of CoM in end-effector frame)
+            # Find a least-squares estimate F = Y*theta by solving a convex optimization
+            prog = MathematicalProgram()
+            theta = prog.NewContinuousVariables(10,1,"theta")
+            m = theta[0]
+            h = theta[1:4]
+            I = np.array([[theta[4,0], theta[7,0], theta[8,0]],
+                          [theta[7,0], theta[5,0], theta[9,0]],
+                          [theta[8,0], theta[9,0], theta[6,0]]])
 
-        p_com_ee = mc_hat/m_hat  # position of CoM in end-effector frame
-        #p_com_ee = theta_hat[0:3]
+            # min \| Y*theta - F\|^2
+            Q = Y.T@Y
+            b = -F.T@Y
+            prog.AddQuadraticCost(Q=Q,b=b,vars=theta)
 
-        p_com_world = self.plant.CalcPointsPositions(self.context,
-                                                     self.end_effector_frame,
-                                                     p_com_ee,
-                                                     self.world_frame)
+            # s.t. I > 0
+            print(I.shape)
+            prog.AddPositiveSemidefiniteConstraint(I)
 
-        print(theta_hat[0])
-        self.p_com_est = p_com_ee
+            res = Solve(prog)
+            theta_hat = res.GetSolution(theta)
+
+            m_hat = theta_hat[0]     # mass
+            h_hat = theta_hat[1:4]  # mass*(position of CoM in end-effector frame)
+            I_hat = np.array([[theta_hat[4], theta_hat[7], theta_hat[8]],
+                              [theta_hat[7], theta_hat[5], theta_hat[9]],
+                              [theta_hat[8], theta_hat[9], theta_hat[6]]])
+            
+          
+            if res.is_success():
+                print(I_hat)
+                print(np.linalg.eigvals(I_hat))
+
+            p_com_ee = h_hat/m_hat  # position of CoM in end-effector frame
+            p_com_world = self.plant.CalcPointsPositions(self.context,
+                                                         self.end_effector_frame,
+                                                         p_com_ee,
+                                                         self.world_frame)
+            self.p_com_est = p_com_ee
 
     def DoCalcGripperOutput(self, context, output):
         """
