@@ -457,7 +457,10 @@ class Gen3Controller(LeafSystem):
             Sigma = 0.5*np.trace(I)*np.eye(3) - I
             J = np.block([[ Sigma, h],
                           [ h.T,   m]])
-            prog.AddPositiveSemidefiniteConstraint(J)
+            #prog.AddPositiveSemidefiniteConstraint(J)
+
+            # s.t. m = 0.1 (true value)
+            prog.AddConstraint(m[0] == 0.1)
 
             res = Solve(prog)
             theta_hat = res.GetSolution(theta)
@@ -469,7 +472,7 @@ class Gen3Controller(LeafSystem):
                               [theta_hat[8], theta_hat[9], theta_hat[6]]])
             
           
-            print(np.all(np.linalg.eigvals(I_hat) > 0))
+            print(m_hat)
 
             p_com_ee = h_hat/m_hat  # position of CoM in end-effector frame
             p_com_world = self.plant.CalcPointsPositions(self.context,

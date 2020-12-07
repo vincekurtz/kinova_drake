@@ -54,7 +54,7 @@ def single_body_regression_matrix(a,v):
     #
     #  f = Ia + v x* Iv
     #
-    #g = np.array([0,0,0,0,0,-9.81])
+    g = np.array([0,0,0,0,0,-9.81])
     f = I@a + spatial_force_cross_product(v, I@v)# - m*g
 
     # Write this expression as linear in the parameters,

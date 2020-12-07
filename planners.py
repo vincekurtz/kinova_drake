@@ -259,10 +259,12 @@ class EstimationPlanner(SimplePlanner):
         #    self.target[3] = 0.1 + 0.2*np.sin(2*(t-10))
         #    self.target[4] = 0.5 + 0.2*np.cos(2*(t-10))
         #    self.target[5] = 0.5 + 0.3*np.sin(3*(t-10))
-        target_pose = np.array([np.pi,0,0,0.0,0.3,0.55])
+        target_pose = np.array([0,0,0,0.0,0.3,0.55])
         target_pose[3] = 0 + 0.2*np.sin(2*t)
-        target_pose[4] = 0.3 + 0.4*np.cos(2*t)
+        target_pose[4] = 0.4 + 0.2*np.cos(2*t)
         target_pose[5] = 0.55 + 0.2*np.sin(3*t)
+        
+        target_pose[0] = 0.0 + 1.5*np.sin(3*t)
 
         target_state = np.hstack([target_pose, np.zeros(6)])
         output.SetFromVector(target_state)

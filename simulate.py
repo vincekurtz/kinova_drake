@@ -11,15 +11,15 @@ from observer import OmniscientObserver
 
 ############## Setup Parameters #################
 
-sim_time = 15
-dt = 3e-3
+sim_time = 10
+dt = 5e-3
 target_realtime_rate = 1.0
 
 # Initial joint angles
 q0 = np.array([0.0,0,np.pi/2,-np.pi/2,0.0,-np.pi/2,0])
 
 # initial end-effector pose
-x0 = np.array([np.pi,  
+x0 = np.array([0,  
                0,
                0,
                0.0,
@@ -105,7 +105,7 @@ if include_manipuland:
 
     #DEBUG: weld manipuland to the gripper
     X = RigidTransform()
-    X.set_translation(np.array([0.05,0.0,0.1]))
+    X.set_translation(np.array([0.05,0.0,0.2]))
     plant.WeldFrames(plant.GetFrameByName("end_effector_link",gen3),plant.GetFrameByName("base_link",manipuland),X)
 
     #box_urdf = "./models/manipulands/peg_box.sdf"
