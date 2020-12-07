@@ -30,8 +30,8 @@ def single_body_regression_matrix(a,v):
     """      
 
     # Create symbolic version of parameters theta
-    #m = Variable("m")                # mass
-    m = 1.0
+    m = Variable("m")                # mass
+    #m = 1.0
     mc = MakeVectorVariable(3,"mc")  # mass times position of CoM in end-effector frame
 
     Ixx = Variable("Ixx")            # rotational inerta *about end-effector frame*
@@ -47,8 +47,8 @@ def single_body_regression_matrix(a,v):
     I = np.block([[ Ibar   , S(mc)       ],   # Spatial inertia of the body in the 
                   [ S(mc).T, m*np.eye(3) ]])  # end-effector frame
     
-    #theta = np.hstack([m, mc, Ixx, Iyy, Izz, Ixy, Ixz, Iyz])
-    theta = np.hstack([mc, Ixx, Iyy, Izz, Ixy, Ixz, Iyz])
+    theta = np.hstack([m, mc, Ixx, Iyy, Izz, Ixy, Ixz, Iyz])
+    #theta = np.hstack([mc, Ixx, Iyy, Izz, Ixy, Ixz, Iyz])
 
     # Create symbolic expression for spatial force,
     #

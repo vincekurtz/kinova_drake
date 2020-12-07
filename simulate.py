@@ -21,7 +21,7 @@ q0 = np.array([0.0,0,np.pi/2,-np.pi/2,0.0,-np.pi/2,0])
 # initial end-effector pose
 x0 = np.array([np.pi,  
                0,
-               np.pi/2,
+               0,
                0.0,
                0.3,
                0.55])
@@ -52,8 +52,8 @@ plant.RegisterAsSourceForSceneGraph(scene_graph)
 c_plant = MultibodyPlant(time_step=dt)
 
 # Turn off gravity
-#plant.mutable_gravity_field().set_gravity_vector([0,0,0])
-#c_plant.mutable_gravity_field().set_gravity_vector([0,0,0])
+plant.mutable_gravity_field().set_gravity_vector([0,0,0])
+c_plant.mutable_gravity_field().set_gravity_vector([0,0,0])
 
 # Load the robot arm model from a urdf file
 robot_urdf = FindResourceOrThrow(robot_description_file)
@@ -105,7 +105,7 @@ if include_manipuland:
 
     #DEBUG: weld manipuland to the gripper
     X = RigidTransform()
-    X.set_translation(np.array([0.02,-0.05,0.2]))
+    X.set_translation(np.array([0.05,0.0,0.1]))
     plant.WeldFrames(plant.GetFrameByName("end_effector_link",gen3),plant.GetFrameByName("base_link",manipuland),X)
 
     #box_urdf = "./models/manipulands/peg_box.sdf"

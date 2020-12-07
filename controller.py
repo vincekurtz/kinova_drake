@@ -419,8 +419,14 @@ class Gen3Controller(LeafSystem):
         estimate the (lumped) inertial parameters of the 
         manipuland. 
         """
-        #y, b = single_body_regression_matrix(a,v)
-        y, b = mbp_version(a,v)
+        y, b = single_body_regression_matrix(a,v)
+        #y, b = mbp_version(a,v)
+
+        if len(self.Ys) >= 2000:
+            # Keep stored lists to a reasonable size by removing
+            # oldest data
+            self.Ys.pop(0)
+            self.Fs.pop(0)
 
         self.Ys.append(y)
         self.Fs.append(f-b)
@@ -431,18 +437,18 @@ class Gen3Controller(LeafSystem):
         Yinv = np.linalg.inv(Y.T@Y)@Y.T
         theta_hat = Yinv@F
 
-        #m_hat = theta_hat[0]     # mass
-        #mc_hat = theta_hat[1:4]  # mass*(position of CoM in end-effector frame)
+        m_hat = theta_hat[0]     # mass
+        mc_hat = theta_hat[1:4]  # mass*(position of CoM in end-effector frame)
 
-        #p_com_ee = mc_hat/m_hat  # position of CoM in end-effector frame
-        p_com_ee = theta_hat[0:3]
+        p_com_ee = mc_hat/m_hat  # position of CoM in end-effector frame
+        #p_com_ee = theta_hat[0:3]
 
         p_com_world = self.plant.CalcPointsPositions(self.context,
                                                      self.end_effector_frame,
                                                      p_com_ee,
                                                      self.world_frame)
 
-        print(theta_hat[1])
+        print(theta_hat[0])
         self.p_com_est = p_com_ee
 
     def DoCalcGripperOutput(self, context, output):
