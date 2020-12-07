@@ -431,7 +431,7 @@ class Gen3Controller(LeafSystem):
         self.Ys.append(y)
         self.Fs.append(f-b)
 
-        if len(self.Ys) >= 10:
+        if len(self.Ys) >= 10: # Need a few steps of data to be able to make an estimate
 
             Y = np.vstack(self.Ys)
             F = np.hstack(self.Fs)
@@ -451,8 +451,13 @@ class Gen3Controller(LeafSystem):
             prog.AddQuadraticCost(Q=Q,b=b,vars=theta)
 
             # s.t. I > 0
-            print(I.shape)
-            prog.AddPositiveSemidefiniteConstraint(I)
+            #prog.AddPositiveSemidefiniteConstraint(I)
+
+            # s.t. Pat's LMI realizability conditions
+            Sigma = 0.5*np.trace(I)*np.eye(3) - I
+            J = np.block([[ Sigma, h],
+                          [ h.T,   m]])
+            prog.AddPositiveSemidefiniteConstraint(J)
 
             res = Solve(prog)
             theta_hat = res.GetSolution(theta)
@@ -464,9 +469,7 @@ class Gen3Controller(LeafSystem):
                               [theta_hat[8], theta_hat[9], theta_hat[6]]])
             
           
-            if res.is_success():
-                print(I_hat)
-                print(np.linalg.eigvals(I_hat))
+            print(np.all(np.linalg.eigvals(I_hat) > 0))
 
             p_com_ee = h_hat/m_hat  # position of CoM in end-effector frame
             p_com_world = self.plant.CalcPointsPositions(self.context,
