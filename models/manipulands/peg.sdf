@@ -6,12 +6,12 @@
       <pose frame=''>0 0 0 0 0 0 </pose>
       <mass>0.100</mass> <!-- 0.028 -->
         <inertia>
-          <ixx>1.17e-3</ixx>
+          <ixx>2.667e-4</ixx>  <!-- e-5 -->
           <ixy>0</ixy>
           <ixz>0</ixz>
-          <iyy>1.9e-3</iyy>
+          <iyy>2.008e-4</iyy>
           <iyz>0</iyz>
-          <izz>1.9e-3</izz>
+          <izz>2.008e-4</izz>
         </inertia>
     </inertial>
     <visual name='base_link'>
