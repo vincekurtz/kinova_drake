@@ -9,7 +9,7 @@ from helpers import *
 # Parameters
 sim_time = 5
 dt = 5e-3
-realtime_rate = 1.0
+realtime_rate = 1
 
 q0 = np.zeros(7)
 q0[3] = 1
@@ -31,6 +31,10 @@ class SpatialForceCtrl(LeafSystem):
                 BasicVector(6),
                 self.CalcVectorOutput)
 
+        self.input_port = self.DeclareVectorInputPort(
+                "state",
+                BasicVector(plant.num_multibody_states()))
+
         self.body_index = plant.GetBodyByName(body_name).index()
         
         self.f = np.zeros(6)
@@ -41,11 +45,16 @@ class SpatialForceCtrl(LeafSystem):
     def CalcOutput(self, context, output):
         t = context.get_time()
         tau = np.array([0.0,
-                        0.001*np.sin(10*t),
-                        0.001*np.cos(10*t)])
+                        0.0,
+                        0.0])
         f = np.array([0.0,
                       0.0,
-                      0.981 + 0.1*np.sin(10*t)])
+                      0.982])
+        
+        #f[2] += 0.1*np.cos(10*t)
+        tau[0] += 0.001*np.sin(11*t)
+        #tau[1] += 0.001*np.sin(12*t)
+        #tau[2] += 0.001*np.sin(13*t)
 
         self.f = np.hstack([tau,f])
 
@@ -74,6 +83,9 @@ controller = builder.AddSystem(SpatialForceCtrl(plant, "base_link"))
 builder.Connect(
         controller.GetOutputPort("spatial_force"),
         plant.get_applied_spatial_force_input_port())
+builder.Connect(
+        plant.get_state_output_port(),
+        controller.get_input_port())
 
 DrakeVisualizer().AddToBuilder(builder=builder,scene_graph=scene_graph)
 
@@ -136,8 +148,14 @@ J = np.block([[ Sigma, h],
               [ h.T,   m]])
 prog.AddPositiveSemidefiniteConstraint(J)
 
-# s.t. m = 0.1 (true value)
+# s.t. Cheater constraints related to true values
 #prog.AddConstraint(m[0] == 0.1)
+#prog.AddConstraint(I[1,0] == 0)
+#prog.AddConstraint(I[2,0] == 0)
+#prog.AddConstraint(I[2,1] == 0)
+#prog.AddConstraint(I[0,0] <= 5e-4)
+#prog.AddConstraint(I[1,1] <= 5e-4)
+#prog.AddConstraint(I[2,2] <= 5e-4)
 
 res = Solve(prog)
 theta_hat = res.GetSolution(theta)
