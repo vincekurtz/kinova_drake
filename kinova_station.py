@@ -62,27 +62,48 @@ class KinovaStation(Diagram):
         ctrl = self.builder.AddSystem(CartesianController(
                                         self.plant,
                                         self.arm))
+        ctrl.set_name("cartesian_controller")
 
         # Inputs of target end-effector pose, twist, wrench go to the controller
         self.builder.ExportInput(ctrl.target_ee_pose_port,
                                  "target_ee_pose")
+        self.builder.ExportInput(ctrl.target_ee_twist_port,
+                                 "target_ee_twist")
+        self.builder.ExportInput(ctrl.target_ee_wrench_port,
+                                 "target_ee_wrench")
 
         # Output measured arm position and velocity
         demux = self.builder.AddSystem(Demultiplexer(
                                         self.plant.num_multibody_states(self.arm),
                                         self.plant.num_positions(self.arm)))
         demux.set_name("demux")
-
         self.builder.Connect(
                 self.plant.get_state_output_port(self.arm),
                 demux.get_input_port(0))
-
         self.builder.ExportOutput(
                 demux.get_output_port(0),
                 "measured_arm_position")
         self.builder.ExportOutput(
                 demux.get_output_port(1),
                 "measured_arm_velocity")
+        
+        # Measured arm position and velocity are sent to the controller
+        self.builder.Connect(
+                demux.get_output_port(0),
+                ctrl.arm_position_port)
+        self.builder.Connect(
+                demux.get_output_port(1),
+                ctrl.arm_velocity_port)
+
+        # Torques from controller go to the simulated plant
+        self.builder.Connect(
+                ctrl.GetOutputPort("applied_arm_torque"),
+                self.plant.get_actuation_input_port(self.arm))
+
+        # Applied torques are treated as an output
+        self.builder.ExportOutput(
+                ctrl.GetOutputPort("applied_arm_torque"),
+                "measured_arm_torques")
 
         # Build the diagram
         self.builder.BuildInto(self)
@@ -109,6 +130,12 @@ class KinovaStation(Diagram):
 
     def AddManipulandFromFile(self, model_file, X_WObject):
         pass
+
+    def ConnectToDrakeVisualizer(self):
+        visualizer_params = DrakeVisualizerParams(role=Role.kIllustration)
+        DrakeVisualizer().AddToBuilder(builder=self.builder,
+                                       scene_graph=self.scene_graph,
+                                       params=visualizer_params)
 
 class CartesianController(LeafSystem):
     """
