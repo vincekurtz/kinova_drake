@@ -172,7 +172,6 @@ class KinovaStation(Diagram):
                 cartesian_controller.GetOutputPort("applied_arm_torque"),
                 wrench_calculator.GetInputPort("joint_torques"))
 
-
         self.builder.ExportOutput(
                 wrench_calculator.get_output_port(),
                 "measured_ee_wrench")
@@ -241,6 +240,14 @@ class KinovaStation(Diagram):
     def AddManipulandFromFile(self, model_file, X_WObject):
         pass
 
+    def SetArmPositions(self, diagram, diagram_context, q):
+        """
+        Set arm positions to the given values. Must be called after the overall
+        system diagram is built, and the associated diagram_context set. 
+        """
+        plant_context = diagram.GetMutableSubsystemContext(self.plant, diagram_context)
+        self.plant.SetPositions(plant_context, self.arm, q)
+
     def ConnectToDrakeVisualizer(self):
         visualizer_params = DrakeVisualizerParams(role=Role.kIllustration)
         DrakeVisualizer().AddToBuilder(builder=self.builder,
@@ -302,7 +309,7 @@ class GripperController(LeafSystem):
             raise RuntimeError("Invalid gripper target type: %s" % target_type)
 
 
-        Kp = 10*np.eye(2)
+        Kp = 100*np.eye(2)
         Kd = 2*np.sqrt(Kp)
 
         tau = Kp@(q_nom - q) + Kd@(qd_nom - qd)
@@ -506,7 +513,7 @@ class CartesianController(LeafSystem):
                 qd_nom = np.zeros(7)
 
             # Select desired accelerations using a proportional controller
-            Kp = 1*np.eye(7)
+            Kp = 10*np.eye(7)
             qdd_nom = Kp@(qd_nom - qd)
 
             # Compute joint torques consistent with these desired accelerations

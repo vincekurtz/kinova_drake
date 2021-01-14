@@ -22,7 +22,7 @@ simulate = True
 
 command_type = EndEffectorTargetType.kTwist  # kPose, kTwist, or kWrench
 
-gripper_command_type = GripperTargetType.kVelocity  # kPosition or kVelocity
+gripper_command_type = GripperTargetType.kPosition  # kPosition or kVelocity
 
 ####################
 
@@ -56,8 +56,8 @@ if command_type == EndEffectorTargetType.kPose:
     target_source = builder.AddSystem(ConstantVectorSource(pose_des))
 
 elif command_type == EndEffectorTargetType.kTwist:
-    twist_des = np.array([0,0,0.2,
-                          0.0,0.0,-0.05])
+    twist_des = np.array([0,0,0.0,
+                          0.0,0.0,0.1])
     target_source = builder.AddSystem(ConstantVectorSource(twist_des))
 
 elif command_type == EndEffectorTargetType.kWrench:
@@ -105,6 +105,10 @@ if simulate:
     # Build the system diagram
     diagram = builder.Build()
     diagram_context = diagram.CreateDefaultContext()
+
+    # Set default arm positions
+    q0 = np.array([0.0, -np.pi/5, np.pi, -0.8*np.pi, np.pi, -0.1*np.pi, 0.5*np.pi])
+    station.SetArmPositions(diagram, diagram_context, q0)
 
     # Set up simulation
     simulator = Simulator(diagram, diagram_context)
