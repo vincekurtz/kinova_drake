@@ -15,8 +15,7 @@ import matplotlib.pyplot as plt
 
 # Set up the kinova station
 station = KinovaStation(time_step=0.001)
-station.AddArm()
-station.AddHandeGripper()
+station.AddArmWithHandeGripper()
 station.AddGround()
 station.ConnectToDrakeVisualizer()
 station.Finalize()

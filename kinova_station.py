@@ -177,23 +177,31 @@ class KinovaStation(Diagram):
         """
         Add the Hand-e gripper to the system. The arm must be added first. 
         """
+        # Add a gripper with actuation to the full simulated plant
         gripper_urdf = "./models/hande_gripper/urdf/robotiq_hande.urdf"
         self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf,"gripper")
 
-        # Fix base of gripper to the arm
         self.plant.WeldFrames(self.plant.GetFrameByName("end_effector_link",self.arm),
                               self.plant.GetFrameByName("hande_base_link", self.gripper))
 
-        # Fix a block with the same mass and inertia as the gripper to the controller arm
-        # TODO
+        # Add a gripper without actuation to the controller plant
+        gripper_static_urdf = "./models/hande_gripper/urdf/robotiq_hande_static.urdf"
+        static_gripper = Parser(plant=self.controller_plant).AddModelFromFile(
+                                                                gripper_static_urdf,
+                                                                "gripper")
 
+        self.controller_plant.WeldFrames(
+                self.controller_plant.GetFrameByName("end_effector_link",self.controller_arm),
+                self.controller_plant.GetFrameByName("hande_base_link", static_gripper))
+        
 
 
     def AddArmWithHandeGripper(self):
         """
         Add the 7-dof arm and a model of the hande gripper to the system.
         """
-        pass
+        self.AddArm()
+        self.AddHandeGripper()
 
     def AddManipulandFromFile(self, model_file, X_WObject):
         pass
@@ -392,7 +400,7 @@ class CartesianController(LeafSystem):
             qd_nom = np.zeros(7)
 
             # Use PD controller to map desired q, qd to desired qdd
-            Kp = 100*np.eye(7)
+            Kp = 1*np.eye(7)
             Kd = 2*np.sqrt(Kp)  # critical damping
             qdd_nom = Kp@(q_nom - q) + Kd@(qd_nom - qd)
 
