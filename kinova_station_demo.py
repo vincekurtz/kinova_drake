@@ -17,10 +17,10 @@ import matplotlib.pyplot as plt
 
 #### Parameters ####
 
-show_diagram = True
+show_diagram = False
 simulate = True
 
-command_type = EndEffectorTargetType.kPose  # pose, twist, or wrench
+command_type = EndEffectorTargetType.kTwist  # pose, twist, or wrench
 
 ####################
 
@@ -55,7 +55,7 @@ if command_type == EndEffectorTargetType.kPose:
 
 elif command_type == EndEffectorTargetType.kTwist:
     twist_des = np.array([0,0,0,
-                          0,0,-0.1])
+                          0,0.0,-0.1])
     target_source = builder.AddSystem(ConstantVectorSource(twist_des))
 
 elif command_type == EndEffectorTargetType.kWrench:

@@ -420,28 +420,37 @@ class CartesianController(LeafSystem):
             # Compute joint torques consistent with the desired wrench
             wrench_des = self.ee_target_port.Eval(context)
             print("got a wrench")
-            pass
         elif target_type == EndEffectorTargetType.kTwist:
             # Compue joint torques consistent with the desired twist
             twist_des = self.ee_target_port.Eval(context)
-            print("got a twist")
-            
-            ## Use DoDifferentialInverseKinematics to determine desired q, qd
-            #X_WE_desired = RigidTransform(RollPitchYaw(rpy_xyz_des[:3]),
-            #                              rpy_xyz_des[-3:]).GetAsIsometry3()
 
-            #params = DifferentialInverseKinematicsParameters(self.plant.num_positions(),
-            #                                                 self.plant.num_velocities())
-            #params.set_timestep(0.005)
-            #params.set_joint_velocity_limits((self.qd_min, self.qd_max))
-            #params.set_joint_position_limits((self.q_min, self.q_max))
+            # Use DoDifferentialInverseKinematics to determine desired qd
+            params = DifferentialInverseKinematicsParameters(self.plant.num_positions(),
+                                                             self.plant.num_velocities())
+            params.set_timestep(0.005)
+            params.set_joint_velocity_limits((self.qd_min, self.qd_max))
+            params.set_joint_position_limits((self.q_min, self.q_max))
 
-            #result = DoDifferentialInverseKinematics(self.plant,
-            #                                         self.context,
-            #                                         X_WE_desired,
-            #                                         self.ee_frame,
-            #                                         params)
-            pass
+            result = DoDifferentialInverseKinematics(self.plant,
+                                                     self.context,
+                                                     twist_des,
+                                                     self.ee_frame,
+                                                     params)
+
+            if result.status == DifferentialInverseKinematicsStatus.kSolutionFound:
+                qd_nom = result.joint_velocities
+            else:
+                print("Differential inverse kinematics failed!")
+                qd_nom = np.zeros(7)
+
+            # Select desired accelerations using a proportional controller
+            Kp = 1*np.eye(7)
+            qdd_nom = Kp@(qd_nom - qd)
+
+            # Compute joint torques consistent with these desired accelerations
+            f_ext = MultibodyForces(self.plant)
+            tau = tau_g + self.plant.CalcInverseDynamics(self.context, qdd_nom, f_ext)
+
         elif target_type == EndEffectorTargetType.kPose:
             # Compute joint torques which move the end effector to the desired pose
             rpy_xyz_des = self.ee_target_port.Eval(context)
