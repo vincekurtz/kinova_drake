@@ -64,17 +64,17 @@ class KinovaStation(Diagram):
                 self.scene_graph.get_source_pose_port(self.plant.get_source_id()))
 
         # Create controller
-        ctrl = self.builder.AddSystem(CartesianController(
+        cartesian_controller = self.builder.AddSystem(CartesianController(
                                         self.controller_plant,
                                         self.controller_arm))
-        ctrl.set_name("cartesian_controller")
+        cartesian_controller.set_name("cartesian_controller")
 
         # Inputs of target end-effector pose, twist, wrench go to the controller
-        self.builder.ExportInput(ctrl.target_ee_pose_port,
+        self.builder.ExportInput(cartesian_controller.target_ee_pose_port,
                                  "target_ee_pose")
-        self.builder.ExportInput(ctrl.target_ee_twist_port,
+        self.builder.ExportInput(cartesian_controller.target_ee_twist_port,
                                  "target_ee_twist")
-        self.builder.ExportInput(ctrl.target_ee_wrench_port,
+        self.builder.ExportInput(cartesian_controller.target_ee_wrench_port,
                                  "target_ee_wrench")
 
         # Output measured arm position and velocity
@@ -95,28 +95,28 @@ class KinovaStation(Diagram):
         # Measured arm position and velocity are sent to the controller
         self.builder.Connect(
                 demux.get_output_port(0),
-                ctrl.arm_position_port)
+                cartesian_controller.arm_position_port)
         self.builder.Connect(
                 demux.get_output_port(1),
-                ctrl.arm_velocity_port)
+                cartesian_controller.arm_velocity_port)
 
         # Torques from controller go to the simulated plant
         self.builder.Connect(
-                ctrl.GetOutputPort("applied_arm_torque"),
+                cartesian_controller.GetOutputPort("applied_arm_torque"),
                 self.plant.get_actuation_input_port(self.arm))
 
         # Applied torques are treated as an output
         self.builder.ExportOutput(
-                ctrl.GetOutputPort("applied_arm_torque"),
+                cartesian_controller.GetOutputPort("applied_arm_torque"),
                 "measured_arm_torques")
         
         # Create gripper controller
         Kp_gripper = 10*np.ones((2,1))
         Kd_gripper = 2*np.sqrt(Kp_gripper)
         Ki_gripper = 0*Kp_gripper
-        gripper_ctrl = self.builder.AddSystem(
+        gripper_controller = self.builder.AddSystem(
                                     PidController(Kp_gripper, Ki_gripper, Kd_gripper))
-        gripper_ctrl.set_name("gripper_controller")
+        gripper_controller.set_name("gripper_controller")
 
         # Connect gripper controller to the diagram
         mux = self.builder.AddSystem(Multiplexer([2,2]))
@@ -131,13 +131,13 @@ class KinovaStation(Diagram):
 
         self.builder.Connect(       # actual gripper state
                 self.plant.get_state_output_port(self.gripper),
-                gripper_ctrl.get_input_port(0))
+                gripper_controller.get_input_port(0))
         self.builder.Connect(       # desired gripper state
                 mux.get_output_port(),
-                gripper_ctrl.get_input_port(1))
+                gripper_controller.get_input_port(1))
 
         self.builder.Connect(
-                gripper_ctrl.get_output_port(),
+                gripper_controller.get_output_port(),
                 self.plant.get_actuation_input_port(self.gripper))
 
         # Send gripper position and velocity as an output
@@ -155,6 +155,27 @@ class KinovaStation(Diagram):
         self.builder.ExportOutput(
                 demux2.get_output_port(1),
                 "measured_gripper_velocity")
+
+        # Compute and output end-effector wrenches based on measured joint torques
+        wrench_calculator = self.builder.AddSystem(EndEffectorWrenchCalculator(
+                self.controller_plant,
+                self.controller_plant.GetFrameByName("end_effector_link")))
+        wrench_calculator.set_name("wrench_calculator")
+
+        self.builder.Connect(
+                demux.get_output_port(0),
+                wrench_calculator.GetInputPort("joint_positions"))
+        self.builder.Connect(
+                demux.get_output_port(1),
+                wrench_calculator.GetInputPort("joint_velocities"))
+        self.builder.Connect(
+                cartesian_controller.GetOutputPort("applied_arm_torque"),
+                wrench_calculator.GetInputPort("joint_torques"))
+
+
+        self.builder.ExportOutput(
+                wrench_calculator.get_output_port(),
+                "measured_ee_wrench")
 
         # Build the diagram
         self.builder.BuildInto(self)
@@ -210,8 +231,6 @@ class KinovaStation(Diagram):
                 self.controller_plant.GetFrameByName("end_effector_link",self.controller_arm),
                 self.controller_plant.GetFrameByName("hande_base_link", static_gripper))
         
-
-
     def AddArmWithHandeGripper(self):
         """
         Add the 7-dof arm and a model of the hande gripper to the system.
@@ -235,11 +254,11 @@ class CartesianController(LeafSystem):
                          -------------------------
                          |                       |
     target_ee_pose ----> |                       |
-    target_ee_twist ---> |  CartesianController  |
+    target_ee_twist ---> |  CartesianController  | ----> applied_arm_torque
     target_ee_wrench --> |                       |
-                         |                       | ----> applied_arm_torque
                          |                       |
-    arm_position ------> |                       |
+                         |                       | ----> measured_ee_pose
+    arm_position ------> |                       | ----> measured_ee_twist
     arm_velocity ------> |                       |
                          |                       |
                          |                       |
@@ -280,6 +299,15 @@ class CartesianController(LeafSystem):
                 "applied_arm_torque",
                 BasicVector(self.plant.num_actuators()),
                 self.CalcArmTorques)
+
+        self.DeclareVectorOutputPort(
+                "measured_ee_pose",
+                BasicVector(6),
+                self.CalcEndEffectorPose)
+        self.DeclareVectorOutputPort(
+                "measured_ee_twist",
+                BasicVector(6),
+                self.CalcEndEffectorTwist)
 
         # Define some relevant frames
         self.world_frame = self.plant.world_frame()
@@ -326,6 +354,12 @@ class CartesianController(LeafSystem):
         self.q_max = np.array(q_max)
         self.qd_min = np.array(qd_min)
         self.qd_max = np.array(qd_max)
+
+    def CalcEndEffectorPose(self, context, output):
+        pass
+    
+    def CalcEndEffectorTwist(self, context, output):
+        pass
     
     def CalcArmTorques(self, context, output):
         """
@@ -426,6 +460,74 @@ class CartesianController(LeafSystem):
 
         output.SetFromVector(tau)
 
-if __name__=="__main__":
-    KST = KinovaStationTemplate()
+class EndEffectorWrenchCalculator(LeafSystem):
+    """
+    A simple system which takes as input joint torques and outputs the corresponding
+    wrench applied to the end-effector. 
 
+                       ---------------------------------
+                       |                               |
+                       |                               |
+                       |                               |
+    joint_positions -> |  EndEffectorWrenchCalculator  | ---> end_effector_wrench
+    joint_angles ----> |                               | 
+    joint_torques ---> |                               |
+                       |                               |
+                       |                               |
+                       ---------------------------------
+    """
+    def __init__(self, plant, end_effector_frame):
+        LeafSystem.__init__(self)
+
+        self.plant = plant
+        self.context = self.plant.CreateDefaultContext()
+        self.ee_frame = end_effector_frame
+
+        # Inputs are joint positions, angles and torques
+        self.q_port = self.DeclareVectorInputPort(
+                                "joint_positions",
+                                BasicVector(plant.num_positions()))
+        self.v_port = self.DeclareVectorInputPort(
+                                "joint_velocities",
+                                BasicVector(plant.num_velocities()))
+        self.tau_port = self.DeclareVectorInputPort(
+                                "joint_torques",
+                                BasicVector(plant.num_actuators()))
+
+        # Output is applied wrench at the end-effector
+        self.DeclareVectorOutputPort(
+                "end_effector_wrench",
+                BasicVector(6),
+                self.CalcEndEffectorWrench)
+
+    def CalcEndEffectorWrench(self, context, output):
+        # Gather inputs
+        q = self.q_port.Eval(context)
+        v = self.v_port.Eval(context)
+        tau = self.tau_port.Eval(context)
+
+        # Set internal model state
+        self.plant.SetPositions(self.context, q)
+        self.plant.SetVelocities(self.context, v)
+
+        # Some dynamics computations
+        M = self.plant.CalcMassMatrixViaInverseDynamics(self.context)
+        tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
+
+        # Compute end-effector jacobian
+        J = self.plant.CalcJacobianSpatialVelocity(self.context,
+                                                   JacobianWrtVariable.kV,
+                                                   self.ee_frame,
+                                                   np.zeros(3),
+                                                   self.plant.world_frame(),
+                                                   self.plant.world_frame())
+
+        # Compute jacobian pseudoinverse
+        Minv = np.linalg.inv(M)
+        Lambda = np.linalg.inv(J@Minv@J.T)
+        Jbar = Lambda@J@Minv
+
+        # Compute wrench (spatial force) applied at end-effector
+        w = Jbar@(tau-tau_g)
+
+        output.SetFromVector(w)

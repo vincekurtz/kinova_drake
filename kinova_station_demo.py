@@ -13,6 +13,13 @@ from kinova_station import KinovaStation
 import numpy as np
 import matplotlib.pyplot as plt
 
+#### Parameters ####
+
+show_diagram = False
+simulate = True
+
+####################
+
 # Set up the kinova station
 station = KinovaStation(time_step=0.001)
 station.AddArmWithHandeGripper()
@@ -20,10 +27,11 @@ station.AddGround()
 station.ConnectToDrakeVisualizer()
 station.Finalize()
 
-# Show the station's system diagram
-plt.figure()
-plot_system_graphviz(station,max_depth=1)
-plt.show()
+if show_diagram:
+    # Show the station's system diagram
+    plt.figure()
+    plot_system_graphviz(station,max_depth=1)
+    plt.show()
 
 # Connect input ports to the kinova station
 builder = DiagramBuilder()
@@ -57,16 +65,22 @@ builder.Connect(
         target_gripper_velocity.get_output_port(0),
         station.GetInputPort("target_gripper_velocity"))
 
-# Build the system diagram
-diagram = builder.Build()
-diagram_context = diagram.CreateDefaultContext()
+# Loggers
+wrench_logger = LogOutput(station.GetOutputPort("measured_ee_wrench"),builder)
+wrench_logger.set_name("wrench_logger")
 
-# Set up simulation
-simulator = Simulator(diagram, diagram_context)
-simulator.set_target_realtime_rate(1.0)
-simulator.set_publish_every_time_step(False)
 
-simulator.Initialize()
-simulator.AdvanceTo(10)
+if simulate:
+    # Build the system diagram
+    diagram = builder.Build()
+    diagram_context = diagram.CreateDefaultContext()
+
+    # Set up simulation
+    simulator = Simulator(diagram, diagram_context)
+    simulator.set_target_realtime_rate(1.0)
+    simulator.set_publish_every_time_step(False)
+
+    simulator.Initialize()
+    simulator.AdvanceTo(10)
 
 
