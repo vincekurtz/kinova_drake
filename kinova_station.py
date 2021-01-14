@@ -1,5 +1,5 @@
 from pydrake.all import *
-from helpers import EndEffectorTargetType
+from helpers import EndEffectorTargetType, GripperTargetType
 
 class KinovaStation(Diagram):
     """
@@ -122,31 +122,20 @@ class KinovaStation(Diagram):
                 "measured_ee_twist")
         
         # Create gripper controller
-        Kp_gripper = 10*np.ones((2,1))
-        Kd_gripper = 2*np.sqrt(Kp_gripper)
-        Ki_gripper = 0*Kp_gripper
-        gripper_controller = self.builder.AddSystem(
-                                    PidController(Kp_gripper, Ki_gripper, Kd_gripper))
+        gripper_controller = self.builder.AddSystem(GripperController())
         gripper_controller.set_name("gripper_controller")
 
         # Connect gripper controller to the diagram
-        mux = self.builder.AddSystem(Multiplexer([2,2]))
-        mux.set_name("mux")
-
         self.builder.ExportInput(
-                mux.get_input_port(0),
-                "target_gripper_position")
+                gripper_controller.GetInputPort("gripper_target"),
+                "gripper_target")
         self.builder.ExportInput(
-                mux.get_input_port(1),
-                "target_gripper_velocity")
+                gripper_controller.GetInputPort("gripper_target_type"),
+                "gripper_target_type")
 
-        self.builder.Connect(       # actual gripper state
+        self.builder.Connect(
                 self.plant.get_state_output_port(self.gripper),
-                gripper_controller.get_input_port(0))
-        self.builder.Connect(       # desired gripper state
-                mux.get_output_port(),
-                gripper_controller.get_input_port(1))
-
+                gripper_controller.GetInputPort("gripper_state"))
         self.builder.Connect(
                 gripper_controller.get_output_port(),
                 self.plant.get_actuation_input_port(self.gripper))
@@ -257,6 +246,68 @@ class KinovaStation(Diagram):
         DrakeVisualizer().AddToBuilder(builder=self.builder,
                                        scene_graph=self.scene_graph,
                                        params=visualizer_params)
+
+class GripperController(LeafSystem):
+    """
+    A simple gripper controller with two modes: position and velocity. 
+    Both modes are essentially simple PD controllers. 
+
+                            -------------------------
+                            |                       |
+                            |                       |
+    gripper_target -------> |   GripperController   |
+    gripper_target_type --> |                       |
+                            |                       | ---> gripper_torques
+                            |                       |
+    gripper_state --------> |                       |
+                            |                       |
+                            |                       |
+                            -------------------------
+    """
+    def __init__(self):
+        LeafSystem.__init__(self)
+
+        # Declare input ports
+        self.target_port = self.DeclareVectorInputPort(
+                                  "gripper_target",
+                                  BasicVector(2))
+        self.target_type_port = self.DeclareAbstractInputPort(
+                                  "gripper_target_type",
+                                  AbstractValue.Make(GripperTargetType.kPosition))
+        self.state_port = self.DeclareVectorInputPort(
+                                    "gripper_state",
+                                    BasicVector(4))
+
+        # Declare output port
+        self.DeclareVectorOutputPort(
+                "gripper_torque",
+                BasicVector(2),
+                self.CalcGripperTorque)
+
+    def CalcGripperTorque(self, context, output):
+        state = self.state_port.Eval(context)
+        target = self.target_port.Eval(context)
+        target_type = self.target_type_port.Eval(context)
+
+        q = state[:2]
+        qd = state[2:]
+
+        if target_type == GripperTargetType.kPosition:
+            q_nom = target
+            qd_nom = np.zeros(2)
+        elif target_type == GripperTargetType.kVelocity:
+            q_nom = q
+            qd_nom = target
+        else:
+            raise RuntimeError("Invalid gripper target type: %s" % target_type)
+
+
+        Kp = 10*np.eye(2)
+        Kd = 2*np.sqrt(Kp)
+
+        tau = Kp@(q_nom - q) + Kd@(qd_nom - qd)
+        output.SetFromVector(tau)
+
 
 class CartesianController(LeafSystem):
     """

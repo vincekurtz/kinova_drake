@@ -10,7 +10,7 @@
 from pydrake.all import *
 from kinova_station import KinovaStation
 
-from helpers import EndEffectorTargetType
+from helpers import EndEffectorTargetType, GripperTargetType
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -20,7 +20,9 @@ import matplotlib.pyplot as plt
 show_diagram = False
 simulate = True
 
-command_type = EndEffectorTargetType.kWrench  # pose, twist, or wrench
+command_type = EndEffectorTargetType.kTwist  # kPose, kTwist, or kWrench
+
+gripper_command_type = GripperTargetType.kVelocity  # kPosition or kVelocity
 
 ####################
 
@@ -42,9 +44,9 @@ builder = DiagramBuilder()
 builder.AddSystem(station)
 
 # Send the command type to the system
-target_type_sys = builder.AddSystem(ConstantValueSource(AbstractValue.Make(command_type)))
+target_type_source = builder.AddSystem(ConstantValueSource(AbstractValue.Make(command_type)))
 builder.Connect(
-        target_type_sys.get_output_port(),
+        target_type_source.get_output_port(),
         station.GetInputPort("ee_target_type"))
 
 # Set (constant) command to send to the system
@@ -54,8 +56,8 @@ if command_type == EndEffectorTargetType.kPose:
     target_source = builder.AddSystem(ConstantVectorSource(pose_des))
 
 elif command_type == EndEffectorTargetType.kTwist:
-    twist_des = np.array([0,0,0,
-                          0.0,0.0,0.0])
+    twist_des = np.array([0,0,0.2,
+                          0.0,0.0,-0.05])
     target_source = builder.AddSystem(ConstantVectorSource(twist_des))
 
 elif command_type == EndEffectorTargetType.kWrench:
@@ -70,21 +72,24 @@ builder.Connect(
         target_source.get_output_port(),
         station.GetInputPort("ee_target"))
 
-
-
 # Send gripper command
-q_grip_des = np.array([0.03,0.03])  # open at [0,0], closed at [0.03,0.03]
-v_grip_des = np.array([0,0])
+if gripper_command_type == GripperTargetType.kPosition:
+    q_grip_des = np.array([0.03,0.03])  # open at [0,0], closed at [0.03,0.03]
+    gripper_target_source = builder.AddSystem(ConstantVectorSource(q_grip_des))
 
-target_gripper_position = builder.AddSystem(ConstantVectorSource(q_grip_des))
-target_gripper_velocity = builder.AddSystem(ConstantVectorSource(v_grip_des))
+elif gripper_command_type == GripperTargetType.kVelocity:
+    v_grip_des = np.array([0.01,0.01])
+    gripper_target_source = builder.AddSystem(ConstantVectorSource(v_grip_des))
 
 builder.Connect(
-        target_gripper_position.get_output_port(0),
-        station.GetInputPort("target_gripper_position"))
+        gripper_target_source.get_output_port(),
+        station.GetInputPort("gripper_target"))
+
+gripper_target_type_source = builder.AddSystem(ConstantValueSource(
+                                         AbstractValue.Make(gripper_command_type)))
 builder.Connect(
-        target_gripper_velocity.get_output_port(0),
-        station.GetInputPort("target_gripper_velocity"))
+        gripper_target_type_source.get_output_port(),
+        station.GetInputPort("gripper_target_type"))
 
 # Loggers force certain outputs to be computed
 wrench_logger = LogOutput(station.GetOutputPort("measured_ee_wrench"),builder)
@@ -106,6 +111,7 @@ if simulate:
     simulator.set_target_realtime_rate(1.0)
     simulator.set_publish_every_time_step(False)
 
+    # Run simulation
     simulator.Initialize()
     simulator.AdvanceTo(10)
 

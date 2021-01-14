@@ -37,3 +37,7 @@ class EndEffectorTargetType(Enum):
     kPose = 1
     kTwist = 2
     kWrench = 3
+
+class GripperTargetType(Enum):
+    kPosition = 1
+    kVelocity = 2
