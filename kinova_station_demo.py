@@ -20,10 +20,10 @@ station.AddGround()
 station.ConnectToDrakeVisualizer()
 station.Finalize()
 
-## Show the station's system diagram
-#plt.figure()
-#plot_system_graphviz(station,max_depth=1)
-#plt.show()
+# Show the station's system diagram
+plt.figure()
+plot_system_graphviz(station,max_depth=1)
+plt.show()
 
 # Connect input ports to the kinova station
 builder = DiagramBuilder()

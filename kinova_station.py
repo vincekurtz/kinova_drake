@@ -140,6 +140,22 @@ class KinovaStation(Diagram):
                 gripper_ctrl.get_output_port(),
                 self.plant.get_actuation_input_port(self.gripper))
 
+        # Send gripper position and velocity as an output
+        demux2 = self.builder.AddSystem(Demultiplexer(
+                                        self.plant.num_multibody_states(self.gripper),
+                                        self.plant.num_positions(self.gripper)))
+        demux2.set_name("demux2")
+        
+        self.builder.Connect(
+                self.plant.get_state_output_port(self.gripper),
+                demux2.get_input_port())
+        self.builder.ExportOutput(
+                demux2.get_output_port(0),
+                "measured_gripper_position")
+        self.builder.ExportOutput(
+                demux2.get_output_port(1),
+                "measured_gripper_velocity")
+
         # Build the diagram
         self.builder.BuildInto(self)
 
