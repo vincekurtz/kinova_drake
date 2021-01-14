@@ -42,6 +42,10 @@ class KinovaStation(Diagram):
         self.plant.RegisterAsSourceForSceneGraph(self.scene_graph)
         self.plant.set_name("plant")
 
+        # A separate plant which only has access to the robot arm + gripper mass,
+        # and not any other objects in the scene
+        self.controller_plant = MultibodyPlant(time_step=time_step)
+
     def Finalize(self):
         """
         Do some final setup stuff. Must be called after making modifications
@@ -49,6 +53,7 @@ class KinovaStation(Diagram):
         this diagram as a system. 
         """
         self.plant.Finalize()
+        self.controller_plant.Finalize()
         
         # Set up the scene graph
         self.builder.Connect(
@@ -60,8 +65,8 @@ class KinovaStation(Diagram):
 
         # Create controller
         ctrl = self.builder.AddSystem(CartesianController(
-                                        self.plant,
-                                        self.arm))
+                                        self.controller_plant,
+                                        self.controller_arm))
         ctrl.set_name("cartesian_controller")
 
         # Inputs of target end-effector pose, twist, wrench go to the controller
@@ -104,6 +109,36 @@ class KinovaStation(Diagram):
         self.builder.ExportOutput(
                 ctrl.GetOutputPort("applied_arm_torque"),
                 "measured_arm_torques")
+        
+        # Create gripper controller
+        Kp_gripper = 10*np.ones((2,1))
+        Kd_gripper = 2*np.sqrt(Kp_gripper)
+        Ki_gripper = 0*Kp_gripper
+        gripper_ctrl = self.builder.AddSystem(
+                                    PidController(Kp_gripper, Ki_gripper, Kd_gripper))
+        gripper_ctrl.set_name("gripper_controller")
+
+        # Connect gripper controller to the diagram
+        mux = self.builder.AddSystem(Multiplexer([2,2]))
+        mux.set_name("mux")
+
+        self.builder.ExportInput(
+                mux.get_input_port(0),
+                "target_gripper_position")
+        self.builder.ExportInput(
+                mux.get_input_port(1),
+                "target_gripper_velocity")
+
+        self.builder.Connect(       # actual gripper state
+                self.plant.get_state_output_port(self.gripper),
+                gripper_ctrl.get_input_port(0))
+        self.builder.Connect(       # desired gripper state
+                mux.get_output_port(),
+                gripper_ctrl.get_input_port(1))
+
+        self.builder.Connect(
+                gripper_ctrl.get_output_port(),
+                self.plant.get_actuation_input_port(self.gripper))
 
         # Build the diagram
         self.builder.BuildInto(self)
@@ -123,18 +158,41 @@ class KinovaStation(Diagram):
                 "ground_collision",
                 surface_friction)
 
-    def SetupArmOnly(self):
+    def AddArm(self):
         """
         Add the 7-dof gen3 arm to the system.
         """
         arm_urdf = "./models/gen3_7dof/urdf/GEN3_URDF_V12.urdf"
         self.arm = Parser(plant=self.plant).AddModelFromFile(arm_urdf, "arm")
+        self.controller_arm = Parser(plant=self.controller_plant).AddModelFromFile(arm_urdf, "arm")
 
         # Fix the base of the arm to the world
         self.plant.WeldFrames(self.plant.world_frame(),
                               self.plant.GetFrameByName("base_link",self.arm))
 
-    def SetupArmWithHandeGripper(self):
+        self.controller_plant.WeldFrames(self.controller_plant.world_frame(),
+                                         self.controller_plant.GetFrameByName("base_link", self.controller_arm))
+
+    def AddHandeGripper(self):
+        """
+        Add the Hand-e gripper to the system. The arm must be added first. 
+        """
+        gripper_urdf = "./models/hande_gripper/urdf/robotiq_hande.urdf"
+        self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf,"gripper")
+
+        # Fix base of gripper to the arm
+        self.plant.WeldFrames(self.plant.GetFrameByName("end_effector_link",self.arm),
+                              self.plant.GetFrameByName("hande_base_link", self.gripper))
+
+        # Fix a block with the same mass and inertia as the gripper to the controller arm
+        # TODO
+
+
+
+    def AddArmWithHandeGripper(self):
+        """
+        Add the 7-dof arm and a model of the hande gripper to the system.
+        """
         pass
 
     def AddManipulandFromFile(self, model_file, X_WObject):
@@ -314,7 +372,7 @@ class CartesianController(LeafSystem):
 
                 prog = ik.get_mutable_prog()
                 q_var = ik.q()
-                prog.AddQuadraticErrorCost(np.eye(len(q_var)), np.zeros(7), q_var)
+                prog.AddQuadraticErrorCost(np.eye(len(q_var)), q, q_var)
                 prog.SetInitialGuess(q_var, q)
                 result = Solve(ik.prog())
 
@@ -334,7 +392,7 @@ class CartesianController(LeafSystem):
             qd_nom = np.zeros(7)
 
             # Use PD controller to map desired q, qd to desired qdd
-            Kp = 1*np.eye(7)
+            Kp = 100*np.eye(7)
             Kd = 2*np.sqrt(Kp)  # critical damping
             qdd_nom = Kp@(q_nom - q) + Kd@(qd_nom - qd)
 
