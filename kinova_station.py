@@ -112,7 +112,16 @@ class KinovaStation(Diagram):
         """
         Add a flat ground with friction
         """
-        pass
+        X_BG = RigidTransform()
+        surface_friction = CoulombFriction(
+                static_friction = 0.7,
+                dynamic_friction = 0.5)
+        self.plant.RegisterCollisionGeometry(
+                self.plant.world_body(),
+                X_BG,
+                HalfSpace(),
+                "ground_collision",
+                surface_friction)
 
     def SetupArmOnly(self):
         """
@@ -189,11 +198,151 @@ class CartesianController(LeafSystem):
                 "applied_arm_torque",
                 BasicVector(self.plant.num_actuators()),
                 self.CalcArmTorques)
+
+        # Define some relevant frames
+        self.world_frame = self.plant.world_frame()
+        self.ee_frame = self.plant.GetFrameByName("end_effector_link")
+
+        # Set joint limits (set self.{q,qd}_{min,max})
+        self.GetJointLimits()
+           
+        # Store desired end-effector pose and corresponding joint
+        # angles so we only run full IK when we need to
+        self.last_ee_pose_target = None
+        self.last_q_target = None
+    
+    def GetJointLimits(self):
+        """
+        Iterate through self.plant to establish joint angle
+        and velocity limits. 
+
+        Sets:
+
+            self.q_min
+            self.q_max
+            self.qd_min
+            self.qd_max
+
+        """
+        q_min = []
+        q_max = []
+        qd_min = []
+        qd_max = []
+
+        joint_indices = self.plant.GetJointIndices(self.arm)
+
+        for idx in joint_indices:
+            joint = self.plant.get_joint(idx)
+            
+            if joint.type_name() == "revolute":  # ignore the joint welded to the world
+                q_min.append(joint.position_lower_limit())
+                q_max.append(joint.position_upper_limit())
+                qd_min.append(joint.velocity_lower_limit())  # note that higher limits
+                qd_max.append(joint.velocity_upper_limit())  # are availible in cartesian mode
+
+        self.q_min = np.array(q_min)
+        self.q_max = np.array(q_max)
+        self.qd_min = np.array(qd_min)
+        self.qd_max = np.array(qd_max)
     
     def CalcArmTorques(self, context, output):
-        tau = np.zeros(7)
-        output.SetFromVector(tau)
+        """
+        This method is called each timestep to determine output torques
+        """
+        q = self.arm_position_port.Eval(context)
+        qd = self.arm_velocity_port.Eval(context)
+        self.plant.SetPositions(self.context,q)
+        self.plant.SetVelocities(self.context,qd)
 
+        # Some dynamics computations
+        tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
+
+
+        # Check whether desired pose, twist, wrench are given
+        rpy_xyz_des = self.target_ee_pose_port.Eval(context)
+        # TODO
+        wrench_given = False
+        twist_given = False
+       
+        if wrench_given:
+            # Compute joint torques consistent with the desired wrench
+            #TODO
+            pass
+        elif twist_given:
+            # Compue joint torques consistent with the desired twist
+            # using DifferentialInverseKinematics
+            # TODO
+            
+            ## Use DoDifferentialInverseKinematics to determine desired q, qd
+            #X_WE_desired = RigidTransform(RollPitchYaw(rpy_xyz_des[:3]),
+            #                              rpy_xyz_des[-3:]).GetAsIsometry3()
+
+            #params = DifferentialInverseKinematicsParameters(self.plant.num_positions(),
+            #                                                 self.plant.num_velocities())
+            #params.set_timestep(0.005)
+            #params.set_joint_velocity_limits((self.qd_min, self.qd_max))
+            #params.set_joint_position_limits((self.q_min, self.q_max))
+
+            #result = DoDifferentialInverseKinematics(self.plant,
+            #                                         self.context,
+            #                                         X_WE_desired,
+            #                                         self.ee_frame,
+            #                                         params)
+            pass
+        else:
+            # Compute joint torques which move the end effector to the desired pose
+
+            if (rpy_xyz_des != self.last_ee_pose_target).any():
+                
+                X_WE_des = RigidTransform(RollPitchYaw(rpy_xyz_des[:3]),
+                                          rpy_xyz_des[-3:])         
+          
+                # First compute joint angles consistent with the desired pose using Drake's IK.
+                # This sets up a nonconvex optimization problem to find joint angles consistent
+                # with the given constraints
+                ik = InverseKinematics(self.plant,self.context)
+                ik.AddPositionConstraint(self.ee_frame,
+                                         [0,0,0],
+                                         self.world_frame,
+                                         X_WE_des.translation(), 
+                                         X_WE_des.translation())
+                ik.AddOrientationConstraint(self.ee_frame,
+                                            RotationMatrix(),
+                                            self.world_frame,
+                                            X_WE_des.rotation(),
+                                            0.001)
+
+                prog = ik.get_mutable_prog()
+                q_var = ik.q()
+                prog.AddQuadraticErrorCost(np.eye(len(q_var)), np.zeros(7), q_var)
+                prog.SetInitialGuess(q_var, q)
+                result = Solve(ik.prog())
+
+                if not result.is_success():
+                    print("Inverse Kinematics Failed!")
+                    q_nom = np.zeros(7)
+                else:
+                    q_nom = result.GetSolution(q_var)
+
+                    # Save the results of this solve for later
+                    self.last_ee_pose_target = rpy_xyz_des
+                    self.last_q_target = q_nom
+
+            else:
+                q_nom = self.last_q_target
+
+            qd_nom = np.zeros(7)
+
+            # Use PD controller to map desired q, qd to desired qdd
+            Kp = 1*np.eye(7)
+            Kd = 2*np.sqrt(Kp)  # critical damping
+            qdd_nom = Kp@(q_nom - q) + Kd@(qd_nom - qd)
+
+            # Compute joint torques consistent with these desired qdd
+            f_ext = MultibodyForces(self.plant)
+            tau = tau_g + self.plant.CalcInverseDynamics(self.context, qdd_nom, f_ext)
+
+        output.SetFromVector(tau)
 
 if __name__=="__main__":
     KST = KinovaStationTemplate()
