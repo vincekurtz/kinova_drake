@@ -65,10 +65,15 @@ builder.Connect(
         target_gripper_velocity.get_output_port(0),
         station.GetInputPort("target_gripper_velocity"))
 
-# Loggers
+# Loggers force certain outputs to be computed
 wrench_logger = LogOutput(station.GetOutputPort("measured_ee_wrench"),builder)
 wrench_logger.set_name("wrench_logger")
 
+pose_logger = LogOutput(station.GetOutputPort("measured_ee_pose"), builder)
+pose_logger.set_name("pose_logger")
+
+twist_logger = LogOutput(station.GetOutputPort("measured_ee_twist"), builder)
+twist_logger.set_name("twist_logger")
 
 if simulate:
     # Build the system diagram

@@ -105,10 +105,16 @@ class KinovaStation(Diagram):
                 cartesian_controller.GetOutputPort("applied_arm_torque"),
                 self.plant.get_actuation_input_port(self.arm))
 
-        # Applied torques are treated as an output
+        # Controller outputs measured arm torques, end-effector pose, end-effector twist
         self.builder.ExportOutput(
                 cartesian_controller.GetOutputPort("applied_arm_torque"),
                 "measured_arm_torques")
+        self.builder.ExportOutput(
+                cartesian_controller.GetOutputPort("measured_ee_pose"),
+                "measured_ee_pose")
+        self.builder.ExportOutput(
+                cartesian_controller.GetOutputPort("measured_ee_twist"),
+                "measured_ee_twist")
         
         # Create gripper controller
         Kp_gripper = 10*np.ones((2,1))
@@ -356,10 +362,41 @@ class CartesianController(LeafSystem):
         self.qd_max = np.array(qd_max)
 
     def CalcEndEffectorPose(self, context, output):
-        pass
+        """
+        This method is called each timestep to determine the end-effector pose
+        """
+        q = self.arm_position_port.Eval(context)
+        qd = self.arm_velocity_port.Eval(context)
+        self.plant.SetPositions(self.context,q)
+        self.plant.SetVelocities(self.context,qd)
+
+        # Compute the rigid transform between the world and end-effector frames
+        X_ee = self.plant.CalcRelativeTransform(self.context,
+                                                self.world_frame,
+                                                self.ee_frame)
+
+        ee_pose = np.hstack([RollPitchYaw(X_ee.rotation()).vector(), X_ee.translation()])
+        output.SetFromVector(ee_pose)
     
     def CalcEndEffectorTwist(self, context, output):
-        pass
+        """
+        This method is called each timestep to determine the end-effector twist
+        """
+        q = self.arm_position_port.Eval(context)
+        qd = self.arm_velocity_port.Eval(context)
+        self.plant.SetPositions(self.context,q)
+        self.plant.SetVelocities(self.context,qd)
+
+        # Compute end-effector Jacobian
+        J = self.plant.CalcJacobianSpatialVelocity(self.context,
+                                                   JacobianWrtVariable.kV,
+                                                   self.ee_frame,
+                                                   np.zeros(3),
+                                                   self.world_frame,
+                                                   self.world_frame)
+
+        ee_twist = J@qd
+        output.SetFromVector(ee_twist)
     
     def CalcArmTorques(self, context, output):
         """
