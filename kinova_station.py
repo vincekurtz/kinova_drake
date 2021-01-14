@@ -419,7 +419,18 @@ class CartesianController(LeafSystem):
         if target_type == EndEffectorTargetType.kWrench:
             # Compute joint torques consistent with the desired wrench
             wrench_des = self.ee_target_port.Eval(context)
-            print("got a wrench")
+
+            # Compute end-effector jacobian
+            J = self.plant.CalcJacobianSpatialVelocity(self.context,
+                                                       JacobianWrtVariable.kV,
+                                                       self.ee_frame,
+                                                       np.zeros(3),
+                                                       self.world_frame,
+                                                       self.world_frame)
+
+            tau = tau_g + J.T@wrench_des
+
+
         elif target_type == EndEffectorTargetType.kTwist:
             # Compue joint torques consistent with the desired twist
             twist_des = self.ee_target_port.Eval(context)
