@@ -10,13 +10,17 @@
 from pydrake.all import *
 from kinova_station import KinovaStation
 
+from helpers import EndEffectorTargetType
+
 import numpy as np
 import matplotlib.pyplot as plt
 
 #### Parameters ####
 
-show_diagram = False
+show_diagram = True
 simulate = True
+
+command_type = EndEffectorTargetType.kPose  # pose, twist, or wrench
 
 ####################
 
@@ -37,21 +41,38 @@ if show_diagram:
 builder = DiagramBuilder()
 builder.AddSystem(station)
 
-# Desired end-effector pose
-rpy_xyz_des = np.array([np.pi,0.0,0.0,
-                        0.6,0.0,0.2])
-target_ee_pose = builder.AddSystem(ConstantVectorSource(rpy_xyz_des))
+# Send the command type to the system
+target_type_sys = builder.AddSystem(ConstantValueSource(AbstractValue.Make(command_type)))
 builder.Connect(
-        target_ee_pose.get_output_port(0),
-        station.GetInputPort("target_ee_pose"))
+        target_type_sys.get_output_port(),
+        station.GetInputPort("ee_target_type"))
 
-# Desired end-effector twist
-# TODO
+# Set (constant) command to send to the system
+if command_type == EndEffectorTargetType.kPose:
+    pose_des = np.array([np.pi,0.0,0.0,
+                            0.6,0.0,0.2])
+    target_source = builder.AddSystem(ConstantVectorSource(pose_des))
 
-# Desired end-effector wrench
-# TODO
+elif command_type == EndEffectorTargetType.kTwist:
+    twist_des = np.array([0,0,0,
+                          0,0,-0.1])
+    target_source = builder.AddSystem(ConstantVectorSource(twist_des))
 
-# Send desired end-effector position and velocity
+elif command_type == EndEffectorTargetType.kWrench:
+    wrench_des = np.array([0,0,0,
+                            0,0,0])
+    target_source = builder.AddSystem(ConstantVectorSource(wrench_des))
+
+else:
+    raise RuntimeError("invalid end-effector target type")
+
+builder.Connect(
+        target_source.get_output_port(),
+        station.GetInputPort("ee_target"))
+
+
+
+# Send gripper command
 q_grip_des = np.array([0.03,0.03])  # open at [0,0], closed at [0.03,0.03]
 v_grip_des = np.array([0,0])
 
@@ -87,5 +108,4 @@ if simulate:
 
     simulator.Initialize()
     simulator.AdvanceTo(10)
-
 

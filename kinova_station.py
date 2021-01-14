@@ -1,4 +1,5 @@
 from pydrake.all import *
+from helpers import EndEffectorTargetType
 
 class KinovaStation(Diagram):
     """
@@ -11,22 +12,28 @@ class KinovaStation(Diagram):
                                |                               |
                                |                               | --> measured_arm_position
                                |                               | --> measured_arm_velocity
-    target_ee_pose ----------> |         KinovaStation         | --> measured_arm_torque
-    target_ee_twist ---------> |                               |
-    target_ee_wrench --------> |                               |
+    ee_target ---------------> |         KinovaStation         | --> measured_arm_torque
+    ee_target_type ----------> |                               |
+                               |                               |
                                |                               | --> measured_ee_pose
                                |                               | --> measured_ee_twist
                                |                               | --> measured_ee_wrench
-                               |                               |
-                               |                               |
-    target_gripper_position -> |                               | --> measured_gripper_position
-    target_gripper_velocity -> |                               | --> measured_gripper_velocity
-                               |                               | --> measured_gripper_force
+    gripper_target ----------> |                               |
+    gripper_target_type -----> |                               |
+                               |                               | --> measured_gripper_position
+                               |                               | --> measured_gripper_velocity
                                |                               |
                                |                               | --> camera_rgb_image (TODO)
                                |                               | --> camera_depth_image (TODO)
                                |                               |
+                               |                               |
                                ---------------------------------
+
+    The input ee_target can be a desired end-effector pose, twist or wrench, as specified by
+    ee_target_type. 
+
+    Similarly, the gripper_target can be a desired gripper position or velocity, as specified
+    by gripper_target_type. 
    
     """
     def __init__(self, time_step=0.002):
@@ -69,13 +76,11 @@ class KinovaStation(Diagram):
                                         self.controller_arm))
         cartesian_controller.set_name("cartesian_controller")
 
-        # Inputs of target end-effector pose, twist, wrench go to the controller
-        self.builder.ExportInput(cartesian_controller.target_ee_pose_port,
-                                 "target_ee_pose")
-        self.builder.ExportInput(cartesian_controller.target_ee_twist_port,
-                                 "target_ee_twist")
-        self.builder.ExportInput(cartesian_controller.target_ee_wrench_port,
-                                 "target_ee_wrench")
+        # End effector target and target type go to the controller
+        self.builder.ExportInput(cartesian_controller.ee_target_port,
+                                 "ee_target")
+        self.builder.ExportInput(cartesian_controller.ee_target_type_port,
+                                 "ee_target_type")
 
         # Output measured arm position and velocity
         demux = self.builder.AddSystem(Demultiplexer(
@@ -259,9 +264,9 @@ class CartesianController(LeafSystem):
  
                          -------------------------
                          |                       |
-    target_ee_pose ----> |                       |
-    target_ee_twist ---> |  CartesianController  | ----> applied_arm_torque
-    target_ee_wrench --> |                       |
+                         |                       |
+    ee_target ---------> |  CartesianController  | ----> applied_arm_torque
+    ee_target_type ----> |                       |
                          |                       |
                          |                       | ----> measured_ee_pose
     arm_position ------> |                       | ----> measured_ee_twist
@@ -270,10 +275,11 @@ class CartesianController(LeafSystem):
                          |                       |
                          -------------------------
 
+    The type of target is determined by ee_target_type, and can be
+        EndEffectorTargetType.kPose,
+        EndEffectorTargetType.kTwist,
+        EndEffectorTargetType.kWrench.
 
-    If a target twist is avialible, this takes precidence over a the given target pose.
-    Similarly, if a target end-effector wrench is availible, this takes precidence over 
-    a target twist and pose.
     """
     def __init__(self, plant, arm_model):
         LeafSystem.__init__(self)
@@ -283,15 +289,12 @@ class CartesianController(LeafSystem):
         self.context = self.plant.CreateDefaultContext()
 
         # Define input ports
-        self.target_ee_pose_port = self.DeclareVectorInputPort(
-                                        "target_ee_pose",
+        self.ee_target_port = self.DeclareVectorInputPort(
+                                        "ee_target",
                                         BasicVector(6))
-        self.target_ee_twist_port = self.DeclareVectorInputPort(
-                                        "target_ee_twist",
-                                        BasicVector(6))
-        self.target_ee_wrench_port = self.DeclareVectorInputPort(
-                                        "target_ee_wrench",
-                                        BasicVector(6))
+        self.ee_target_type_port = self.DeclareAbstractInputPort(
+                                            "ee_target_type",
+                                            AbstractValue.Make(EndEffectorTargetType.kPose))
 
         self.arm_position_port = self.DeclareVectorInputPort(
                                         "arm_position",
@@ -410,21 +413,18 @@ class CartesianController(LeafSystem):
         # Some dynamics computations
         tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
 
+        # Indicate what type of command we're recieving
+        target_type = self.ee_target_type_port.Eval(context)
 
-        # Check whether desired pose, twist, wrench are given
-        rpy_xyz_des = self.target_ee_pose_port.Eval(context)
-        # TODO
-        wrench_given = False
-        twist_given = False
-       
-        if wrench_given:
+        if target_type == EndEffectorTargetType.kWrench:
             # Compute joint torques consistent with the desired wrench
-            #TODO
+            wrench_des = self.ee_target_port.Eval(context)
+            print("got a wrench")
             pass
-        elif twist_given:
+        elif target_type == EndEffectorTargetType.kTwist:
             # Compue joint torques consistent with the desired twist
-            # using DifferentialInverseKinematics
-            # TODO
+            twist_des = self.ee_target_port.Eval(context)
+            print("got a twist")
             
             ## Use DoDifferentialInverseKinematics to determine desired q, qd
             #X_WE_desired = RigidTransform(RollPitchYaw(rpy_xyz_des[:3]),
@@ -442,9 +442,11 @@ class CartesianController(LeafSystem):
             #                                         self.ee_frame,
             #                                         params)
             pass
-        else:
+        elif target_type == EndEffectorTargetType.kPose:
             # Compute joint torques which move the end effector to the desired pose
+            rpy_xyz_des = self.ee_target_port.Eval(context)
 
+            # Only do a full inverse kinematics solve if the target pose has changed
             if (rpy_xyz_des != self.last_ee_pose_target).any():
                 
                 X_WE_des = RigidTransform(RollPitchYaw(rpy_xyz_des[:3]),
@@ -494,6 +496,9 @@ class CartesianController(LeafSystem):
             # Compute joint torques consistent with these desired qdd
             f_ext = MultibodyForces(self.plant)
             tau = tau_g + self.plant.CalcInverseDynamics(self.context, qdd_nom, f_ext)
+
+        else:
+            raise RuntimeError("Invalid target type %s" % target_type)
 
         output.SetFromVector(tau)
 

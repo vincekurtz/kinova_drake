@@ -1,6 +1,7 @@
 # Miscellaneous helper functions
 from pydrake.autodiffutils import AutoDiffXd
 import numpy as np
+from enum import Enum
 
 def jacobian2(function, x):
     """
@@ -31,3 +32,8 @@ def jacobian2(function, x):
         yds.append(yd)
 
     return np.vstack(yds).reshape(y_ad.shape + (-1,))
+
+class EndEffectorTargetType(Enum):
+    kPose = 1
+    kTwist = 2
+    kWrench = 3
