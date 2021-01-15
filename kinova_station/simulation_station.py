@@ -127,40 +127,48 @@ class KinovaStation(Diagram):
                 cartesian_controller.GetOutputPort("measured_ee_twist"),
                 "measured_ee_twist")
         
-        # Create gripper controller
-        gripper_controller = self.builder.AddSystem(GripperController())
-        gripper_controller.set_name("gripper_controller")
+        ## Create gripper controller
+        #gripper_controller = self.builder.AddSystem(GripperController())
+        #gripper_controller.set_name("gripper_controller")
 
-        # Connect gripper controller to the diagram
-        self.builder.ExportInput(
-                gripper_controller.GetInputPort("gripper_target"),
-                "gripper_target")
-        self.builder.ExportInput(
-                gripper_controller.GetInputPort("gripper_target_type"),
-                "gripper_target_type")
+        ## Connect gripper controller to the diagram
+        #self.builder.ExportInput(
+        #        gripper_controller.GetInputPort("gripper_target"),
+        #        "gripper_target")
+        #self.builder.ExportInput(
+        #        gripper_controller.GetInputPort("gripper_target_type"),
+        #        "gripper_target_type")
 
+        #self.builder.Connect(
+        #        self.plant.get_state_output_port(self.gripper),
+        #        gripper_controller.GetInputPort("gripper_state"))
+        #self.builder.Connect(
+        #        gripper_controller.get_output_port(),
+        #        self.plant.get_actuation_input_port(self.gripper))
+
+        gp = self.builder.AddSystem(ConstantVectorSource(np.array([0.1])))  # sketch of controller
         self.builder.Connect(
-                self.plant.get_state_output_port(self.gripper),
-                gripper_controller.GetInputPort("gripper_state"))
-        self.builder.Connect(
-                gripper_controller.get_output_port(),
+                gp.get_output_port(),
                 self.plant.get_actuation_input_port(self.gripper))
 
-        # Send gripper position and velocity as an output
-        demux2 = self.builder.AddSystem(Demultiplexer(
-                                        self.plant.num_multibody_states(self.gripper),
-                                        self.plant.num_positions(self.gripper)))
-        demux2.set_name("demux2")
-        
-        self.builder.Connect(
-                self.plant.get_state_output_port(self.gripper),
-                demux2.get_input_port())
-        self.builder.ExportOutput(
-                demux2.get_output_port(0),
-                "measured_gripper_position")
-        self.builder.ExportOutput(
-                demux2.get_output_port(1),
-                "measured_gripper_velocity")
+
+        print(self.plant.get_actuation_input_port(self.gripper).size())
+
+        ## Send gripper position and velocity as an output
+        #demux2 = self.builder.AddSystem(Demultiplexer(
+        #                                self.plant.num_multibody_states(self.gripper),
+        #                                self.plant.num_positions(self.gripper)))
+        #demux2.set_name("demux2")
+        #
+        #self.builder.Connect(
+        #        self.plant.get_state_output_port(self.gripper),
+        #        demux2.get_input_port())
+        #self.builder.ExportOutput(
+        #        demux2.get_output_port(0),
+        #        "measured_gripper_position")
+        #self.builder.ExportOutput(
+        #        demux2.get_output_port(1),
+        #        "measured_gripper_velocity")
 
         # Compute and output end-effector wrenches based on measured joint torques
         wrench_calculator = self.builder.AddSystem(EndEffectorWrenchCalculator(
@@ -250,6 +258,27 @@ class KinovaStation(Diagram):
         self.controller_plant.WeldFrames(
                 self.controller_plant.GetFrameByName("end_effector_link",self.controller_arm),
                 self.controller_plant.GetFrameByName("hande_base_link", static_gripper))
+
+    def Add2f85Gripper(self):
+        """
+        Add the Robotiq 2F-85 gripper to the system. The arm must be added first. 
+        """
+        # Add a gripper with actuation to the full simulated plant
+        gripper_urdf = "./models/2f_85_gripper/urdf/robotiq_2f_85.urdf"
+        self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf,"gripper")
+
+        self.plant.WeldFrames(self.plant.GetFrameByName("end_effector_link",self.arm),
+                              self.plant.GetFrameByName("robotiq_arg2f_base_link", self.gripper))
+
+        # Add a gripper without actuation to the controller plant
+        gripper_static_urdf = "./models/2f_85_gripper/urdf/robotiq_2f_85_static.urdf"
+        static_gripper = Parser(plant=self.controller_plant).AddModelFromFile(
+                                                                gripper_static_urdf,
+                                                                "gripper")
+
+        self.controller_plant.WeldFrames(
+                self.controller_plant.GetFrameByName("end_effector_link",self.controller_arm),
+                self.controller_plant.GetFrameByName("robotiq_arg2f_base_link", static_gripper))
         
     def AddArmWithHandeGripper(self):
         """

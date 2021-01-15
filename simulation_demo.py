@@ -52,7 +52,7 @@ show_station_diagram = False
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
-show_toplevel_diagram = True
+show_toplevel_diagram = False
 
 # Run a quick simulation
 simulate = True
@@ -66,7 +66,12 @@ gripper_command_type = GripperTarget.kPosition  # kPosition or kVelocity
 
 # Set up the kinova station
 station = KinovaStation(time_step=0.001)
-station.SetupSinglePegScenario()
+station.AddGround()
+station.AddArm()
+#station.AddHandeGripper()
+station.Add2f85Gripper()
+station.ConnectToDrakeVisualizer()
+#station.SetupSinglePegScenario()
 station.Finalize()
 
 if show_station_diagram:
@@ -111,28 +116,28 @@ builder.Connect(
 target_source.set_name("ee_command_source")
 target_type_source.set_name("ee_type_source")
 
-# Set gripper command
-if gripper_command_type == GripperTarget.kPosition:
-    q_grip_des = np.array([0.00,0.00])  # open at [0,0], closed at [0.03,0.03]
-    gripper_target_source = builder.AddSystem(ConstantVectorSource(q_grip_des))
-
-elif gripper_command_type == GripperTarget.kVelocity:
-    v_grip_des = np.array([0.01,0.01])
-    gripper_target_source = builder.AddSystem(ConstantVectorSource(v_grip_des))
-
-# Send gripper command and type
-gripper_target_type_source = builder.AddSystem(ConstantValueSource(
-                                         AbstractValue.Make(gripper_command_type)))
-builder.Connect(
-        gripper_target_type_source.get_output_port(),
-        station.GetInputPort("gripper_target_type"))
-
-builder.Connect(
-        gripper_target_source.get_output_port(),
-        station.GetInputPort("gripper_target"))
-
-gripper_target_source.set_name("gripper_command_source")
-gripper_target_type_source.set_name("gripper_type_source")
+## Set gripper command
+#if gripper_command_type == GripperTarget.kPosition:
+#    q_grip_des = np.array([0.00,0.00])  # open at [0,0], closed at [0.03,0.03]
+#    gripper_target_source = builder.AddSystem(ConstantVectorSource(q_grip_des))
+#
+#elif gripper_command_type == GripperTarget.kVelocity:
+#    v_grip_des = np.array([0.01,0.01])
+#    gripper_target_source = builder.AddSystem(ConstantVectorSource(v_grip_des))
+#
+## Send gripper command and type
+#gripper_target_type_source = builder.AddSystem(ConstantValueSource(
+#                                         AbstractValue.Make(gripper_command_type)))
+#builder.Connect(
+#        gripper_target_type_source.get_output_port(),
+#        station.GetInputPort("gripper_target_type"))
+#
+#builder.Connect(
+#        gripper_target_source.get_output_port(),
+#        station.GetInputPort("gripper_target"))
+#
+#gripper_target_source.set_name("gripper_command_source")
+#gripper_target_type_source.set_name("gripper_type_source")
 
 # Loggers force certain outputs to be computed
 wrench_logger = LogOutput(station.GetOutputPort("measured_ee_wrench"),builder)
