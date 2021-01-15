@@ -43,7 +43,7 @@ from pydrake.all import *
 import numpy as np
 import matplotlib.pyplot as plt
 
-from kinova_station import KinovaStation, EndEffectorTargetType, GripperTargetType
+from kinova_station import KinovaStation, EndEffectorTarget, GripperTarget
 
 ########################### Parameters #################################
 
@@ -52,29 +52,21 @@ show_station_diagram = False
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
-show_toplevel_diagram = False
+show_toplevel_diagram = True
 
 # Run a quick simulation
 simulate = True
 
 # If we're running a simulation, choose which sort of commands are
 # sent to the arm and the gripper
-ee_command_type = EndEffectorTargetType.kTwist      # kPose, kTwist, or kWrench
-gripper_command_type = GripperTargetType.kPosition  # kPosition or kVelocity
+ee_command_type = EndEffectorTarget.kTwist      # kPose, kTwist, or kWrench
+gripper_command_type = GripperTarget.kPosition  # kPosition or kVelocity
 
 ########################################################################
 
 # Set up the kinova station
 station = KinovaStation(time_step=0.001)
-station.AddArmWithHandeGripper()
-station.AddGround()
-
-X_peg = RigidTransform()
-X_peg.set_translation([0.5,0,0.1])
-X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,np.pi/2,0])))
-station.AddManipulandFromFile("./models/manipulands/peg.sdf", X_peg)
-
-station.ConnectToDrakeVisualizer()
+station.SetupSinglePegScenario()
 station.Finalize()
 
 if show_station_diagram:
@@ -88,17 +80,17 @@ builder = DiagramBuilder()
 builder.AddSystem(station)
 
 # Set (constant) command to send to the system
-if ee_command_type == EndEffectorTargetType.kPose:
+if ee_command_type == EndEffectorTarget.kPose:
     pose_des = np.array([np.pi,0.0,0.0,
                             0.6,0.0,0.2])
     target_source = builder.AddSystem(ConstantVectorSource(pose_des))
 
-elif ee_command_type == EndEffectorTargetType.kTwist:
+elif ee_command_type == EndEffectorTarget.kTwist:
     twist_des = np.array([0,0,0.0,
                           0.0,0.0,0.1])
     target_source = builder.AddSystem(ConstantVectorSource(twist_des))
 
-elif ee_command_type == EndEffectorTargetType.kWrench:
+elif ee_command_type == EndEffectorTarget.kWrench:
     wrench_des = np.array([0,0,0.0,
                             0.1,0.0,0.0])
     target_source = builder.AddSystem(ConstantVectorSource(wrench_des))
@@ -120,11 +112,11 @@ target_source.set_name("ee_command_source")
 target_type_source.set_name("ee_type_source")
 
 # Set gripper command
-if gripper_command_type == GripperTargetType.kPosition:
+if gripper_command_type == GripperTarget.kPosition:
     q_grip_des = np.array([0.00,0.00])  # open at [0,0], closed at [0.03,0.03]
     gripper_target_source = builder.AddSystem(ConstantVectorSource(q_grip_des))
 
-elif gripper_command_type == GripperTargetType.kVelocity:
+elif gripper_command_type == GripperTarget.kVelocity:
     v_grip_des = np.array([0.01,0.01])
     gripper_target_source = builder.AddSystem(ConstantVectorSource(v_grip_des))
 

@@ -4,12 +4,12 @@ from pydrake.all import *
 import numpy as np
 from enum import Enum
 
-class EndEffectorTargetType(Enum):
+class EndEffectorTarget(Enum):
     kPose = 1
     kTwist = 2
     kWrench = 3
 
-class GripperTargetType(Enum):
+class GripperTarget(Enum):
     kPosition = 1
     kVelocity = 2
 

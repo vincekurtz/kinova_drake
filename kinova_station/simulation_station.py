@@ -1,6 +1,6 @@
 from pydrake.all import *
-from kinova_station.common import (EndEffectorTargetType, 
-                                   GripperTargetType, 
+from kinova_station.common import (EndEffectorTarget, 
+                                   GripperTarget, 
                                    EndEffectorWrenchCalculator)
 
 class KinovaStation(Diagram):
@@ -185,6 +185,21 @@ class KinovaStation(Diagram):
         # Build the diagram
         self.builder.BuildInto(self)
 
+    def SetupSinglePegScenario(self):
+        """
+        Set up a scenario with the robot arm, Hand-e gripper, and a single peg. 
+        And connect to the Drake visualizer while we're at it.
+        """
+        self.AddGround()
+        self.AddArmWithHandeGripper()
+
+        X_peg = RigidTransform()
+        X_peg.set_translation([0.5,0,0.1])
+        X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,np.pi/2,0])))
+        self.AddManipulandFromFile("./models/manipulands/peg.sdf", X_peg)
+
+        self.ConnectToDrakeVisualizer()
+
     def AddGround(self):
         """
         Add a flat ground with friction
@@ -310,7 +325,7 @@ class GripperController(LeafSystem):
                                   BasicVector(2))
         self.target_type_port = self.DeclareAbstractInputPort(
                                   "gripper_target_type",
-                                  AbstractValue.Make(GripperTargetType.kPosition))
+                                  AbstractValue.Make(GripperTarget.kPosition))
         self.state_port = self.DeclareVectorInputPort(
                                     "gripper_state",
                                     BasicVector(4))
@@ -329,10 +344,10 @@ class GripperController(LeafSystem):
         q = state[:2]
         qd = state[2:]
 
-        if target_type == GripperTargetType.kPosition:
+        if target_type == GripperTarget.kPosition:
             q_nom = target
             qd_nom = np.zeros(2)
-        elif target_type == GripperTargetType.kVelocity:
+        elif target_type == GripperTarget.kVelocity:
             q_nom = q
             qd_nom = target
         else:
@@ -364,9 +379,9 @@ class CartesianController(LeafSystem):
                          -------------------------
 
     The type of target is determined by ee_target_type, and can be
-        EndEffectorTargetType.kPose,
-        EndEffectorTargetType.kTwist,
-        EndEffectorTargetType.kWrench.
+        EndEffectorTarget.kPose,
+        EndEffectorTarget.kTwist,
+        EndEffectorTarget.kWrench.
 
     """
     def __init__(self, plant, arm_model):
@@ -382,7 +397,7 @@ class CartesianController(LeafSystem):
                                         BasicVector(6))
         self.ee_target_type_port = self.DeclareAbstractInputPort(
                                             "ee_target_type",
-                                            AbstractValue.Make(EndEffectorTargetType.kPose))
+                                            AbstractValue.Make(EndEffectorTarget.kPose))
 
         self.arm_position_port = self.DeclareVectorInputPort(
                                         "arm_position",
@@ -400,11 +415,14 @@ class CartesianController(LeafSystem):
         self.DeclareVectorOutputPort(
                 "measured_ee_pose",
                 BasicVector(6),
-                self.CalcEndEffectorPose)
+                self.CalcEndEffectorPose,
+                {self.time_ticket()}   # indicate that this doesn't depend on any inputs,
+                )                      # but should still be updated each timestep
         self.DeclareVectorOutputPort(
                 "measured_ee_twist",
                 BasicVector(6),
-                self.CalcEndEffectorTwist)
+                self.CalcEndEffectorTwist,
+                {self.time_ticket()})
 
         # Define some relevant frames
         self.world_frame = self.plant.world_frame()
@@ -504,7 +522,7 @@ class CartesianController(LeafSystem):
         # Indicate what type of command we're recieving
         target_type = self.ee_target_type_port.Eval(context)
 
-        if target_type == EndEffectorTargetType.kWrench:
+        if target_type == EndEffectorTarget.kWrench:
             # Compute joint torques consistent with the desired wrench
             wrench_des = self.ee_target_port.Eval(context)
 
@@ -519,7 +537,7 @@ class CartesianController(LeafSystem):
             tau = tau_g + J.T@wrench_des
 
 
-        elif target_type == EndEffectorTargetType.kTwist:
+        elif target_type == EndEffectorTarget.kTwist:
             # Compue joint torques consistent with the desired twist
             twist_des = self.ee_target_port.Eval(context)
 
@@ -550,7 +568,7 @@ class CartesianController(LeafSystem):
             f_ext = MultibodyForces(self.plant)
             tau = tau_g + self.plant.CalcInverseDynamics(self.context, qdd_nom, f_ext)
 
-        elif target_type == EndEffectorTargetType.kPose:
+        elif target_type == EndEffectorTarget.kPose:
             # Compute joint torques which move the end effector to the desired pose
             rpy_xyz_des = self.ee_target_port.Eval(context)
 
