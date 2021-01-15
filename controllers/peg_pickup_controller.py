@@ -6,7 +6,7 @@
 ##
 
 from pydrake.all import *
-from kinova_station import KinovaStation, EndEffectorTarget, GripperTarget
+from kinova_station import EndEffectorTarget, GripperTarget
 
 class PegPickupController(LeafSystem):
     """
