@@ -43,8 +43,7 @@ from pydrake.all import *
 import numpy as np
 import matplotlib.pyplot as plt
 
-from kinova_station import KinovaStation
-from helpers import EndEffectorTargetType, GripperTargetType
+from kinova_station import KinovaStation, EndEffectorTargetType, GripperTargetType
 
 ########################### Parameters #################################
 
@@ -81,7 +80,6 @@ if show_station_diagram:
 # Connect input ports to the kinova station
 builder = DiagramBuilder()
 builder.AddSystem(station)
-
 
 # Set (constant) command to send to the system
 if ee_command_type == EndEffectorTargetType.kPose:

@@ -1,7 +1,7 @@
 from pydrake.all import *
-from helpers import (EndEffectorTargetType, 
-                     GripperTargetType, 
-                     EndEffectorWrenchCalculator)
+from kinova_station.common import (EndEffectorTargetType, 
+                                   GripperTargetType, 
+                                   EndEffectorWrenchCalculator)
 
 class KinovaStation(Diagram):
     """
