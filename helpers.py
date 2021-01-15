@@ -1,37 +1,8 @@
 # Miscellaneous helper functions
-from pydrake.autodiffutils import AutoDiffXd
+
+from pydrake.all import *
 import numpy as np
 from enum import Enum
-
-def jacobian2(function, x):
-    """
-    This is a rewritting of the jacobian function from drake which addresses
-    a strange bug that prevents computations of Jdot.
-
-    Compute the jacobian of the function evaluated at the vector input x
-    using Eigen's automatic differentiation. The dimension of the jacobian will
-    be one more than the output of ``function``.
-
-    ``function`` should be vector-input, and can be any dimension output, and
-    must return an array with AutoDiffXd elements.
-    """
-    x = np.asarray(x)
-    assert x.ndim == 1, "x must be a vector"
-    x_ad = np.empty(x.shape, dtype=np.object)
-    for i in range(x.size):
-        der = np.zeros(x.size)
-        der[i] = 1
-        x_ad.flat[i] = AutoDiffXd(x.flat[i], der)
-    y_ad = np.asarray(function(x_ad))
-
-    yds = []
-    for y in y_ad.flat:
-        yd = y.derivatives()
-        if yd.shape == (0,):
-            yd = np.zeros(x_ad.shape)
-        yds.append(yd)
-
-    return np.vstack(yds).reshape(y_ad.shape + (-1,))
 
 class EndEffectorTargetType(Enum):
     kPose = 1
@@ -41,3 +12,75 @@ class EndEffectorTargetType(Enum):
 class GripperTargetType(Enum):
     kPosition = 1
     kVelocity = 2
+
+class EndEffectorWrenchCalculator(LeafSystem):
+    """
+    A simple system which takes as input joint torques and outputs the corresponding
+    wrench applied to the end-effector. 
+
+                       ---------------------------------
+                       |                               |
+                       |                               |
+                       |                               |
+    joint_positions -> |  EndEffectorWrenchCalculator  | ---> end_effector_wrench
+    joint_angles ----> |                               | 
+    joint_torques ---> |                               |
+                       |                               |
+                       |                               |
+                       ---------------------------------
+    """
+    def __init__(self, plant, end_effector_frame):
+        LeafSystem.__init__(self)
+
+        self.plant = plant
+        self.context = self.plant.CreateDefaultContext()
+        self.ee_frame = end_effector_frame
+
+        # Inputs are joint positions, angles and torques
+        self.q_port = self.DeclareVectorInputPort(
+                                "joint_positions",
+                                BasicVector(plant.num_positions()))
+        self.v_port = self.DeclareVectorInputPort(
+                                "joint_velocities",
+                                BasicVector(plant.num_velocities()))
+        self.tau_port = self.DeclareVectorInputPort(
+                                "joint_torques",
+                                BasicVector(plant.num_actuators()))
+
+        # Output is applied wrench at the end-effector
+        self.DeclareVectorOutputPort(
+                "end_effector_wrench",
+                BasicVector(6),
+                self.CalcEndEffectorWrench)
+
+    def CalcEndEffectorWrench(self, context, output):
+        # Gather inputs
+        q = self.q_port.Eval(context)
+        v = self.v_port.Eval(context)
+        tau = self.tau_port.Eval(context)
+
+        # Set internal model state
+        self.plant.SetPositions(self.context, q)
+        self.plant.SetVelocities(self.context, v)
+
+        # Some dynamics computations
+        M = self.plant.CalcMassMatrixViaInverseDynamics(self.context)
+        tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
+
+        # Compute end-effector jacobian
+        J = self.plant.CalcJacobianSpatialVelocity(self.context,
+                                                   JacobianWrtVariable.kV,
+                                                   self.ee_frame,
+                                                   np.zeros(3),
+                                                   self.plant.world_frame(),
+                                                   self.plant.world_frame())
+
+        # Compute jacobian pseudoinverse
+        Minv = np.linalg.inv(M)
+        Lambda = np.linalg.inv(J@Minv@J.T)
+        Jbar = Lambda@J@Minv
+
+        # Compute wrench (spatial force) applied at end-effector
+        w = Jbar@(tau-tau_g)
+
+        output.SetFromVector(w)
