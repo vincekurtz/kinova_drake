@@ -64,6 +64,7 @@ class PegPickupController(LeafSystem):
                 self.SetGripperCommandType)
 
         # Define command sequence
+        # TODO: consider creating a separate command sequence class
         self.command_sequence = {
                 "lineup" : {"target_pose" : np.array([-np.pi,0,0, 0.5,-0.1,0.3]),
                               "start_time" : 0,
