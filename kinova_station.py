@@ -38,7 +38,7 @@ class KinovaStation(Diagram):
     """
     def __init__(self, time_step=0.002):
         Diagram.__init__(self)
-        self.set_name("manipulation_station")
+        self.set_name("kinova_manipulation_station")
 
         self.builder = DiagramBuilder()
 
