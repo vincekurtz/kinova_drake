@@ -68,6 +68,12 @@ gripper_command_type = GripperTargetType.kPosition  # kPosition or kVelocity
 station = KinovaStation(time_step=0.001)
 station.AddArmWithHandeGripper()
 station.AddGround()
+
+X_peg = RigidTransform()
+X_peg.set_translation([0.5,0,0.1])
+X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,np.pi/2,0])))
+station.AddManipulandFromFile("./models/manipulands/peg.sdf", X_peg)
+
 station.ConnectToDrakeVisualizer()
 station.Finalize()
 
@@ -161,6 +167,9 @@ if simulate:
     # Set default arm positions
     q0 = np.array([0.0, -np.pi/5, np.pi, -0.8*np.pi, np.pi, -0.1*np.pi, 0.5*np.pi])
     station.SetArmPositions(diagram, diagram_context, q0)
+
+    # Set starting position for any objects in the scene
+    station.SetManipulandStartPositions(diagram, diagram_context)
 
     # Set up simulation
     simulator = Simulator(diagram, diagram_context)

@@ -55,6 +55,10 @@ class KinovaStation(Diagram):
         # and not any other objects in the scene
         self.controller_plant = MultibodyPlant(time_step=time_step)
 
+        # Body id's and poses for any extra objects in the scene
+        self.object_ids = []
+        self.object_poses = []
+
     def Finalize(self):
         """
         Do some final setup stuff. Must be called after making modifications
@@ -240,7 +244,16 @@ class KinovaStation(Diagram):
         self.AddHandeGripper()
 
     def AddManipulandFromFile(self, model_file, X_WObject):
-        pass
+        """
+        Add an object to the simulation and place it in the given pose in the world
+        """
+        manipuland = Parser(plant=self.plant).AddModelFromFile(model_file)
+        body_indices = self.plant.GetBodyIndices(manipuland)
+
+        assert len(body_indices) == 1, "Only single-body objects are supported for now"
+        
+        self.object_ids.append(body_indices[0])
+        self.object_poses.append(X_WObject)
 
     def SetArmPositions(self, diagram, diagram_context, q):
         """
@@ -249,6 +262,21 @@ class KinovaStation(Diagram):
         """
         plant_context = diagram.GetMutableSubsystemContext(self.plant, diagram_context)
         self.plant.SetPositions(plant_context, self.arm, q)
+
+    def SetManipulandStartPositions(self, diagram, diagram_context):
+        """
+        Set positions of any manipulands to their starting values. Must be called
+        after the overall system diagram is built, and the associated diagram_context set.
+        """
+        assert len(self.object_ids) == len(self.object_poses), "Manipuland poses and ids don't match"
+
+        plant_context = diagram.GetMutableSubsystemContext(self.plant, diagram_context)
+        
+        for i in range(len(self.object_ids)):
+            self.plant.SetFreeBodyPose(plant_context, 
+                                       self.plant.get_body(self.object_ids[i]),
+                                       self.object_poses[i])
+
 
     def ConnectToDrakeVisualizer(self):
         visualizer_params = DrakeVisualizerParams(role=Role.kIllustration)
