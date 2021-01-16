@@ -80,14 +80,14 @@ class KinovaStation(Diagram):
 
             # Add frames which are located at the desired linkage point
             X_LIF = RigidTransform()
-            X_LIF.set_translation([0,0,-0.02])
+            X_LIF.set_translation([0,0.0,-0.035])
             left_inner_finger_bushing = FixedOffsetFrame(
                                                 "left_inner_finger_bushing",
                                                 left_inner_finger,
                                                 X_LIF,
                                                 self.gripper)
             X_LIK = RigidTransform()
-            X_LIK.set_translation([0,0.01,0])
+            X_LIK.set_translation([0,0,0])
             left_inner_knuckle_bushing = FixedOffsetFrame(
                                                 "left_inner_knuckle_bushing",
                                                 left_inner_knuckle,
@@ -390,35 +390,28 @@ class KinovaStation(Diagram):
                                        params=visualizer_params)
 
     def ConnectToMeshcatVisualizer(self):
-
-        # Need to start meshcat server with
+        # Need to first start meshcat server with
         #
         #  bazel run @meshcat_python//:meshcat-server
         #
-        # first. TODO: start meshcat server from here
+        # TODO: start meshcat server from here
 
-        frames_to_draw = {"gripper": {"left_inner_finger","base_link"},
-                          "arm": ["end_effector_link"]}
+        # DEBUG
+        frames_to_draw = {"gripper": {"left_inner_finger"},
+                          "arm": {"end_effector_link"}}
 
         #ConnectMeshcatVisualizer(builder=self.builder,
         #                         scene_graph=self.scene_graph,
         #                         output_port=self.scene_graph.get_query_output_port(),
-        #                         frames_to_draw=frames_to_draw,
-        #                         frames_opacity=1,
-        #                         axis_length=0.1,
-        #                         axis_radius=0.01)
-        meshcat_viz = self.builder.AddSystem(
-                MeshcatVisualizer(self.scene_graph,
-                                  frames_to_draw=frames_to_draw,
-                                  axis_radius=0.1)
-                )
+        #                         frames_to_draw=frames_to_draw)
 
-        #self.builder.Connect(
-        #        self.scene_graph.get_pose_bundle_output_port(),
-        #        meshcat_viz.get_input_port(0))
+        meshcat_visualizer = self.builder.AddSystem(
+                MeshcatVisualizer(self.scene_graph,
+                                  frames_to_draw=frames_to_draw))
         self.builder.Connect(
-                self.scene_graph.get_query_output_port(),
-                meshcat_viz.get_geometry_query_input_port())
+                self.scene_graph.get_pose_bundle_output_port(),
+                meshcat_visualizer.get_input_port(0))
+                                               
 
 
 class GripperController(LeafSystem):
@@ -576,21 +569,27 @@ class CartesianController(LeafSystem):
         qd_min = []
         qd_max = []
 
-        joint_indices = self.plant.GetJointIndices(self.arm)
+        # DEBUG
+        #joint_indices = self.plant.GetJointIndices(self.arm)
 
-        for idx in joint_indices:
-            joint = self.plant.get_joint(idx)
-            
-            if joint.type_name() == "revolute":  # ignore the joint welded to the world
-                q_min.append(joint.position_lower_limit())
-                q_max.append(joint.position_upper_limit())
-                qd_min.append(joint.velocity_lower_limit())  # note that higher limits
-                qd_max.append(joint.velocity_upper_limit())  # are availible in cartesian mode
+        #for idx in joint_indices:
+        #    joint = self.plant.get_joint(idx)
+        #    
+        #    if joint.type_name() == "revolute":  # ignore the joint welded to the world
+        #        q_min.append(joint.position_lower_limit())
+        #        q_max.append(joint.position_upper_limit())
+        #        qd_min.append(joint.velocity_lower_limit())  # note that higher limits
+        #        qd_max.append(joint.velocity_upper_limit())  # are availible in cartesian mode
 
-        self.q_min = np.array(q_min)
-        self.q_max = np.array(q_max)
-        self.qd_min = np.array(qd_min)
-        self.qd_max = np.array(qd_max)
+        #self.q_min = np.array(q_min)
+        #self.q_max = np.array(q_max)
+        #self.qd_min = np.array(qd_min)
+        #self.qd_max = np.array(qd_max)
+
+        self.q_min = np.zeros(7)
+        self.q_max = np.zeros(7)
+        self.qd_min = np.zeros(7)
+        self.qd_max = np.zeros(7)
 
     def CalcEndEffectorPose(self, context, output):
         """
