@@ -59,12 +59,64 @@ class KinovaStation(Diagram):
         self.object_ids = []
         self.object_poses = []
 
+        # Which sort of gripper we're using. (Robotiq Hand-e, Robotiq 2F-85, or none)
+        self.gripper_type = None   # None, hande, or 2f_85
+
     def Finalize(self):
         """
         Do some final setup stuff. Must be called after making modifications
         to the station (e.g. adding arm, gripper, manipulands) and before using
         this diagram as a system. 
         """
+        if self.gripper_type == "2f_85":
+            # The 2F-85 gripper has a complicated mechanical component which includes
+            # a kinematic loop. The original URDF deals with this by using a "mimic" tag,
+            # but Drake doesn't support this. So we'll try to close the loop using a bushing,
+            # as described in Drake's four-bar linkage example: 
+            # https://github.com/RobotLocomotion/drake/tree/master/examples/multibody/four_bar.
+
+            left_inner_finger = self.plant.GetFrameByName("left_inner_finger", self.gripper)
+            left_inner_knuckle = self.plant.GetFrameByName("left_inner_knuckle", self.gripper)
+
+            # Add frames which are located at the desired linkage point
+            X_LIF = RigidTransform()
+            X_LIF.set_translation([0,0,-0.02])
+            left_inner_finger_bushing = FixedOffsetFrame(
+                                                "left_inner_finger_bushing",
+                                                left_inner_finger,
+                                                X_LIF,
+                                                self.gripper)
+            X_LIK = RigidTransform()
+            X_LIK.set_translation([0,0.01,0])
+            left_inner_knuckle_bushing = FixedOffsetFrame(
+                                                "left_inner_knuckle_bushing",
+                                                left_inner_knuckle,
+                                                X_LIK,
+                                                self.gripper)
+
+            self.plant.AddFrame(left_inner_finger_bushing)
+            self.plant.AddFrame(left_inner_knuckle_bushing)
+
+            # Force and torque stiffness and damping describe a revolute joint on the z-axis
+            k_xyz = 30
+            d_xyz = 2
+            k_rpy = 0
+            d_rpy = 0
+            force_stiffness_constants =  np.array([k_xyz,k_xyz,k_xyz])
+            force_damping_constants =    np.array([d_xyz,d_xyz,d_xyz])
+            torque_stiffness_constants = np.array([k_rpy,k_rpy,0])
+            torque_damping_constants =   np.array([d_rpy,d_rpy,0])
+
+            bushing = LinearBushingRollPitchYaw(
+                        left_inner_finger_bushing, left_inner_knuckle_bushing,
+                        torque_stiffness_constants, torque_damping_constants,
+                        force_stiffness_constants, force_damping_constants)
+            self.plant.AddForceElement(bushing)
+
+        # DEBUG: turn off gravity
+        self.plant.mutable_gravity_field().set_gravity_vector([0,0,0])
+        self.controller_plant.mutable_gravity_field().set_gravity_vector([0,0,0])
+
         self.plant.Finalize()
         self.controller_plant.Finalize()
         
@@ -127,48 +179,50 @@ class KinovaStation(Diagram):
                 cartesian_controller.GetOutputPort("measured_ee_twist"),
                 "measured_ee_twist")
         
-        ## Create gripper controller
-        #gripper_controller = self.builder.AddSystem(GripperController())
-        #gripper_controller.set_name("gripper_controller")
+        # Create gripper controller
+        if self.gripper_type == "hande":
+            gripper_controller = self.builder.AddSystem(GripperController())
+            gripper_controller.set_name("gripper_controller")
 
-        ## Connect gripper controller to the diagram
-        #self.builder.ExportInput(
-        #        gripper_controller.GetInputPort("gripper_target"),
-        #        "gripper_target")
-        #self.builder.ExportInput(
-        #        gripper_controller.GetInputPort("gripper_target_type"),
-        #        "gripper_target_type")
+            # Connect gripper controller to the diagram
+            self.builder.ExportInput(
+                    gripper_controller.GetInputPort("gripper_target"),
+                    "gripper_target")
+            self.builder.ExportInput(
+                    gripper_controller.GetInputPort("gripper_target_type"),
+                    "gripper_target_type")
 
-        #self.builder.Connect(
-        #        self.plant.get_state_output_port(self.gripper),
-        #        gripper_controller.GetInputPort("gripper_state"))
-        #self.builder.Connect(
-        #        gripper_controller.get_output_port(),
-        #        self.plant.get_actuation_input_port(self.gripper))
+            self.builder.Connect(
+                    self.plant.get_state_output_port(self.gripper),
+                    gripper_controller.GetInputPort("gripper_state"))
+            self.builder.Connect(
+                    gripper_controller.get_output_port(),
+                    self.plant.get_actuation_input_port(self.gripper))
+        
+            # Send gripper position and velocity as an output
+            demux2 = self.builder.AddSystem(Demultiplexer(
+                                            self.plant.num_multibody_states(self.gripper),
+                                            self.plant.num_positions(self.gripper)))
+            demux2.set_name("demux2")
+            
+            self.builder.Connect(
+                    self.plant.get_state_output_port(self.gripper),
+                    demux2.get_input_port())
+            self.builder.ExportOutput(
+                    demux2.get_output_port(0),
+                    "measured_gripper_position")
+            self.builder.ExportOutput(
+                    demux2.get_output_port(1),
+                    "measured_gripper_velocity")
+        
+        elif self.gripper_type == "2f_85":
 
-        gp = self.builder.AddSystem(ConstantVectorSource(np.array([0.1])))  # sketch of controller
-        self.builder.Connect(
-                gp.get_output_port(),
-                self.plant.get_actuation_input_port(self.gripper))
+            # Send a simple actuator command
+            gp = self.builder.AddSystem(ConstantVectorSource(np.array([-0.0])))  # sketch of controller
+            self.builder.Connect(
+                    gp.get_output_port(),
+                    self.plant.get_actuation_input_port(self.gripper))
 
-
-        print(self.plant.get_actuation_input_port(self.gripper).size())
-
-        ## Send gripper position and velocity as an output
-        #demux2 = self.builder.AddSystem(Demultiplexer(
-        #                                self.plant.num_multibody_states(self.gripper),
-        #                                self.plant.num_positions(self.gripper)))
-        #demux2.set_name("demux2")
-        #
-        #self.builder.Connect(
-        #        self.plant.get_state_output_port(self.gripper),
-        #        demux2.get_input_port())
-        #self.builder.ExportOutput(
-        #        demux2.get_output_port(0),
-        #        "measured_gripper_position")
-        #self.builder.ExportOutput(
-        #        demux2.get_output_port(1),
-        #        "measured_gripper_velocity")
 
         # Compute and output end-effector wrenches based on measured joint torques
         wrench_calculator = self.builder.AddSystem(EndEffectorWrenchCalculator(
@@ -242,6 +296,8 @@ class KinovaStation(Diagram):
         """
         Add the Hand-e gripper to the system. The arm must be added first. 
         """
+        self.gripper_type = "hande"
+
         # Add a gripper with actuation to the full simulated plant
         gripper_urdf = "./models/hande_gripper/urdf/robotiq_hande.urdf"
         self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf,"gripper")
@@ -263,6 +319,8 @@ class KinovaStation(Diagram):
         """
         Add the Robotiq 2F-85 gripper to the system. The arm must be added first. 
         """
+        self.gripper_type = "2f_85"
+
         # Add a gripper with actuation to the full simulated plant
         gripper_urdf = "./models/2f_85_gripper/urdf/robotiq_2f_85.urdf"
         self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf,"gripper")
@@ -276,9 +334,12 @@ class KinovaStation(Diagram):
                                                                 gripper_static_urdf,
                                                                 "gripper")
 
+        X_grip = RigidTransform()
+        X_grip.set_rotation(RotationMatrix(RollPitchYaw([0,0,1])))
         self.controller_plant.WeldFrames(
                 self.controller_plant.GetFrameByName("end_effector_link",self.controller_arm),
-                self.controller_plant.GetFrameByName("robotiq_arg2f_base_link", static_gripper))
+                self.controller_plant.GetFrameByName("robotiq_arg2f_base_link", static_gripper), 
+                X_AB=X_grip)
         
     def AddArmWithHandeGripper(self):
         """
@@ -327,6 +388,38 @@ class KinovaStation(Diagram):
         DrakeVisualizer().AddToBuilder(builder=self.builder,
                                        scene_graph=self.scene_graph,
                                        params=visualizer_params)
+
+    def ConnectToMeshcatVisualizer(self):
+
+        # Need to start meshcat server with
+        #
+        #  bazel run @meshcat_python//:meshcat-server
+        #
+        # first. TODO: start meshcat server from here
+
+        frames_to_draw = {"gripper": {"left_inner_finger","base_link"},
+                          "arm": ["end_effector_link"]}
+
+        #ConnectMeshcatVisualizer(builder=self.builder,
+        #                         scene_graph=self.scene_graph,
+        #                         output_port=self.scene_graph.get_query_output_port(),
+        #                         frames_to_draw=frames_to_draw,
+        #                         frames_opacity=1,
+        #                         axis_length=0.1,
+        #                         axis_radius=0.01)
+        meshcat_viz = self.builder.AddSystem(
+                MeshcatVisualizer(self.scene_graph,
+                                  frames_to_draw=frames_to_draw,
+                                  axis_radius=0.1)
+                )
+
+        #self.builder.Connect(
+        #        self.scene_graph.get_pose_bundle_output_port(),
+        #        meshcat_viz.get_input_port(0))
+        self.builder.Connect(
+                self.scene_graph.get_query_output_port(),
+                meshcat_viz.get_geometry_query_input_port())
+
 
 class GripperController(LeafSystem):
     """

@@ -70,7 +70,8 @@ station.AddGround()
 station.AddArm()
 #station.AddHandeGripper()
 station.Add2f85Gripper()
-station.ConnectToDrakeVisualizer()
+station.ConnectToMeshcatVisualizer()
+#station.ConnectToDrakeVisualizer()
 #station.SetupSinglePegScenario()
 station.Finalize()
 
@@ -92,7 +93,7 @@ if ee_command_type == EndEffectorTarget.kPose:
 
 elif ee_command_type == EndEffectorTarget.kTwist:
     twist_des = np.array([0,0,0.0,
-                          0.0,0.0,0.1])
+                          0.0,0.0,0.0])
     target_source = builder.AddSystem(ConstantVectorSource(twist_des))
 
 elif ee_command_type == EndEffectorTarget.kWrench:
@@ -170,7 +171,7 @@ if simulate:
 
     # Set up simulation
     simulator = Simulator(diagram, diagram_context)
-    simulator.set_target_realtime_rate(1.0)
+    simulator.set_target_realtime_rate(0.1)
     simulator.set_publish_every_time_step(False)
 
     # Run simulation
