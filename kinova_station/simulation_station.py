@@ -115,7 +115,7 @@ class KinovaStation(Diagram):
             self.plant.AddFrame(right_inner_knuckle_bushing)
 
             # Force and torque stiffness and damping describe a revolute joint on the z-axis
-            k_xyz = 20000
+            k_xyz = 8000
             d_xyz = 10
             k_rpy = 15
             d_rpy = 3
@@ -244,7 +244,7 @@ class KinovaStation(Diagram):
         elif self.gripper_type == "2f_85":
 
             # Send a simple actuator command
-            gripper_torque = 0.01*np.ones(2)
+            gripper_torque = 0.05*np.ones(2)
             gp = self.builder.AddSystem(ConstantVectorSource(gripper_torque))  # sketch of controller
             self.builder.Connect(
                     gp.get_output_port(),
