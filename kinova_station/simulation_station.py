@@ -74,6 +74,7 @@ class KinovaStation(Diagram):
             # but Drake doesn't support this. So we'll try to close the loop using a bushing,
             # as described in Drake's four-bar linkage example: 
             # https://github.com/RobotLocomotion/drake/tree/master/examples/multibody/four_bar.
+            # TODO: refactor into separate function
 
             left_inner_finger = self.plant.GetFrameByName("left_inner_finger", self.gripper)
             left_inner_knuckle = self.plant.GetFrameByName("left_inner_knuckle", self.gripper)
@@ -82,9 +83,9 @@ class KinovaStation(Diagram):
 
             # Add frames which are located at the desired linkage point
             X_finger = RigidTransform()
-            X_finger.set_translation([0.0,-0.017,0.007])
+            X_finger.set_translation([0.0,-0.016,0.007])
             X_knuckle = RigidTransform()
-            X_knuckle.set_translation([0.0,0.039,0.044])
+            X_knuckle.set_translation([0.0,0.038,0.043])
 
             left_inner_finger_bushing = FixedOffsetFrame(
                                                 "left_inner_finger_bushing",
@@ -243,7 +244,7 @@ class KinovaStation(Diagram):
         elif self.gripper_type == "2f_85":
 
             # Send a simple actuator command
-            gripper_torque = -0.01*np.ones(2)
+            gripper_torque = 0.01*np.ones(2)
             gp = self.builder.AddSystem(ConstantVectorSource(gripper_torque))  # sketch of controller
             self.builder.Connect(
                     gp.get_output_port(),
