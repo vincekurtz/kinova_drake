@@ -83,9 +83,9 @@ class KinovaStation(Diagram):
 
             # Add frames which are located at the desired linkage point
             X_finger = RigidTransform()
-            X_finger.set_translation([0.0,-0.013,0.008])
+            X_finger.set_translation([0.0,-0.019,0.008])
             X_knuckle = RigidTransform()
-            X_knuckle.set_translation([0.0,0.042,0.042])
+            X_knuckle.set_translation([0.0,0.037,0.045])
 
             left_inner_finger_bushing = FixedOffsetFrame(
                                                 "left_inner_finger_bushing",
@@ -115,8 +115,8 @@ class KinovaStation(Diagram):
             self.plant.AddFrame(right_inner_knuckle_bushing)
 
             # Force and torque stiffness and damping describe a revolute joint on the z-axis
-            k_xyz = 500
-            d_xyz = 20
+            k_xyz = 300
+            d_xyz = 15
             k_rpy = 15
             d_rpy = 3
             force_stiffness_constants =  np.array([k_xyz,k_xyz,k_xyz])
@@ -244,7 +244,7 @@ class KinovaStation(Diagram):
         elif self.gripper_type == "2f_85":
 
             # Send a simple actuator command
-            gripper_torque = -0.05*np.ones(2)
+            gripper_torque = 0.05*np.ones(2)
             gp = self.builder.AddSystem(ConstantVectorSource(gripper_torque))  # sketch of controller
             self.builder.Connect(
                     gp.get_output_port(),
@@ -435,7 +435,7 @@ class KinovaStation(Diagram):
         meshcat_visualizer = self.builder.AddSystem(
                 MeshcatVisualizer(self.scene_graph,
                                   frames_to_draw=frames_to_draw,
-                                  axis_length=0.1,
+                                  axis_length=0.05,
                                   axis_radius=0.001
                                   ))
         self.builder.Connect(

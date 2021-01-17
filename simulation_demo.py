@@ -185,7 +185,7 @@ if simulate:
 
     # Run simulation
     simulator.Initialize()
-    simulator.AdvanceTo(0.001)
+    simulator.AdvanceTo(1.001)
 
     plant_context = diagram.GetSubsystemContext(station.plant, diagram_context)
     X_rel = station.plant.CalcRelativeTransform(plant_context, rik_frame, rif_frame)

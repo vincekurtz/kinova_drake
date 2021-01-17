@@ -124,7 +124,7 @@
         <mesh filename="../meshes/visual/robotiq_arg2f_85_inner_knuckle.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="">
-        <color rgba="0.5 0.1 0.1 1"/>
+        <color rgba="0.5 0.1 0.1 0.5"/>
       </material>
     </visual>
     <!--
