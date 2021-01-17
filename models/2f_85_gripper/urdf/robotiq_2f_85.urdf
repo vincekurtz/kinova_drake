@@ -82,7 +82,7 @@
         <mesh filename="../meshes/visual/robotiq_arg2f_85_inner_finger.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="">
-        <color rgba="0.1 0.1 0.1 1"/>
+        <color rgba="0.1 0.1 0.1 0.5"/>
       </material>
     </visual>
     <collision>
@@ -124,7 +124,7 @@
         <mesh filename="../meshes/visual/robotiq_arg2f_85_inner_knuckle.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="">
-        <color rgba="0.1 0.1 0.1 1"/>
+        <color rgba="0.5 0.1 0.1 1"/>
       </material>
     </visual>
     <!--
@@ -234,7 +234,7 @@
         <mesh filename="../meshes/visual/robotiq_arg2f_85_inner_knuckle.obj" scale="0.001 0.001 0.001"/>
       </geometry>
       <material name="">
-        <color rgba="0.1 0.1 0.1 1"/>
+        <color rgba="0.5 0.1 0.1 1"/>
       </material>
     </visual>
     <!--
@@ -325,6 +325,15 @@
       <hardwareInterface>PositionJointInterface</hardwareInterface>
     </joint>
     <actuator name="finger_joint_motor">
+      <mechanicalReduction>1</mechanicalReduction>
+    </actuator>
+  </transmission>
+  <transmission name="right_outer_knuckle_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="right_outer_knuckle_joint">
+      <hardwareInterface>PositionJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="right_outer_knuckle_motor">
       <mechanicalReduction>1</mechanicalReduction>
     </actuator>
   </transmission>

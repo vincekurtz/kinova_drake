@@ -77,52 +77,63 @@ class KinovaStation(Diagram):
 
             left_inner_finger = self.plant.GetFrameByName("left_inner_finger", self.gripper)
             left_inner_knuckle = self.plant.GetFrameByName("left_inner_knuckle", self.gripper)
-
-            ## Add new rigid bodies at the desired linkage point. This lets us visualize the 
-            ## frames in meshcat
-            #X_LIF = RigidTransform()
-            #X_LIF.set_translation([0,0.0,-0.035])
-            #self.plant.AddRigidBody("left_inner_finger_bushing", self.gripper, SpatialInertia())
-            #
-            #self.plant.WeldFrames(self.plant.GetFrameByName("left_inner_finger"),
-            #                      self.plant.GetFrameByName("left_inner_finger_bushing"),
-            #                      X_LIF)
+            right_inner_finger = self.plant.GetFrameByName("right_inner_finger", self.gripper)
+            right_inner_knuckle = self.plant.GetFrameByName("right_inner_knuckle", self.gripper)
 
 
             # Add frames which are located at the desired linkage point
-            X_LIF = RigidTransform()
-            X_LIF.set_translation([0.0,-0.015,0.0035])
+            X_finger = RigidTransform()
+            X_finger.set_translation([0.0,-0.013,0.008])
+            X_knuckle = RigidTransform()
+            X_knuckle.set_translation([0.0,0.042,0.042])
+
             left_inner_finger_bushing = FixedOffsetFrame(
                                                 "left_inner_finger_bushing",
                                                 left_inner_finger,
-                                                X_LIF,
+                                                X_finger,
                                                 self.gripper)
-            X_LIK = RigidTransform()
-            X_LIK.set_translation([0.0,0.04,0.04])
             left_inner_knuckle_bushing = FixedOffsetFrame(
                                                 "left_inner_knuckle_bushing",
                                                 left_inner_knuckle,
-                                                X_LIK,
+                                                X_knuckle,
                                                 self.gripper)
+            right_inner_finger_bushing = FixedOffsetFrame(
+                                                "right_inner_finger_bushing",
+                                                right_inner_finger,
+                                                X_finger,
+                                                self.gripper)
+            right_inner_knuckle_bushing = FixedOffsetFrame(
+                                                "right_inner_knuckle_bushing",
+                                                right_inner_knuckle,
+                                                X_knuckle,
+                                                self.gripper)
+
 
             self.plant.AddFrame(left_inner_finger_bushing)
             self.plant.AddFrame(left_inner_knuckle_bushing)
+            self.plant.AddFrame(right_inner_finger_bushing)
+            self.plant.AddFrame(right_inner_knuckle_bushing)
 
             # Force and torque stiffness and damping describe a revolute joint on the z-axis
-            k_xyz = 300
-            d_xyz = 15
-            k_rpy = 0
-            d_rpy = 0
+            k_xyz = 500
+            d_xyz = 20
+            k_rpy = 15
+            d_rpy = 3
             force_stiffness_constants =  np.array([k_xyz,k_xyz,k_xyz])
             force_damping_constants =    np.array([d_xyz,d_xyz,d_xyz])
-            torque_stiffness_constants = np.array([k_rpy,k_rpy,0])
-            torque_damping_constants =   np.array([d_rpy,d_rpy,0])
+            torque_stiffness_constants = np.array([0,k_rpy,k_rpy])
+            torque_damping_constants =   np.array([0,d_rpy,k_rpy])
 
-            bushing = LinearBushingRollPitchYaw(
+            left_finger_bushing = LinearBushingRollPitchYaw(
                         left_inner_finger_bushing, left_inner_knuckle_bushing,
                         torque_stiffness_constants, torque_damping_constants,
                         force_stiffness_constants, force_damping_constants)
-            self.plant.AddForceElement(bushing)
+            right_finger_bushing = LinearBushingRollPitchYaw(
+                        right_inner_finger_bushing, right_inner_knuckle_bushing,
+                        torque_stiffness_constants, torque_damping_constants,
+                        force_stiffness_constants, force_damping_constants)
+            self.plant.AddForceElement(left_finger_bushing)
+            self.plant.AddForceElement(right_finger_bushing)
 
             # DEBUG: connect to visualizer now
             self.ConnectToMeshcatVisualizer()
@@ -233,7 +244,8 @@ class KinovaStation(Diagram):
         elif self.gripper_type == "2f_85":
 
             # Send a simple actuator command
-            gp = self.builder.AddSystem(ConstantVectorSource(np.array([-0.0])))  # sketch of controller
+            gripper_torque = -0.05*np.ones(2)
+            gp = self.builder.AddSystem(ConstantVectorSource(gripper_torque))  # sketch of controller
             self.builder.Connect(
                     gp.get_output_port(),
                     self.plant.get_actuation_input_port(self.gripper))
@@ -411,10 +423,6 @@ class KinovaStation(Diagram):
         #  bazel run @meshcat_python//:meshcat-server
         #
         # TODO: start meshcat server from here
-
-        # DEBUG
-        print(self.plant.GetFrameByName("left_inner_knuckle",self.gripper))
-        print(self.plant.GetFrameByName("left_inner_finger_bushing",self.gripper))
 
         frames_to_draw = {"gripper": {"left_inner_knuckle","left_inner_finger"}}
                                       #"left_inner_finger_bushing"}}

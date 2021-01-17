@@ -171,22 +171,22 @@ if simulate:
 
     # Set up simulation
     simulator = Simulator(diagram, diagram_context)
-    simulator.set_target_realtime_rate(1.0)
-    simulator.set_publish_every_time_step(False)
+    simulator.set_target_realtime_rate(0.1)
+    simulator.set_publish_every_time_step(True)
 
     # DEBUG
-    lif_frame = station.plant.GetFrameByName("left_inner_finger_bushing", station.gripper)
-    lik_frame = station.plant.GetFrameByName("left_inner_knuckle_bushing", station.gripper)
+    rif_frame = station.plant.GetFrameByName("left_inner_finger_bushing", station.gripper)
+    rik_frame = station.plant.GetFrameByName("left_inner_knuckle_bushing", station.gripper)
 
     plant_context = diagram.GetSubsystemContext(station.plant, diagram_context)
-    X_rel = station.plant.CalcRelativeTransform(plant_context, lik_frame, lif_frame)
+    X_rel = station.plant.CalcRelativeTransform(plant_context, rik_frame, rif_frame)
     #X_rel = station.plant.CalcRelativeTransform(plant_context, station.plant.world_frame(), lik_frame)
     print(X_rel.translation())
 
     # Run simulation
     simulator.Initialize()
-    simulator.AdvanceTo(1.)
+    simulator.AdvanceTo(0.001)
 
     plant_context = diagram.GetSubsystemContext(station.plant, diagram_context)
-    X_rel = station.plant.CalcRelativeTransform(plant_context, lik_frame, lif_frame)
+    X_rel = station.plant.CalcRelativeTransform(plant_context, rik_frame, rif_frame)
     print(X_rel.translation())
