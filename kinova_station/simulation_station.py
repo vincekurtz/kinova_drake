@@ -135,13 +135,10 @@ class KinovaStation(Diagram):
             self.plant.AddForceElement(left_finger_bushing)
             self.plant.AddForceElement(right_finger_bushing)
 
-            # DEBUG: connect to visualizer now
-            self.ConnectToMeshcatVisualizer()
-            #self.ConnectToDrakeVisualizer()
 
         # DEBUG: turn off gravity
-        self.plant.mutable_gravity_field().set_gravity_vector([0,0,0])
-        self.controller_plant.mutable_gravity_field().set_gravity_vector([0,0,0])
+        #self.plant.mutable_gravity_field().set_gravity_vector([0,0,0])
+        #self.controller_plant.mutable_gravity_field().set_gravity_vector([0,0,0])
 
         self.plant.Finalize()
         self.controller_plant.Finalize()
@@ -411,11 +408,10 @@ class KinovaStation(Diagram):
 
 
     def ConnectToDrakeVisualizer(self):
-        #visualizer_params = DrakeVisualizerParams(role=Role.kIllustration)
-        #DrakeVisualizer().AddToBuilder(builder=self.builder,
-        #                               scene_graph=self.scene_graph)
-        #                               params=visualizer_params)
-        ConnectDrakeVisualizer(self.builder, self.scene_graph)
+        visualizer_params = DrakeVisualizerParams(role=Role.kIllustration)
+        DrakeVisualizer().AddToBuilder(builder=self.builder,
+                                       scene_graph=self.scene_graph,
+                                       params=visualizer_params)
 
     def ConnectToMeshcatVisualizer(self):
         # Need to first start meshcat server with
@@ -424,25 +420,9 @@ class KinovaStation(Diagram):
         #
         # TODO: start meshcat server from here
 
-        frames_to_draw = {"gripper": {"left_inner_knuckle","left_inner_finger"}}
-                                      #"left_inner_finger_bushing"}}
-
-        #ConnectMeshcatVisualizer(builder=self.builder,
-        #                         scene_graph=self.scene_graph,
-        #                         output_port=self.scene_graph.get_query_output_port(),
-        #                         frames_to_draw=frames_to_draw)
-
-        meshcat_visualizer = self.builder.AddSystem(
-                MeshcatVisualizer(self.scene_graph,
-                                  frames_to_draw=frames_to_draw,
-                                  axis_length=0.05,
-                                  axis_radius=0.001
-                                  ))
-        self.builder.Connect(
-                self.scene_graph.get_pose_bundle_output_port(),
-                meshcat_visualizer.get_input_port(0))
-                                               
-
+        ConnectMeshcatVisualizer(builder=self.builder,
+                                 scene_graph=self.scene_graph,
+                                 output_port=self.scene_graph.get_query_output_port())
 
 class GripperController(LeafSystem):
     """
@@ -599,27 +579,21 @@ class CartesianController(LeafSystem):
         qd_min = []
         qd_max = []
 
-        # DEBUG
-        #joint_indices = self.plant.GetJointIndices(self.arm)
+        joint_indices = self.plant.GetJointIndices(self.arm)
 
-        #for idx in joint_indices:
-        #    joint = self.plant.get_joint(idx)
-        #    
-        #    if joint.type_name() == "revolute":  # ignore the joint welded to the world
-        #        q_min.append(joint.position_lower_limit())
-        #        q_max.append(joint.position_upper_limit())
-        #        qd_min.append(joint.velocity_lower_limit())  # note that higher limits
-        #        qd_max.append(joint.velocity_upper_limit())  # are availible in cartesian mode
+        for idx in joint_indices:
+            joint = self.plant.get_joint(idx)
+            
+            if joint.type_name() == "revolute":  # ignore the joint welded to the world
+                q_min.append(joint.position_lower_limit())
+                q_max.append(joint.position_upper_limit())
+                qd_min.append(joint.velocity_lower_limit())  # note that higher limits
+                qd_max.append(joint.velocity_upper_limit())  # are availible in cartesian mode
 
-        #self.q_min = np.array(q_min)
-        #self.q_max = np.array(q_max)
-        #self.qd_min = np.array(qd_min)
-        #self.qd_max = np.array(qd_max)
-
-        self.q_min = -np.inf*np.ones(7)
-        self.q_max = np.inf*np.ones(7)
-        self.qd_min = -np.inf*np.ones(7)
-        self.qd_max = np.inf*np.ones(7)
+        self.q_min = np.array(q_min)
+        self.q_max = np.array(q_max)
+        self.qd_min = np.array(qd_min)
+        self.qd_max = np.array(qd_max)
 
     def CalcEndEffectorPose(self, context, output):
         """
