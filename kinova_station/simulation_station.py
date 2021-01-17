@@ -78,16 +78,27 @@ class KinovaStation(Diagram):
             left_inner_finger = self.plant.GetFrameByName("left_inner_finger", self.gripper)
             left_inner_knuckle = self.plant.GetFrameByName("left_inner_knuckle", self.gripper)
 
+            ## Add new rigid bodies at the desired linkage point. This lets us visualize the 
+            ## frames in meshcat
+            #X_LIF = RigidTransform()
+            #X_LIF.set_translation([0,0.0,-0.035])
+            #self.plant.AddRigidBody("left_inner_finger_bushing", self.gripper, SpatialInertia())
+            #
+            #self.plant.WeldFrames(self.plant.GetFrameByName("left_inner_finger"),
+            #                      self.plant.GetFrameByName("left_inner_finger_bushing"),
+            #                      X_LIF)
+
+
             # Add frames which are located at the desired linkage point
             X_LIF = RigidTransform()
-            X_LIF.set_translation([0,0.0,-0.035])
+            X_LIF.set_translation([0.0,-0.015,0.0035])
             left_inner_finger_bushing = FixedOffsetFrame(
                                                 "left_inner_finger_bushing",
                                                 left_inner_finger,
                                                 X_LIF,
                                                 self.gripper)
             X_LIK = RigidTransform()
-            X_LIK.set_translation([0,0,0])
+            X_LIK.set_translation([0.0,0.04,0.04])
             left_inner_knuckle_bushing = FixedOffsetFrame(
                                                 "left_inner_knuckle_bushing",
                                                 left_inner_knuckle,
@@ -98,8 +109,8 @@ class KinovaStation(Diagram):
             self.plant.AddFrame(left_inner_knuckle_bushing)
 
             # Force and torque stiffness and damping describe a revolute joint on the z-axis
-            k_xyz = 30
-            d_xyz = 2
+            k_xyz = 300
+            d_xyz = 15
             k_rpy = 0
             d_rpy = 0
             force_stiffness_constants =  np.array([k_xyz,k_xyz,k_xyz])
@@ -112,6 +123,10 @@ class KinovaStation(Diagram):
                         torque_stiffness_constants, torque_damping_constants,
                         force_stiffness_constants, force_damping_constants)
             self.plant.AddForceElement(bushing)
+
+            # DEBUG: connect to visualizer now
+            self.ConnectToMeshcatVisualizer()
+            #self.ConnectToDrakeVisualizer()
 
         # DEBUG: turn off gravity
         self.plant.mutable_gravity_field().set_gravity_vector([0,0,0])
@@ -384,10 +399,11 @@ class KinovaStation(Diagram):
 
 
     def ConnectToDrakeVisualizer(self):
-        visualizer_params = DrakeVisualizerParams(role=Role.kIllustration)
-        DrakeVisualizer().AddToBuilder(builder=self.builder,
-                                       scene_graph=self.scene_graph,
-                                       params=visualizer_params)
+        #visualizer_params = DrakeVisualizerParams(role=Role.kIllustration)
+        #DrakeVisualizer().AddToBuilder(builder=self.builder,
+        #                               scene_graph=self.scene_graph)
+        #                               params=visualizer_params)
+        ConnectDrakeVisualizer(self.builder, self.scene_graph)
 
     def ConnectToMeshcatVisualizer(self):
         # Need to first start meshcat server with
@@ -397,8 +413,11 @@ class KinovaStation(Diagram):
         # TODO: start meshcat server from here
 
         # DEBUG
-        frames_to_draw = {"gripper": {"left_inner_finger"},
-                          "arm": {"end_effector_link"}}
+        print(self.plant.GetFrameByName("left_inner_knuckle",self.gripper))
+        print(self.plant.GetFrameByName("left_inner_finger_bushing",self.gripper))
+
+        frames_to_draw = {"gripper": {"left_inner_knuckle","left_inner_finger"}}
+                                      #"left_inner_finger_bushing"}}
 
         #ConnectMeshcatVisualizer(builder=self.builder,
         #                         scene_graph=self.scene_graph,
@@ -407,7 +426,10 @@ class KinovaStation(Diagram):
 
         meshcat_visualizer = self.builder.AddSystem(
                 MeshcatVisualizer(self.scene_graph,
-                                  frames_to_draw=frames_to_draw))
+                                  frames_to_draw=frames_to_draw,
+                                  axis_length=0.1,
+                                  axis_radius=0.001
+                                  ))
         self.builder.Connect(
                 self.scene_graph.get_pose_bundle_output_port(),
                 meshcat_visualizer.get_input_port(0))
@@ -586,10 +608,10 @@ class CartesianController(LeafSystem):
         #self.qd_min = np.array(qd_min)
         #self.qd_max = np.array(qd_max)
 
-        self.q_min = np.zeros(7)
-        self.q_max = np.zeros(7)
-        self.qd_min = np.zeros(7)
-        self.qd_max = np.zeros(7)
+        self.q_min = -np.inf*np.ones(7)
+        self.q_max = np.inf*np.ones(7)
+        self.qd_min = -np.inf*np.ones(7)
+        self.qd_max = np.inf*np.ones(7)
 
     def CalcEndEffectorPose(self, context, output):
         """

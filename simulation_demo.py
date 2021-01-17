@@ -70,8 +70,8 @@ station.AddGround()
 station.AddArm()
 #station.AddHandeGripper()
 station.Add2f85Gripper()
-station.ConnectToMeshcatVisualizer()
 #station.ConnectToDrakeVisualizer()
+#station.ConnectToMeshcatVisualizer()
 #station.SetupSinglePegScenario()
 station.Finalize()
 
@@ -171,7 +171,7 @@ if simulate:
 
     # Set up simulation
     simulator = Simulator(diagram, diagram_context)
-    simulator.set_target_realtime_rate(0.1)
+    simulator.set_target_realtime_rate(1.0)
     simulator.set_publish_every_time_step(False)
 
     # DEBUG
@@ -179,13 +179,14 @@ if simulate:
     lik_frame = station.plant.GetFrameByName("left_inner_knuckle_bushing", station.gripper)
 
     plant_context = diagram.GetSubsystemContext(station.plant, diagram_context)
-    X_rel = station.plant.CalcRelativeTransform(plant_context, lif_frame, lik_frame)
+    X_rel = station.plant.CalcRelativeTransform(plant_context, lik_frame, lif_frame)
+    #X_rel = station.plant.CalcRelativeTransform(plant_context, station.plant.world_frame(), lik_frame)
     print(X_rel.translation())
 
     # Run simulation
     simulator.Initialize()
-    simulator.AdvanceTo(1)
+    simulator.AdvanceTo(1.)
 
     plant_context = diagram.GetSubsystemContext(station.plant, diagram_context)
-    X_rel = station.plant.CalcRelativeTransform(plant_context, lif_frame, lik_frame)
+    X_rel = station.plant.CalcRelativeTransform(plant_context, lik_frame, lif_frame)
     print(X_rel.translation())
