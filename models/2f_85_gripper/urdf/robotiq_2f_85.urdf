@@ -265,8 +265,7 @@
     <parent link="robotiq_arg2f_base_link"/>
     <child link="left_inner_knuckle"/>
     <axis xyz="1 0 0"/>
-        <!--<limit effort="1000" lower="0" upper="0.8757" velocity="2.0"/>-->
-    <limit effort="1000" lower="0" upper="0.8" velocity="2.0"/>
+    <limit effort="1000" lower="0" upper="0.8757" velocity="2.0"/>
     <mimic joint="finger_joint" multiplier="1" offset="0"/>
   </joint>
   <joint name="left_inner_finger_joint" type="revolute">
@@ -303,8 +302,7 @@
     <parent link="robotiq_arg2f_base_link"/>
     <child link="right_inner_knuckle"/>
     <axis xyz="1 0 0"/>
-        <!--<limit effort="1000" lower="0" upper="0.8757" velocity="2.0"/>-->
-    <limit effort="1000" lower="0" upper="0.8" velocity="2.0"/>
+    <limit effort="1000" lower="0" upper="0.8757" velocity="2.0"/>
     <mimic joint="finger_joint" multiplier="1" offset="0"/>
   </joint>
   <joint name="right_inner_finger_joint" type="revolute">
