@@ -5,7 +5,7 @@ from kinova_station.common import (EndEffectorTarget,
 
 class KinovaStation(Diagram):
     """
-    A template system diagram for controlling 7 DoF Kinova Gen3 robot, modeled 
+    A template system diagram for controlling a 7 DoF Kinova Gen3 robot, modeled 
     after Drake's ManipulationStation, but with the kinova instead of a kuka arm.
    
                                ---------------------------------
