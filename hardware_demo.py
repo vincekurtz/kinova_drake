@@ -62,6 +62,6 @@ gripper_command_type = GripperTarget.kPosition  # kPosition or kVelocity
 ########################################################################
 
 with KinovaStationHardwareInterface() as station:
-    print(station.arg)
-    print("sup")
+    station.go_home()
+    station.send_twist_example()
 

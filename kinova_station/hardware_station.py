@@ -1,5 +1,9 @@
 from pydrake.all import *
 
+import time
+import sys
+import threading
+
 from kinova_station.common import (EndEffectorTarget, 
                                    GripperTarget, 
                                    EndEffectorWrenchCalculator)
@@ -12,6 +16,7 @@ from kortex_api.autogen.client_stubs.DeviceConfigClientRpc import DeviceConfigCl
 from kortex_api.autogen.client_stubs.BaseClientRpc import BaseClient
 
 from kortex_api.autogen.messages import DeviceConfig_pb2, Session_pb2, Base_pb2
+
 
 
 class KinovaStationHardwareInterface(Diagram):
@@ -84,8 +89,17 @@ class KinovaStationHardwareInterface(Diagram):
         device_config = DeviceConfigClient(self.router)
         self.base = BaseClient(self.router)
 
-        print(device_config.GetDeviceType())
-        print(self.base.GetArmState())
+        if self.base.GetArmState().active_state != Base_pb2.ARMSTATE_SERVOING_READY:
+            print("")
+            print("ERROR: arm not in ready state.")
+
+            print(self.base.GetArmState())
+
+            print("Make sure there is nothing else currently sending commands (e.g. joystick, web interface), ")
+            print("and clear any faults before trying again.")
+            sys.exit(0)
+
+        print("Hardware Connection Open.\n")
 
         return self
 
@@ -94,7 +108,7 @@ class KinovaStationHardwareInterface(Diagram):
         Disconnect from the API instance and close everything down. This
         is called at the end of a 'with' statement.
         """
-        print("Closing Hardware Connection...")
+        print("\nClosing Hardware Connection...")
 
         if self.session_manager is not None:
             router_options = RouterClientSendOptions()
@@ -111,4 +125,88 @@ class KinovaStationHardwareInterface(Diagram):
         # Finalize the controller plant
 
         # Set up input and output ports 
+
+    def check_for_end_or_abort(self, e):
+        """
+        Return a closure checking for END or ABORT notifications
+
+        Arguments:
+        e -- event to signal when the action is completed
+            (will be set when an END or ABORT occurs)
+        """
+        def check(notification, e = e):
+            print("EVENT : " + \
+                  Base_pb2.ActionEvent.Name(notification.action_event))
+            if notification.action_event == Base_pb2.ACTION_END \
+            or notification.action_event == Base_pb2.ACTION_ABORT:
+                e.set()
+        return check
+
+
+    def go_home(self):
+        """
+        Move the arm to the home position.
+        """
+        # Make sure the arm is in Single Level Servoing mode
+        base_servo_mode = Base_pb2.ServoingModeInformation()
+        base_servo_mode.servoing_mode = Base_pb2.SINGLE_LEVEL_SERVOING
+        self.base.SetServoingMode(base_servo_mode)
+
+        # Move arm to ready position
+        print("Moving the arm to the home position")
+        action_type = Base_pb2.RequestedActionType()
+        action_type.action_type = Base_pb2.REACH_JOINT_ANGLES
+        action_list = self.base.ReadAllActions(action_type)
+        action_handle = None
+        for action in action_list.action_list:
+            if action.name == "Home":
+                action_handle = action.handle
+
+        if action_handle == None:
+            print("Can't reach home position. Exiting")
+            sys.exit(0)
+
+        e = threading.Event()
+        notification_handle = self.base.OnNotificationActionTopic(
+            self.check_for_end_or_abort(e),
+            Base_pb2.NotificationOptions()
+        )
+
+        self.base.ExecuteActionFromReference(action_handle)
+
+        # Leave time to action to complete
+        TIMEOUT_DURATION = 20  # seconds
+        finished = e.wait(TIMEOUT_DURATION)   
+        self.base.Unsubscribe(notification_handle)
+
+        if finished:
+            print("Home position reached")
+        else:
+            print("Timeout while moving to home position")
+        return finished
+
+
+    def send_twist_example(self):
+        
+        command = Base_pb2.TwistCommand()
+        command.reference_frame = Base_pb2.CARTESIAN_REFERENCE_FRAME_TOOL
+        command.duration = 0
+
+        twist = command.twist
+        twist.linear_x = 0
+        twist.linear_y = 0.03
+        twist.linear_z = 0
+        twist.angular_x = 0
+        twist.angular_y = 0
+        twist.angular_z = 5
+
+        print ("Sending the twist command for 5 seconds...")
+        self.base.SendTwistCommand(command)
+
+        # Let time for twist to be executed
+        time.sleep(5)
+
+        print ("Stopping the robot...")
+        self.base.Stop()
+        time.sleep(1)
 
