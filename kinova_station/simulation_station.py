@@ -162,20 +162,6 @@ class KinovaStation(Diagram):
         self.builder.ExportOutput(
                 gripper_controller.GetOutputPort("measured_gripper_velocity"),
                 "measured_gripper_velocity")
-        #demux2 = self.builder.AddSystem(Demultiplexer(
-        #                                self.plant.num_multibody_states(self.gripper),
-        #                                self.plant.num_positions(self.gripper)))
-        #demux2.set_name("demux2")
-        #
-        #self.builder.Connect(
-        #        self.plant.get_state_output_port(self.gripper),
-        #        demux2.get_input_port())
-        #self.builder.ExportOutput(
-        #        demux2.get_output_port(0),
-        #        "measured_gripper_position")
-        #self.builder.ExportOutput(
-        #        demux2.get_output_port(1),
-        #        "measured_gripper_velocity")
         
         # Compute and output end-effector wrenches based on measured joint torques
         wrench_calculator = self.builder.AddSystem(EndEffectorWrenchCalculator(
@@ -374,10 +360,10 @@ class GripperController(LeafSystem):
                             -------------------------
                             |                       |
                             |                       |
-    gripper_target -------> |   GripperController   | ---> gripper_torques
+    gripper_target -------> |   GripperController   | ---> applied_gripper_torques
     gripper_target_type --> |                       |
-                            |                       | ---> gripper_position
-                            |                       | ---> gripper_velocity
+                            |                       | ---> measured_gripper_position
+                            |                       | ---> measured_gripper_velocity
     gripper_state --------> |                       |
                             |                       |
                             |                       |

@@ -48,7 +48,7 @@ from kinova_station import KinovaStation, EndEffectorTarget, GripperTarget
 ########################### Parameters #################################
 
 # Make a plot of the inner workings of the station
-show_station_diagram = True
+show_station_diagram = False
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown

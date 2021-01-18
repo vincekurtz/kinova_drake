@@ -127,14 +127,12 @@
         <color rgba="0.1 0.1 0.1 1"/>
       </material>
     </visual>
-    <!--
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/collision/robotiq_arg2f_85_inner_knuckle.obj" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
-    -->
   </link>
   <link name="right_outer_knuckle">
     <inertial>
@@ -237,14 +235,12 @@
         <color rgba="0.1 0.1 0.1 1"/>
       </material>
     </visual>
-    <!--
     <collision>
       <origin rpy="0 0 0" xyz="0 0 0"/>
       <geometry>
         <mesh filename="../meshes/collision/robotiq_arg2f_85_inner_knuckle.obj" scale="0.001 0.001 0.001"/>
       </geometry>
     </collision>
-    -->
   </link>
   <joint name="finger_joint" type="revolute">
     <origin rpy="0 0 3.141592653589793" xyz="0 -0.0306011 0.054904"/>
@@ -337,5 +333,16 @@
       <mechanicalReduction>1</mechanicalReduction>
     </actuator>
   </transmission>
+  <!-- Ignore collisions between inner knuckles and inner fingers-->
+  <drake:collision_filter_group name="left_inner_group">
+    <drake:member link="left_inner_knuckle"/>
+    <drake:member link="left_inner_finger"/>
+    <drake:ignored_collision_filter_group name="left_inner_group"/>
+  </drake:collision_filter_group>
+  <drake:collision_filter_group name="right_inner_group">
+    <drake:member link="right_inner_knuckle"/>
+    <drake:member link="right_inner_finger"/>
+    <drake:ignored_collision_filter_group name="right_inner_group"/>
+  </drake:collision_filter_group>
 </robot>
 
