@@ -152,24 +152,30 @@ class KinovaStation(Diagram):
                 self.plant.get_state_output_port(self.gripper),
                 gripper_controller.GetInputPort("gripper_state"))
         self.builder.Connect(
-                gripper_controller.get_output_port(),
+                gripper_controller.GetOutputPort("applied_gripper_torque"),
                 self.plant.get_actuation_input_port(self.gripper))
     
         # Send gripper position and velocity as an output
-        demux2 = self.builder.AddSystem(Demultiplexer(
-                                        self.plant.num_multibody_states(self.gripper),
-                                        self.plant.num_positions(self.gripper)))
-        demux2.set_name("demux2")
-        
-        self.builder.Connect(
-                self.plant.get_state_output_port(self.gripper),
-                demux2.get_input_port())
         self.builder.ExportOutput(
-                demux2.get_output_port(0),
+                gripper_controller.GetOutputPort("measured_gripper_position"),
                 "measured_gripper_position")
         self.builder.ExportOutput(
-                demux2.get_output_port(1),
+                gripper_controller.GetOutputPort("measured_gripper_velocity"),
                 "measured_gripper_velocity")
+        #demux2 = self.builder.AddSystem(Demultiplexer(
+        #                                self.plant.num_multibody_states(self.gripper),
+        #                                self.plant.num_positions(self.gripper)))
+        #demux2.set_name("demux2")
+        #
+        #self.builder.Connect(
+        #        self.plant.get_state_output_port(self.gripper),
+        #        demux2.get_input_port())
+        #self.builder.ExportOutput(
+        #        demux2.get_output_port(0),
+        #        "measured_gripper_position")
+        #self.builder.ExportOutput(
+        #        demux2.get_output_port(1),
+        #        "measured_gripper_velocity")
         
         # Compute and output end-effector wrenches based on measured joint torques
         wrench_calculator = self.builder.AddSystem(EndEffectorWrenchCalculator(
@@ -194,13 +200,18 @@ class KinovaStation(Diagram):
         # Build the diagram
         self.builder.BuildInto(self)
 
-    def SetupSinglePegScenario(self):
+    def SetupSinglePegScenario(self, gripper_type="hande"):
         """
-        Set up a scenario with the robot arm, Hand-e gripper, and a single peg. 
+        Set up a scenario with the robot arm, a gripper, and a single peg. 
         And connect to the Drake visualizer while we're at it.
         """
         self.AddGround()
-        self.AddArmWithHandeGripper()
+        if gripper_type == "hande":
+            self.AddArmWithHandeGripper()
+        elif gripper_type == "2f_85":
+            self.AddArmWith2f85Gripper()
+        else:
+            raise RuntimeError("Invalid gripper type: %s" % gripper_type)
 
         X_peg = RigidTransform()
         X_peg.set_translation([0.5,0,0.1])
@@ -295,6 +306,13 @@ class KinovaStation(Diagram):
         """
         self.AddArm()
         self.AddHandeGripper()
+    
+    def AddArmWith2f85Gripper(self):
+        """
+        Add the 7-dof arm and a model of the 2F-85 gripper to the system.
+        """
+        self.AddArm()
+        self.Add2f85Gripper()
 
     def AddManipulandFromFile(self, model_file, X_WObject):
         """
@@ -356,10 +374,10 @@ class GripperController(LeafSystem):
                             -------------------------
                             |                       |
                             |                       |
-    gripper_target -------> |   GripperController   |
+    gripper_target -------> |   GripperController   | ---> gripper_torques
     gripper_target_type --> |                       |
-                            |                       | ---> gripper_torques
-                            |                       |
+                            |                       | ---> gripper_position
+                            |                       | ---> gripper_velocity
     gripper_state --------> |                       |
                             |                       |
                             |                       |
@@ -404,31 +422,38 @@ class GripperController(LeafSystem):
                                     "gripper_state",
                                     BasicVector(state_size))
 
-        # Declare output port
+        # Declare output ports
         self.DeclareVectorOutputPort(
-                "gripper_torque",
+                "applied_gripper_torque",
                 BasicVector(2),
                 self.CalcGripperTorque)
+        self.DeclareVectorOutputPort(
+                "measured_gripper_position",
+                BasicVector(2),
+                self.CalcGripperPosition,
+                {self.time_ticket()}   # indicate that this doesn't depend on any inputs,
+                )                      # but should still be updated each timestep
+        self.DeclareVectorOutputPort(
+                "measured_gripper_velocity",
+                BasicVector(2),
+                self.CalcGripperVelocity,
+                {self.time_ticket()})
 
-    def CalcGripperTorque(self, context, output):
-        state = self.state_port.Eval(context)
-        target = self.target_port.Eval(context)
-        target_type = self.target_type_port.Eval(context)
-
+    def ComputePosition(self, state):
+        """
+        Compute the gripper position from state data. 
+        This is especially useful for the 2F-85 gripper, since the
+        state does not map neatly to the finger positions. 
+        """
         if self.type == "hande":
             # For the simple Hand-e gripper, prismatic joint positions map fairly
             # directly to gripper position.
-            finger_position = 0.03 - state[:2]   # each gripper travels roughly 30mm,
-            finger_velocity = -state[2:]         # and is zero in the open position
-            
-            Kp = 100*np.eye(2)
-            Kd = 2*np.sqrt(Kp)
-
+            finger_position = 0.03 - state[:2]   # each finger travels roughly 30mm,
+                                                 # and is zero in the open position
         else:
             # For the more complex 2F-85 gripper, we need to do some kinematics 
-            # calculations to figure out the gripper position and velocity.
+            # calculations to figure out the gripper position
             self.plant.SetPositionsAndVelocities(self.context, state)
-            v = state[-self.plant.num_velocities():]
 
             right_finger = self.plant.GetFrameByName("right_inner_finger_pad")
             left_finger = self.plant.GetFrameByName("left_inner_finger_pad")
@@ -437,30 +462,76 @@ class GripperController(LeafSystem):
             X_lf = self.plant.CalcRelativeTransform(self.context, 
                                                     left_finger,
                                                     base)
-            J_lf = self.plant.CalcJacobianTranslationalVelocity(self.context,
-                                                               JacobianWrtVariable.kV,
-                                                               left_finger,
-                                                               np.zeros(3),
-                                                               base,
-                                                               base)
             X_rf = self.plant.CalcRelativeTransform(self.context, 
                                                     right_finger,
                                                     base)
-            J_rf = self.plant.CalcJacobianTranslationalVelocity(self.context,
-                                                               JacobianWrtVariable.kV,
-                                                               right_finger,
-                                                               np.zeros(3),
-                                                               base,
-                                                               base)
            
             lf_pos = -X_lf.translation()[1]
-            lf_vel = -(J_lf@v)[1]
             rf_pos = -X_rf.translation()[1]
-            rf_vel = (J_rf@v)[1]
 
             finger_position = np.array([lf_pos,rf_pos])
-            finger_velocity = np.array([lf_vel,rf_vel])
+
+        return finger_position
+
+    def ComputeVelocity(self, state):
+        """
+        Compute the gripper velocity from state data.
+        This is especially useful for the 2F-85 gripper, since the
+        state does not map neatly to the finger positions. 
+        """
+        if self.type == "hande":
+            finger_velocity = -state[2:]
+        else:
+            # For the more complex 2F-85 gripper, we need to do some kinematics 
+            self.plant.SetPositionsAndVelocities(self.context, state)
+            v = state[-self.plant.num_velocities():]
+
+            right_finger = self.plant.GetFrameByName("right_inner_finger_pad")
+            left_finger = self.plant.GetFrameByName("left_inner_finger_pad")
+            base = self.plant.GetFrameByName("robotiq_arg2f_base_link")
+           
+            J_lf = self.plant.CalcJacobianTranslationalVelocity(self.context,
+                                                                JacobianWrtVariable.kV,
+                                                                left_finger,
+                                                                np.zeros(3),
+                                                                base,
+                                                                base)
+            J_rf = self.plant.CalcJacobianTranslationalVelocity(self.context,
+                                                                JacobianWrtVariable.kV,
+                                                                right_finger,
+                                                                np.zeros(3),
+                                                                base,
+                                                                base)
             
+            lf_vel = -(J_lf@v)[1]
+            rf_vel = (J_rf@v)[1]
+
+            finger_velocity = np.array([lf_vel,rf_vel])
+
+        return finger_velocity
+
+    def CalcGripperPosition(self, context, output):
+        state = self.state_port.Eval(context)
+        output.SetFromVector(self.ComputePosition(state))
+        
+    def CalcGripperVelocity(self, context, output):
+        state = self.state_port.Eval(context)
+        output.SetFromVector(self.ComputeVelocity(state))
+
+    def CalcGripperTorque(self, context, output):
+        state = self.state_port.Eval(context)
+        target = self.target_port.Eval(context)
+        target_type = self.target_type_port.Eval(context)
+
+        finger_position = self.ComputePosition(state)
+        finger_velocity = self.ComputeVelocity(state)
+
+        # Set PD gains depending on gripper type
+        if self.type == "hande":
+            Kp = 100*np.eye(2)
+            Kd = 2*np.sqrt(Kp)
+
+        else:
             Kp = 10*np.eye(2)
             Kd = 2*np.sqrt(0.01*Kp)
         

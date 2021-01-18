@@ -126,9 +126,9 @@ class PegPickupController(LeafSystem):
        
         # Set gripper target position accordingly
         if self.command_sequence[mode]["gripper_closed"]:
-            cmd_pos = np.array([0.03,0.03])
-        else:
             cmd_pos = np.zeros(2)
+        else:
+            cmd_pos = np.array([0.04,0.04])
 
         output.SetFromVector(cmd_pos)
 
