@@ -117,28 +117,30 @@ builder.Connect(
 target_source.set_name("ee_command_source")
 target_type_source.set_name("ee_type_source")
 
-## Set gripper command
-#if gripper_command_type == GripperTarget.kPosition:
-#    q_grip_des = np.array([0.00,0.00])  # open at [0,0], closed at [0.03,0.03]
-#    gripper_target_source = builder.AddSystem(ConstantVectorSource(q_grip_des))
-#
-#elif gripper_command_type == GripperTarget.kVelocity:
-#    v_grip_des = np.array([0.01,0.01])
-#    gripper_target_source = builder.AddSystem(ConstantVectorSource(v_grip_des))
-#
-## Send gripper command and type
-#gripper_target_type_source = builder.AddSystem(ConstantValueSource(
-#                                         AbstractValue.Make(gripper_command_type)))
-#builder.Connect(
-#        gripper_target_type_source.get_output_port(),
-#        station.GetInputPort("gripper_target_type"))
-#
-#builder.Connect(
-#        gripper_target_source.get_output_port(),
-#        station.GetInputPort("gripper_target"))
-#
-#gripper_target_source.set_name("gripper_command_source")
-#gripper_target_type_source.set_name("gripper_type_source")
+# Set gripper command
+if gripper_command_type == GripperTarget.kPosition:
+    q_grip_des = np.array([0.06,0.06])  # Closed at [0,0], 
+                                        # Hand-e open at [0.03,0.03], 
+                                        # 2F-85 open at [0.06,0.06]
+    gripper_target_source = builder.AddSystem(ConstantVectorSource(q_grip_des))
+
+elif gripper_command_type == GripperTarget.kVelocity:
+    v_grip_des = -np.array([0.01,0.01])
+    gripper_target_source = builder.AddSystem(ConstantVectorSource(v_grip_des))
+
+# Send gripper command and type
+gripper_target_type_source = builder.AddSystem(ConstantValueSource(
+                                         AbstractValue.Make(gripper_command_type)))
+builder.Connect(
+        gripper_target_type_source.get_output_port(),
+        station.GetInputPort("gripper_target_type"))
+
+builder.Connect(
+        gripper_target_source.get_output_port(),
+        station.GetInputPort("gripper_target"))
+
+gripper_target_source.set_name("gripper_command_source")
+gripper_target_type_source.set_name("gripper_type_source")
 
 # Loggers force certain outputs to be computed
 wrench_logger = LogOutput(station.GetOutputPort("measured_ee_wrench"),builder)
@@ -174,19 +176,6 @@ if simulate:
     simulator.set_target_realtime_rate(10.1)
     simulator.set_publish_every_time_step(False)
 
-    # DEBUG
-    rif_frame = station.plant.GetFrameByName("left_inner_finger_bushing", station.gripper)
-    rik_frame = station.plant.GetFrameByName("left_inner_knuckle_bushing", station.gripper)
-
-    plant_context = diagram.GetSubsystemContext(station.plant, diagram_context)
-    X_rel = station.plant.CalcRelativeTransform(plant_context, rik_frame, rif_frame)
-    #X_rel = station.plant.CalcRelativeTransform(plant_context, station.plant.world_frame(), lik_frame)
-    print(X_rel.translation())
-
     # Run simulation
     simulator.Initialize()
-    simulator.AdvanceTo(10.001)
-
-    plant_context = diagram.GetSubsystemContext(station.plant, diagram_context)
-    X_rel = station.plant.CalcRelativeTransform(plant_context, rik_frame, rif_frame)
-    print(X_rel.translation())
+    simulator.AdvanceTo(10.0)

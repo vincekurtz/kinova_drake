@@ -68,77 +68,11 @@ class KinovaStation(Diagram):
         to the station (e.g. adding arm, gripper, manipulands) and before using
         this diagram as a system. 
         """
+
         if self.gripper_type == "2f_85":
-            # The 2F-85 gripper has a complicated mechanical component which includes
-            # a kinematic loop. The original URDF deals with this by using a "mimic" tag,
-            # but Drake doesn't support this. So we'll try to close the loop using a bushing,
-            # as described in Drake's four-bar linkage example: 
-            # https://github.com/RobotLocomotion/drake/tree/master/examples/multibody/four_bar.
-            # TODO: refactor into separate function
-
-            left_inner_finger = self.plant.GetFrameByName("left_inner_finger", self.gripper)
-            left_inner_knuckle = self.plant.GetFrameByName("left_inner_knuckle", self.gripper)
-            right_inner_finger = self.plant.GetFrameByName("right_inner_finger", self.gripper)
-            right_inner_knuckle = self.plant.GetFrameByName("right_inner_knuckle", self.gripper)
-
-            # Add frames which are located at the desired linkage point
-            X_finger = RigidTransform()
-            X_finger.set_translation([0.0,-0.016,0.007])
-            X_knuckle = RigidTransform()
-            X_knuckle.set_translation([0.0,0.038,0.043])
-
-            left_inner_finger_bushing = FixedOffsetFrame(
-                                                "left_inner_finger_bushing",
-                                                left_inner_finger,
-                                                X_finger,
-                                                self.gripper)
-            left_inner_knuckle_bushing = FixedOffsetFrame(
-                                                "left_inner_knuckle_bushing",
-                                                left_inner_knuckle,
-                                                X_knuckle,
-                                                self.gripper)
-            right_inner_finger_bushing = FixedOffsetFrame(
-                                                "right_inner_finger_bushing",
-                                                right_inner_finger,
-                                                X_finger,
-                                                self.gripper)
-            right_inner_knuckle_bushing = FixedOffsetFrame(
-                                                "right_inner_knuckle_bushing",
-                                                right_inner_knuckle,
-                                                X_knuckle,
-                                                self.gripper)
-
-
-            self.plant.AddFrame(left_inner_finger_bushing)
-            self.plant.AddFrame(left_inner_knuckle_bushing)
-            self.plant.AddFrame(right_inner_finger_bushing)
-            self.plant.AddFrame(right_inner_knuckle_bushing)
-
-            # Force and torque stiffness and damping describe a revolute joint on the z-axis
-            k_xyz = 8000
-            d_xyz = 10
-            k_rpy = 15
-            d_rpy = 3
-            force_stiffness_constants =  np.array([k_xyz,k_xyz,k_xyz])
-            force_damping_constants =    np.array([d_xyz,d_xyz,d_xyz])
-            torque_stiffness_constants = np.array([0,k_rpy,k_rpy])
-            torque_damping_constants =   np.array([0,d_rpy,k_rpy])
-
-            left_finger_bushing = LinearBushingRollPitchYaw(
-                        left_inner_finger_bushing, left_inner_knuckle_bushing,
-                        torque_stiffness_constants, torque_damping_constants,
-                        force_stiffness_constants, force_damping_constants)
-            right_finger_bushing = LinearBushingRollPitchYaw(
-                        right_inner_finger_bushing, right_inner_knuckle_bushing,
-                        torque_stiffness_constants, torque_damping_constants,
-                        force_stiffness_constants, force_damping_constants)
-            self.plant.AddForceElement(left_finger_bushing)
-            self.plant.AddForceElement(right_finger_bushing)
-
-
-        # DEBUG: turn off gravity
-        #self.plant.mutable_gravity_field().set_gravity_vector([0,0,0])
-        #self.controller_plant.mutable_gravity_field().set_gravity_vector([0,0,0])
+            # Add bushings to model the kinematic loop in the 2F-85 gripper.
+            # This needs to be done pre-Finalize
+            add_2f_85_bushings(self.plant, self.gripper)
 
         self.plant.Finalize()
         self.controller_plant.Finalize()
@@ -203,51 +137,40 @@ class KinovaStation(Diagram):
                 "measured_ee_twist")
         
         # Create gripper controller
-        if self.gripper_type == "hande":
-            gripper_controller = self.builder.AddSystem(GripperController())
-            gripper_controller.set_name("gripper_controller")
+        gripper_controller = self.builder.AddSystem(GripperController(self.gripper_type))
+        gripper_controller.set_name("gripper_controller")
 
-            # Connect gripper controller to the diagram
-            self.builder.ExportInput(
-                    gripper_controller.GetInputPort("gripper_target"),
-                    "gripper_target")
-            self.builder.ExportInput(
-                    gripper_controller.GetInputPort("gripper_target_type"),
-                    "gripper_target_type")
+        # Connect gripper controller to the diagram
+        self.builder.ExportInput(
+                gripper_controller.GetInputPort("gripper_target"),
+                "gripper_target")
+        self.builder.ExportInput(
+                gripper_controller.GetInputPort("gripper_target_type"),
+                "gripper_target_type")
 
-            self.builder.Connect(
-                    self.plant.get_state_output_port(self.gripper),
-                    gripper_controller.GetInputPort("gripper_state"))
-            self.builder.Connect(
-                    gripper_controller.get_output_port(),
-                    self.plant.get_actuation_input_port(self.gripper))
+        self.builder.Connect(
+                self.plant.get_state_output_port(self.gripper),
+                gripper_controller.GetInputPort("gripper_state"))
+        self.builder.Connect(
+                gripper_controller.get_output_port(),
+                self.plant.get_actuation_input_port(self.gripper))
+    
+        # Send gripper position and velocity as an output
+        demux2 = self.builder.AddSystem(Demultiplexer(
+                                        self.plant.num_multibody_states(self.gripper),
+                                        self.plant.num_positions(self.gripper)))
+        demux2.set_name("demux2")
         
-            # Send gripper position and velocity as an output
-            demux2 = self.builder.AddSystem(Demultiplexer(
-                                            self.plant.num_multibody_states(self.gripper),
-                                            self.plant.num_positions(self.gripper)))
-            demux2.set_name("demux2")
-            
-            self.builder.Connect(
-                    self.plant.get_state_output_port(self.gripper),
-                    demux2.get_input_port())
-            self.builder.ExportOutput(
-                    demux2.get_output_port(0),
-                    "measured_gripper_position")
-            self.builder.ExportOutput(
-                    demux2.get_output_port(1),
-                    "measured_gripper_velocity")
+        self.builder.Connect(
+                self.plant.get_state_output_port(self.gripper),
+                demux2.get_input_port())
+        self.builder.ExportOutput(
+                demux2.get_output_port(0),
+                "measured_gripper_position")
+        self.builder.ExportOutput(
+                demux2.get_output_port(1),
+                "measured_gripper_velocity")
         
-        elif self.gripper_type == "2f_85":
-
-            # Send a simple actuator command
-            gripper_torque = 0.05*np.ones(2)
-            gp = self.builder.AddSystem(ConstantVectorSource(gripper_torque))  # sketch of controller
-            self.builder.Connect(
-                    gp.get_output_port(),
-                    self.plant.get_actuation_input_port(self.gripper))
-
-
         # Compute and output end-effector wrenches based on measured joint torques
         wrench_calculator = self.builder.AddSystem(EndEffectorWrenchCalculator(
                 self.controller_plant,
@@ -349,8 +272,11 @@ class KinovaStation(Diagram):
         gripper_urdf = "./models/2f_85_gripper/urdf/robotiq_2f_85.urdf"
         self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf,"gripper")
 
+        X_grip = RigidTransform()
+        X_grip.set_rotation(RotationMatrix(RollPitchYaw([0,0,np.pi/2])))
         self.plant.WeldFrames(self.plant.GetFrameByName("end_effector_link",self.arm),
-                              self.plant.GetFrameByName("robotiq_arg2f_base_link", self.gripper))
+                              self.plant.GetFrameByName("robotiq_arg2f_base_link", self.gripper),
+                              X_grip)
 
         # Add a gripper without actuation to the controller plant
         gripper_static_urdf = "./models/2f_85_gripper/urdf/robotiq_2f_85_static.urdf"
@@ -358,12 +284,10 @@ class KinovaStation(Diagram):
                                                                 gripper_static_urdf,
                                                                 "gripper")
 
-        X_grip = RigidTransform()
-        X_grip.set_rotation(RotationMatrix(RollPitchYaw([0,0,1])))
         self.controller_plant.WeldFrames(
                 self.controller_plant.GetFrameByName("end_effector_link",self.controller_arm),
                 self.controller_plant.GetFrameByName("robotiq_arg2f_base_link", static_gripper), 
-                X_AB=X_grip)
+                X_grip)
         
     def AddArmWithHandeGripper(self):
         """
@@ -441,8 +365,32 @@ class GripperController(LeafSystem):
                             |                       |
                             -------------------------
     """
-    def __init__(self):
+    def __init__(self, gripper_type):
+        """
+        The type can be "hande" or "2f_85", depending on the type of gripper.
+        """
         LeafSystem.__init__(self)
+        self.type = gripper_type
+        
+        # State input port size depends on what type of gripper we're using.
+        # (2F-85 has many more degrees of freedom. )
+        if self.type == "2f_85":
+            state_size = 12
+
+            # We'll create a simple model of the gripper which is welded to the floor. 
+            # This will allow us to compute the distance between fingers.
+            self.plant = MultibodyPlant(1.0)  # timestep doesn't matter
+            gripper_urdf = "./models/2f_85_gripper/urdf/robotiq_2f_85.urdf"
+            self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf, "gripper")
+            self.plant.WeldFrames(self.plant.world_frame(),
+                                  self.plant.GetFrameByName("robotiq_arg2f_base_link",self.gripper))
+            self.plant.Finalize()
+            self.context = self.plant.CreateDefaultContext()
+
+        elif self.type == "hande":
+            state_size = 4
+        else:
+            raise RuntimeError("Invalid gripper type: %s" % self.type)
 
         # Declare input ports
         self.target_port = self.DeclareVectorInputPort(
@@ -451,9 +399,10 @@ class GripperController(LeafSystem):
         self.target_type_port = self.DeclareAbstractInputPort(
                                   "gripper_target_type",
                                   AbstractValue.Make(GripperTarget.kPosition))
+
         self.state_port = self.DeclareVectorInputPort(
                                     "gripper_state",
-                                    BasicVector(4))
+                                    BasicVector(state_size))
 
         # Declare output port
         self.DeclareVectorOutputPort(
@@ -466,23 +415,70 @@ class GripperController(LeafSystem):
         target = self.target_port.Eval(context)
         target_type = self.target_type_port.Eval(context)
 
-        q = state[:2]
-        qd = state[2:]
+        if self.type == "hande":
+            # For the simple Hand-e gripper, prismatic joint positions map fairly
+            # directly to gripper position.
+            finger_position = 0.03 - state[:2]   # each gripper travels roughly 30mm,
+            finger_velocity = -state[2:]         # and is zero in the open position
+            
+            Kp = 100*np.eye(2)
+            Kd = 2*np.sqrt(Kp)
 
+        else:
+            # For the more complex 2F-85 gripper, we need to do some kinematics 
+            # calculations to figure out the gripper position and velocity.
+            self.plant.SetPositionsAndVelocities(self.context, state)
+            v = state[-self.plant.num_velocities():]
+
+            right_finger = self.plant.GetFrameByName("right_inner_finger_pad")
+            left_finger = self.plant.GetFrameByName("left_inner_finger_pad")
+            base = self.plant.GetFrameByName("robotiq_arg2f_base_link")
+           
+            X_lf = self.plant.CalcRelativeTransform(self.context, 
+                                                    left_finger,
+                                                    base)
+            J_lf = self.plant.CalcJacobianTranslationalVelocity(self.context,
+                                                               JacobianWrtVariable.kV,
+                                                               left_finger,
+                                                               np.zeros(3),
+                                                               base,
+                                                               base)
+            X_rf = self.plant.CalcRelativeTransform(self.context, 
+                                                    right_finger,
+                                                    base)
+            J_rf = self.plant.CalcJacobianTranslationalVelocity(self.context,
+                                                               JacobianWrtVariable.kV,
+                                                               right_finger,
+                                                               np.zeros(3),
+                                                               base,
+                                                               base)
+           
+            lf_pos = -X_lf.translation()[1]
+            lf_vel = -(J_lf@v)[1]
+            rf_pos = -X_rf.translation()[1]
+            rf_vel = (J_rf@v)[1]
+
+            finger_position = np.array([lf_pos,rf_pos])
+            finger_velocity = np.array([lf_vel,rf_vel])
+            
+            Kp = 10*np.eye(2)
+            Kd = 2*np.sqrt(0.01*Kp)
+        
+        # Set target positions and velocities based on the current control mode
         if target_type == GripperTarget.kPosition:
-            q_nom = target
-            qd_nom = np.zeros(2)
+            target_finger_position = target
+            target_finger_velocity = np.zeros(2)
         elif target_type == GripperTarget.kVelocity:
-            q_nom = q
-            qd_nom = target
+            target_finger_position = finger_position
+            target_finger_velocity = target
         else:
             raise RuntimeError("Invalid gripper target type: %s" % target_type)
 
+        # Determine applied torques with PD controller
+        position_err = target_finger_position - finger_position
+        velocity_err = target_finger_velocity - finger_velocity
+        tau = -Kp@(position_err) - Kd@(velocity_err)
 
-        Kp = 100*np.eye(2)
-        Kd = 2*np.sqrt(Kp)
-
-        tau = Kp@(q_nom - q) + Kd@(qd_nom - qd)
         output.SetFromVector(tau)
 
 
@@ -752,3 +748,73 @@ class CartesianController(LeafSystem):
             raise RuntimeError("Invalid target type %s" % target_type)
 
         output.SetFromVector(tau)
+
+def add_2f_85_bushings(plant, gripper):
+    """
+    The Robotiq 2F-85 gripper has a complicated mechanical component which includes
+    a kinematic loop. The original URDF deals with this by using a "mimic" tag,
+    but Drake doesn't support this. So we'll try to close the loop using a bushing,
+    as described in Drake's four-bar linkage example: 
+
+        https://github.com/RobotLocomotion/drake/tree/master/examples/multibody/four_bar.
+
+    This needs to be done before plant is finalized. 
+    """
+    left_inner_finger = plant.GetFrameByName("left_inner_finger", gripper)
+    left_inner_knuckle = plant.GetFrameByName("left_inner_knuckle", gripper)
+    right_inner_finger = plant.GetFrameByName("right_inner_finger", gripper)
+    right_inner_knuckle = plant.GetFrameByName("right_inner_knuckle", gripper)
+
+    # Add frames which are located at the desired linkage point
+    X_finger = RigidTransform()
+    X_finger.set_translation([0.0,-0.016,0.007])
+    X_knuckle = RigidTransform()
+    X_knuckle.set_translation([0.0,0.038,0.043])
+
+    left_inner_finger_bushing = FixedOffsetFrame(
+                                        "left_inner_finger_bushing",
+                                        left_inner_finger,
+                                        X_finger,
+                                        gripper)
+    left_inner_knuckle_bushing = FixedOffsetFrame(
+                                        "left_inner_knuckle_bushing",
+                                        left_inner_knuckle,
+                                        X_knuckle,
+                                        gripper)
+    right_inner_finger_bushing = FixedOffsetFrame(
+                                        "right_inner_finger_bushing",
+                                        right_inner_finger,
+                                        X_finger,
+                                        gripper)
+    right_inner_knuckle_bushing = FixedOffsetFrame(
+                                        "right_inner_knuckle_bushing",
+                                        right_inner_knuckle,
+                                        X_knuckle,
+                                        gripper)
+
+
+    plant.AddFrame(left_inner_finger_bushing)
+    plant.AddFrame(left_inner_knuckle_bushing)
+    plant.AddFrame(right_inner_finger_bushing)
+    plant.AddFrame(right_inner_knuckle_bushing)
+
+    # Force and torque stiffness and damping describe a revolute joint on the z-axis
+    k_xyz = 8000
+    d_xyz = 10
+    k_rpy = 15
+    d_rpy = 3
+    force_stiffness_constants =  np.array([k_xyz,k_xyz,k_xyz])
+    force_damping_constants =    np.array([d_xyz,d_xyz,d_xyz])
+    torque_stiffness_constants = np.array([0,k_rpy,k_rpy])
+    torque_damping_constants =   np.array([0,d_rpy,k_rpy])
+
+    left_finger_bushing = LinearBushingRollPitchYaw(
+                left_inner_finger_bushing, left_inner_knuckle_bushing,
+                torque_stiffness_constants, torque_damping_constants,
+                force_stiffness_constants, force_damping_constants)
+    right_finger_bushing = LinearBushingRollPitchYaw(
+                right_inner_finger_bushing, right_inner_knuckle_bushing,
+                torque_stiffness_constants, torque_damping_constants,
+                force_stiffness_constants, force_damping_constants)
+    plant.AddForceElement(left_finger_bushing)
+    plant.AddForceElement(right_finger_bushing)
