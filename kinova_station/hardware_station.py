@@ -143,9 +143,10 @@ class KinovaStationHardwareInterface(Diagram):
         return check
 
 
-    def go_home(self):
+    def go_home(self, name="Home"):
         """
-        Move the arm to the home position.
+        Move the arm to the home position. Different positions can be
+        specified using the 'name' parameter ('Home', 'Retract', 'Packaging', or 'Zero').
         """
         # Make sure the arm is in Single Level Servoing mode
         base_servo_mode = Base_pb2.ServoingModeInformation()
@@ -159,11 +160,13 @@ class KinovaStationHardwareInterface(Diagram):
         action_list = self.base.ReadAllActions(action_type)
         action_handle = None
         for action in action_list.action_list:
-            if action.name == "Home":
+            if action.name == name:
                 action_handle = action.handle
 
         if action_handle == None:
-            print("Can't reach home position. Exiting")
+            print("Invalid home position name: %s" % name)
+            print("Must be one of ['Home','Retract','Packaging','Zero']")
+            print("Exiting.")
             sys.exit(0)
 
         e = threading.Event()
