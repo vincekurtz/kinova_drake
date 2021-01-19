@@ -48,7 +48,7 @@ from kinova_station import KinovaStationHardwareInterface, EndEffectorTarget, Gr
 ########################### Parameters #################################
 
 # Make a plot of the system diagram for this example
-show_toplevel_diagram = True
+show_toplevel_diagram = False
 
 # Run the example
 run = True
@@ -88,10 +88,10 @@ with KinovaStationHardwareInterface() as station:
     wrench_logger = LogOutput(station.GetOutputPort("measured_ee_wrench"), builder)
     wrench_logger.set_name("wrench_logger")
 
-    gp_logger = LogOutput(station.GetOutputPort("measured_gripper_position"), builder)
-    gp_logger.set_name("gripper_position_logger")
-    gv_logger = LogOutput(station.GetOutputPort("measured_gripper_velocity"), builder)
-    gv_logger.set_name("gripper_velocity_logger")
+    #gp_logger = LogOutput(station.GetOutputPort("measured_gripper_position"), builder)
+    #gp_logger.set_name("gripper_position_logger")
+    #gv_logger = LogOutput(station.GetOutputPort("measured_gripper_velocity"), builder)
+    #gv_logger.set_name("gripper_velocity_logger")
 
     # Build the system diagram
     diagram = builder.Build()
@@ -125,8 +125,7 @@ with KinovaStationHardwareInterface() as station:
         simulator.AdvanceTo(2.0)  # seconds
 
         # Print rate data
-        # TODO: print out target and actual rates in Hz
         print("")
-        print("Target realtime rate: %s" % simulator.get_target_realtime_rate())
-        print("Actual realtime rate: %s" % simulator.get_actual_realtime_rate())
+        print("Target control frequency: %s Hz" % (1/time_step))
+        print("Actual control frequency: %s Hz" % (1/time_step * simulator.get_actual_realtime_rate()))
 

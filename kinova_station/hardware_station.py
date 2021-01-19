@@ -372,78 +372,6 @@ class KinovaStationHardwareInterface(LeafSystem):
             else: # Else, no finger present in answer, end loop
                 break
 
-    def calc_arm_torque_example(self):
-        feedback = self.base_cyclic.RefreshFeedback()
-        tau = np.zeros(7)
-        for i in range(7):
-            tau[i] = feedback.actuators[i].torque  # in Nm
-                                    
-        print("tau: %s" % tau)
-
-    def calc_ee_pose_example(self):
-        feedback = self.base_cyclic.RefreshFeedback()
-        ee_pose = np.zeros(6)
-
-        ee_pose[0] = np.radians(feedback.base.tool_pose_theta_x)
-        ee_pose[1] = np.radians(feedback.base.tool_pose_theta_y)
-        ee_pose[2] = np.radians(feedback.base.tool_pose_theta_z)
-        ee_pose[3] = feedback.base.tool_pose_x
-        ee_pose[4] = feedback.base.tool_pose_y
-        ee_pose[5] = feedback.base.tool_pose_z
-
-        print("end-effector pose: %s" % ee_pose)
-
-    def calc_ee_twist_example(self):
-        # This is the twist expressed in the base frame
-        feedback = self.base_cyclic.RefreshFeedback()
-        ee_twist = np.zeros(6)
-
-        ee_twist[0] = np.radians(feedback.base.tool_twist_angular_x)
-        ee_twist[1] = np.radians(feedback.base.tool_twist_angular_y)
-        ee_twist[2] = np.radians(feedback.base.tool_twist_angular_z)
-        ee_twist[3] = feedback.base.tool_twist_linear_x
-        ee_twist[4] = feedback.base.tool_twist_linear_y
-        ee_twist[5] = feedback.base.tool_twist_linear_z
-
-        print("end-effector twist: %s" % ee_twist)
-
-    def calc_ee_wrench_example(self):
-        feedback = self.base_cyclic.RefreshFeedback()
-
-        ee_wrench = np.zeros(6)
-
-        ee_wrench[0] = feedback.base.tool_external_wrench_torque_x
-        ee_wrench[1] = feedback.base.tool_external_wrench_torque_y
-        ee_wrench[2] = feedback.base.tool_external_wrench_torque_z
-        ee_wrench[3] = feedback.base.tool_external_wrench_force_x
-        ee_wrench[4] = feedback.base.tool_external_wrench_force_y
-        ee_wrench[5] = feedback.base.tool_external_wrench_force_z
-
-        print("end-effector wrench: %s" % ee_wrench)
-
-    def calc_gripper_position_example(self):
-        # Position is 0 full open, 1 fully closed
-        gripper_request = Base_pb2.GripperRequest()
-        gripper_request.mode = Base_pb2.GRIPPER_POSITION
-        gripper_measure = self.base.GetMeasuredGripperMovement(gripper_request)
-        
-        if len(gripper_measure.finger):
-            print("Current gripper position is : {0}".format(gripper_measure.finger[0].value))
-        else: # Else, no finger present in answer, end loop
-            print("No gripper detected")
-        pass
-
-    def calc_gripper_velocity_example(self):
-        # Positive velocities close, negative velocities open
-        gripper_request = Base_pb2.GripperRequest()
-        gripper_request.mode = Base_pb2.GRIPPER_SPEED
-        gripper_measure = self.base.GetMeasuredGripperMovement(gripper_request)
-        
-        if len(gripper_measure.finger):
-            print("Current gripper speed is : {0}".format(gripper_measure.finger[0].value))
-        else: # Else, no finger present in answer, end loop
-            print("No gripper detected")
-
     def get_camera_rbg_image_example(self):
         # Note: can fetch camera params, see example 01-vision_intrinsics.py
         pass
@@ -469,7 +397,6 @@ class KinovaStationHardwareInterface(LeafSystem):
         """
         Compute the current joint velocities and send as output.
         """
-        # Get feedback from the base, but only if we haven't already this timestep
         t = context.get_time()
         if (self.last_feedback_time != t): self.GetFeedback(t)
 
@@ -483,7 +410,6 @@ class KinovaStationHardwareInterface(LeafSystem):
         """
         Compute the current joint torques and send as output.
         """
-        # Get feedback from the base, but only if we haven't already this timestep
         t = context.get_time()
         if (self.last_feedback_time != t): self.GetFeedback(t)
 
@@ -494,19 +420,84 @@ class KinovaStationHardwareInterface(LeafSystem):
         output.SetFromVector(tau)
 
     def CalcEndEffectorPose(self, context, output):
-        pass
+        """
+        Compute the current end-effector pose and send as output.
+        """
+        t = context.get_time()
+        if (self.last_feedback_time != t): self.GetFeedback(t)
+
+        ee_pose = np.zeros(6)
+        ee_pose[0] = np.radians(self.feedback.base.tool_pose_theta_x)
+        ee_pose[1] = np.radians(self.feedback.base.tool_pose_theta_y)
+        ee_pose[2] = np.radians(self.feedback.base.tool_pose_theta_z)
+        ee_pose[3] = self.feedback.base.tool_pose_x
+        ee_pose[4] = self.feedback.base.tool_pose_y
+        ee_pose[5] = self.feedback.base.tool_pose_z
+
+        output.SetFromVector(ee_pose)
 
     def CalcEndEffectorTwist(self, context, output):
-        pass
+        """
+        Compute the current end-effector twist and send as output
+        """
+        t = context.get_time()
+        if (self.last_feedback_time != t): self.GetFeedback(t)
+        
+        ee_twist = np.zeros(6)
+        ee_twist[0] = np.radians(self.feedback.base.tool_twist_angular_x)
+        ee_twist[1] = np.radians(self.feedback.base.tool_twist_angular_y)
+        ee_twist[2] = np.radians(self.feedback.base.tool_twist_angular_z)
+        ee_twist[3] = self.feedback.base.tool_twist_linear_x
+        ee_twist[4] = self.feedback.base.tool_twist_linear_y
+        ee_twist[5] = self.feedback.base.tool_twist_linear_z
+
+        output.SetFromVector(ee_twist)
 
     def CalcEndEffectorWrench(self, context, output):
-        pass
+        """
+        Compute the current end-effector wrench and send as output
+        """
+        t = context.get_time()
+        if (self.last_feedback_time != t): self.GetFeedback(t)
+        
+        ee_wrench = np.zeros(6)
+        ee_wrench[0] = self.feedback.base.tool_external_wrench_torque_x
+        ee_wrench[1] = self.feedback.base.tool_external_wrench_torque_y
+        ee_wrench[2] = self.feedback.base.tool_external_wrench_torque_z
+        ee_wrench[3] = self.feedback.base.tool_external_wrench_force_x
+        ee_wrench[4] = self.feedback.base.tool_external_wrench_force_y
+        ee_wrench[5] = self.feedback.base.tool_external_wrench_force_z
+
+        output.SetFromVector(ee_wrench)
 
     def CalcGripperPosition(self, context, output):
-        pass
+        """
+        Compute the current gripper position and send as output
+
+        Note that this method is fairly slow: sending and recieving the
+        MeasuredGripperMovement takes about 25ms.
+        """
+        # Position is 0 full open, 1 fully closed
+        gripper_request = Base_pb2.GripperRequest()
+        gripper_request.mode = Base_pb2.GRIPPER_POSITION
+        gripper_measure = self.base.GetMeasuredGripperMovement(gripper_request)
+        
+        output.SetFromVector([gripper_measure.finger[0].value])
 
     def CalcGripperVelocity(self, context, output):
-        pass
+        """
+        Compute the current gripper velocity and send as output.
+
+        Note that this method is fairly slow: sending and recieving the
+        MeasuredGripperMovement takes about 25ms.
+        """
+        # TODO: this just gives us a speed, but not a direction!
+        gripper_request = Base_pb2.GripperRequest()
+        gripper_request.mode = Base_pb2.GRIPPER_SPEED
+        gripper_measure = self.base.GetMeasuredGripperMovement(gripper_request)
+
+        print([gripper_measure.finger[0].value])
+        output.SetFromVector([gripper_measure.finger[0].value])
     
     def DoCalcTimeDerivatives(self, context, continuous_state):
         """
