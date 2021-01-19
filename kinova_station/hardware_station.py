@@ -338,14 +338,45 @@ class KinovaStationHardwareInterface(Diagram):
         print("tau: %s" % tau)
 
     def calc_ee_pose_example(self):
-        pass
+        feedback = self.base_cyclic.RefreshFeedback()
+        ee_pose = np.zeros(6)
+
+        ee_pose[0] = np.radians(feedback.base.tool_pose_theta_x)
+        ee_pose[1] = np.radians(feedback.base.tool_pose_theta_y)
+        ee_pose[2] = np.radians(feedback.base.tool_pose_theta_z)
+        ee_pose[3] = feedback.base.tool_pose_x
+        ee_pose[4] = feedback.base.tool_pose_y
+        ee_pose[5] = feedback.base.tool_pose_z
+
+        print("end-effector pose: %s" % ee_pose)
 
     def calc_ee_twist_example(self):
-        pass
+        # This is the twist expressed in the base frame
+        feedback = self.base_cyclic.RefreshFeedback()
+        ee_twist = np.zeros(6)
+
+        ee_twist[0] = np.radians(feedback.base.tool_twist_angular_x)
+        ee_twist[1] = np.radians(feedback.base.tool_twist_angular_y)
+        ee_twist[2] = np.radians(feedback.base.tool_twist_angular_z)
+        ee_twist[3] = feedback.base.tool_twist_linear_x
+        ee_twist[4] = feedback.base.tool_twist_linear_y
+        ee_twist[5] = feedback.base.tool_twist_linear_z
+
+        print("end-effector twist: %s" % ee_twist)
 
     def calc_ee_wrench_example(self):
-        # Use measured joint torques + calculator in common.py, same as simulation
-        pass
+        feedback = self.base_cyclic.RefreshFeedback()
+
+        ee_wrench = np.zeros(6)
+
+        ee_wrench[0] = feedback.base.tool_external_wrench_torque_x
+        ee_wrench[1] = feedback.base.tool_external_wrench_torque_y
+        ee_wrench[2] = feedback.base.tool_external_wrench_torque_z
+        ee_wrench[3] = feedback.base.tool_external_wrench_force_x
+        ee_wrench[4] = feedback.base.tool_external_wrench_force_y
+        ee_wrench[5] = feedback.base.tool_external_wrench_force_z
+
+        print("end-effector wrench: %s" % ee_wrench)
 
     def calc_gripper_position_example(self):
         # Position is 0 full open, 1 fully closed
