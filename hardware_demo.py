@@ -71,7 +71,47 @@ with KinovaStationHardwareInterface() as station:
     builder = DiagramBuilder()
     builder.AddSystem(station)
 
-    # Connect simple controllers to inputs
+    # Connect end-effector target source
+    if ee_command_type == EndEffectorTarget.kPose:
+        pose_des = np.array([np.pi,0.0,0.0, 0.6,0.0,0.2])
+        target_source = builder.AddSystem(ConstantVectorSource(pose_des))
+    elif ee_command_type == EndEffectorTarget.kTwist:
+        twist_des = np.array([0,0,0.0,0.0,0.0,0.0])
+        target_source = builder.AddSystem(ConstantVectorSource(twist_des))
+    elif ee_command_type == EndEffectorTarget.kWrench:
+        wrench_des = np.array([0,0,0.0,0.1,0.0,0.0])
+        target_source = builder.AddSystem(ConstantVectorSource(wrench_des))
+    target_source.set_name("ee_command_source")
+    builder.Connect(
+            target_source.get_output_port(),
+            station.GetInputPort("ee_target"))
+
+    # Connect end-effector type source
+    target_type_source = builder.AddSystem(ConstantValueSource(AbstractValue.Make(ee_command_type)))
+    target_type_source.set_name("ee_type_source")
+    builder.Connect(
+            target_type_source.get_output_port(),
+            station.GetInputPort("ee_target_type"))
+
+    # Connect gripper target source
+    if gripper_command_type == GripperTarget.kPosition:
+        q_grip_des = np.array([0.5])
+        gripper_target_source = builder.AddSystem(ConstantVectorSource(q_grip_des))
+    elif gripper_command_type == GripperTarget.kVelocity:
+        v_grip_des = np.array([-0.1])
+        gripper_target_source = builder.AddSystem(ConstantVectorSource(v_grip_des))
+    gripper_target_source.set_name("gripper_command_source")
+    builder.Connect(
+            gripper_target_source.get_output_port(),
+            station.GetInputPort("gripper_target"))
+
+    # Connect gripper type source
+    gripper_target_type_source = builder.AddSystem(ConstantValueSource(
+                                             AbstractValue.Make(gripper_command_type)))
+    gripper_target_type_source.set_name("gripper_type_source")
+    builder.Connect(
+            gripper_target_type_source.get_output_port(),
+            station.GetInputPort("gripper_target_type"))
 
     # Connect loggers to outputs
     q_logger = LogOutput(station.GetOutputPort("measured_arm_position"), builder)

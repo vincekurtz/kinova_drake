@@ -70,7 +70,7 @@ class KinovaStationHardwareInterface(LeafSystem):
         
         self.gripper_target_port = self.DeclareVectorInputPort(
                                              "gripper_target",
-                                             BasicVector(6))
+                                             BasicVector(1))
         self.gripper_target_type_port = self.DeclareAbstractInputPort(
                                             "gripper_target_type",
                                             AbstractValue.Make(GripperTarget.kPosition))
@@ -249,6 +249,39 @@ class KinovaStationHardwareInterface(LeafSystem):
             print("Timeout while moving to home position")
         return finished
 
+    def send_gripper_command(self, mode, command):
+        """
+        Send a position or a velocity command to the gripper
+        """
+        assert (mode == Base_pb2.GRIPPER_POSITION) or (mode == Base_pb2.GRIPPER_SPEED)
+
+        gripper_command = Base_pb2.GripperCommand()
+        gripper_command.mode = mode
+        
+        finger = gripper_command.gripper.finger.add()
+        finger.finger_identifier = 1
+        finger.value = command
+
+        self.base.SendGripperCommand(gripper_command)
+
+    def send_gripper_position_command(self, position):
+        """
+        Convienience method for sending a position command 
+        (real number in [0,1]) to the gripper. 
+        """
+        self.send_gripper_command(
+                mode = Base_pb2.GRIPPER_POSITION,
+                command = position)
+
+    def send_gripper_velocity_command(self, velocity):
+        """
+        Convienience method for sending a velocity command
+        to the gripper.
+        """
+        self.send_gripper_command(
+                mode = Base_pb2.GRIPPER_SPEED,
+                command = velocity)
+
     def send_ee_pose_example(self):
         print("Starting Cartesian action movement ...")
         action = Base_pb2.Action()
@@ -312,65 +345,6 @@ class KinovaStationHardwareInterface(LeafSystem):
 
     def send_ee_wrench_example(self):
         pass
-
-    def send_gripper_position_target_example(self):
-        # Create the GripperCommand we will send
-        gripper_command = Base_pb2.GripperCommand()
-        finger = gripper_command.gripper.finger.add()
-
-        # Close the gripper with position increments
-        print("Performing gripper test in position mode...")
-        gripper_command.mode = Base_pb2.GRIPPER_POSITION
-        position = 0.00
-        finger.finger_identifier = 1
-        while position < 1.0:
-            finger.value = position
-            print("Going to position {:0.2f}...".format(finger.value))
-            self.base.SendGripperCommand(gripper_command)
-            position += 0.1
-            time.sleep(1)
-
-    def send_gripper_velocity_target_example(self):
-        # Create the GripperCommand we will send
-        gripper_command = Base_pb2.GripperCommand()
-        finger = gripper_command.gripper.finger.add()
-
-        # Set speed to open gripper
-        print ("Opening gripper using speed command...")
-        gripper_command.mode = Base_pb2.GRIPPER_SPEED
-        finger.value = 0.1
-        self.base.SendGripperCommand(gripper_command)
-        gripper_request = Base_pb2.GripperRequest()
-
-        # Wait for reported position to be opened
-        gripper_request.mode = Base_pb2.GRIPPER_POSITION
-        while True:
-            gripper_measure = self.base.GetMeasuredGripperMovement(gripper_request)
-            if len (gripper_measure.finger):
-                print("Current position is : {0}".format(gripper_measure.finger[0].value))
-                if gripper_measure.finger[0].value < 0.01:
-                    break
-            else: # Else, no finger present in answer, end loop
-                break
-
-        # Set speed to close gripper
-        print ("Closing gripper using speed command...")
-        gripper_command.mode = Base_pb2.GRIPPER_SPEED
-        finger.value = -0.1
-        self.base.SendGripperCommand(gripper_command)
-
-        # Wait for reported speed to be 0
-        # Note: this is a nicer way of doing grasping, since we stop once an object is firmly
-        # in the gripper. 
-        gripper_request.mode = Base_pb2.GRIPPER_SPEED
-        while True:
-            gripper_measure = self.base.GetMeasuredGripperMovement(gripper_request)
-            if len (gripper_measure.finger):
-                print("Current speed is : {0}".format(gripper_measure.finger[0].value))
-                if gripper_measure.finger[0].value == 0.0:
-                    break
-            else: # Else, no finger present in answer, end loop
-                break
 
     def get_camera_rbg_image_example(self):
         # Note: can fetch camera params, see example 01-vision_intrinsics.py
@@ -507,5 +481,22 @@ class KinovaStationHardwareInterface(LeafSystem):
         commands to the robot. 
         """
         print("time is: %s" % context.get_time())
+
+        # Get data from input ports
+        ee_target_type = self.ee_target_type_port.Eval(context)
+        ee_target = self.ee_target_port.Eval(context)
+
+        gripper_target_type = self.gripper_target_type_port.Eval(context)
+        gripper_target = self.gripper_target_port.Eval(context)
+
+        # Send commands to the base consistent with these targets
+        if gripper_target_type == GripperTarget.kPosition:
+            self.send_gripper_position_command(gripper_target[0])
+        elif gripper_target_type == GripperTarget.kVelocity:
+            self.send_gripper_velocity_command(gripper_target[0])
+        else:
+            raise RuntimeError("Invalid gripper target type %s" % gripper_target_type)
+
+        print("")
 
 
