@@ -77,13 +77,48 @@ class KinovaStationHardwareInterface(LeafSystem):
 
         # Declare output ports
         self.DeclareVectorOutputPort(
-                "test_output_port",
+                "measured_arm_position",
+                BasicVector(7),
+                self.CalcArmPosition)
+        self.DeclareVectorOutputPort(
+                "measured_arm_velocity",
+                BasicVector(7),
+                self.CalcArmVelocity)
+        self.DeclareVectorOutputPort(
+                "measured_arm_torque",
+                BasicVector(7),
+                self.CalcArmTorque)
+
+        self.DeclareVectorOutputPort(
+                "measured_ee_pose",
+                BasicVector(6),
+                self.CalcEndEffectorPose)
+        self.DeclareVectorOutputPort(
+                "measured_ee_twist",
+                BasicVector(6),
+                self.CalcEndEffectorTwist)
+        self.DeclareVectorOutputPort(
+                "measured_ee_wrench",
+                BasicVector(6),
+                self.CalcEndEffectorWrench)
+
+        self.DeclareVectorOutputPort(
+                "measured_gripper_position",
                 BasicVector(1),
-                self.CalcTestOutput)
+                self.CalcGripperPosition)
+        self.DeclareVectorOutputPort(
+                "measured_gripper_velocity",
+                BasicVector(1),
+                self.CalcGripperVelocity)
 
         # Create a dummy continuous state so that the simulator
         # knows not to just jump to the last possible timestep
         self.DeclareContinuousState(1)
+
+        # Each call to self.base_cyclic.RefreshFeedback() takes about 0.025s, so we'll
+        # try to minimize redudant calls to the base as much as possible
+        self.last_feedback_time = -np.inf
+        self.feedback = None
 
     def __enter__(self):
         """
@@ -143,11 +178,6 @@ class KinovaStationHardwareInterface(LeafSystem):
         self.transport.disconnect()
         print("Hardware Connection Closed.")
 
-    def DoCalcTimeDerivatives(self, context, continuous_state):
-        # The continuous state is just a dummy for the simulator,
-        # so nothing needs to be done here
-        pass
-
     def check_for_end_or_abort(self, e):
         """
         Return a closure checking for END or ABORT notifications
@@ -164,6 +194,15 @@ class KinovaStationHardwareInterface(LeafSystem):
                 e.set()
         return check
 
+    def GetFeedback(self, current_time):
+        """
+        Sets self.feedback with the latest data from the controller. 
+        We also indicate the time at which this feedback was set, in an 
+        effor to reduce redudnant calls to self.base_cyclic.RefreshFeedback(),
+        which take about 25ms each. 
+        """
+        self.feedback = self.base_cyclic.RefreshFeedback()
+        self.last_feedback_time = current_time
 
     def go_home(self, name="Home"):
         """
@@ -333,22 +372,6 @@ class KinovaStationHardwareInterface(LeafSystem):
             else: # Else, no finger present in answer, end loop
                 break
 
-    def calc_arm_position_example(self):
-        feedback = self.base_cyclic.RefreshFeedback()
-        q = np.zeros(7)
-        for i in range(7):
-            q[i] = np.radians(feedback.actuators[i].position)  # Kortex provides joint angles
-                                                               # in degrees for some reason
-        print("q: %s" % q)
-
-    def calc_arm_velocity_example(self):
-        feedback = self.base_cyclic.RefreshFeedback()
-        qd = np.zeros(7)
-        for i in range(7):
-            qd[i] = np.radians(feedback.actuators[i].velocity)  # Kortex provides joint angles
-                                                                # in degrees for some reason
-        print("qd: %s" % qd)
-
     def calc_arm_torque_example(self):
         feedback = self.base_cyclic.RefreshFeedback()
         tau = np.zeros(7)
@@ -428,8 +451,70 @@ class KinovaStationHardwareInterface(LeafSystem):
     def get_camera_depth_image_example(self):
         pass
 
-    def CalcTestOutput(self, context, output):
-        print("time is %s" % context.get_time())
+    def CalcArmPosition(self, context, output):
+        """
+        Compute the current joint angles and send as output.
+        """
+        # Get feedback from the base, but only if we haven't already this timestep
+        t = context.get_time()
+        if (self.last_feedback_time != t): self.GetFeedback(t)
 
-        output.SetFromVector([3.14])
+        q = np.zeros(7)
+        for i in range(7):
+            q[i] = np.radians(self.feedback.actuators[i].position)  # Kortex provides joint angles
+                                                                    # in degrees for some reason
+        output.SetFromVector(q)
+
+    def CalcArmVelocity(self, context, output):
+        """
+        Compute the current joint velocities and send as output.
+        """
+        # Get feedback from the base, but only if we haven't already this timestep
+        t = context.get_time()
+        if (self.last_feedback_time != t): self.GetFeedback(t)
+
+        qd = np.zeros(7)
+        for i in range(7):
+            qd[i] = np.radians(self.feedback.actuators[i].velocity)  # Kortex provides joint angles
+                                                                     # in degrees for some reason
+        output.SetFromVector(qd)
+
+    def CalcArmTorque(self, context, output):
+        """
+        Compute the current joint torques and send as output.
+        """
+        # Get feedback from the base, but only if we haven't already this timestep
+        t = context.get_time()
+        if (self.last_feedback_time != t): self.GetFeedback(t)
+
+        tau = np.zeros(7)
+        for i in range(7):
+            tau[i] = np.radians(self.feedback.actuators[i].torque)  # in Nm
+
+        output.SetFromVector(tau)
+
+    def CalcEndEffectorPose(self, context, output):
+        pass
+
+    def CalcEndEffectorTwist(self, context, output):
+        pass
+
+    def CalcEndEffectorWrench(self, context, output):
+        pass
+
+    def CalcGripperPosition(self, context, output):
+        pass
+
+    def CalcGripperVelocity(self, context, output):
+        pass
+    
+    def DoCalcTimeDerivatives(self, context, continuous_state):
+        """
+        This method gets called every timestep. It's nominal purpose
+        is to update the (dummy) continuous variable for the simulator, 
+        but here we'll use it to parse inputs and send the corresponding 
+        commands to the robot. 
+        """
+        print("time is: %s" % context.get_time())
+
 

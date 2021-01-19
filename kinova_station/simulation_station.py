@@ -466,8 +466,8 @@ class GripperController(LeafSystem):
                 "applied_gripper_torque",
                 BasicVector(2),
                 self.CalcGripperTorque)
-        self.DeclareVectorOutputPort(
-                "measured_gripper_position",
+        self.DeclareVectorOutputPort(         # TODO: gripper position and velocity
+                "measured_gripper_position",  # commands should be 1d to match hardware
                 BasicVector(2),
                 self.CalcGripperPosition,
                 {self.time_ticket()}   # indicate that this doesn't depend on any inputs,

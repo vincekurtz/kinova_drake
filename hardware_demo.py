@@ -48,7 +48,7 @@ from kinova_station import KinovaStationHardwareInterface, EndEffectorTarget, Gr
 ########################### Parameters #################################
 
 # Make a plot of the system diagram for this example
-show_toplevel_diagram = False
+show_toplevel_diagram = True
 
 # Run the example
 run = True
@@ -67,9 +67,6 @@ gripper_command_type = GripperTarget.kPosition  # kPosition or kVelocity
 # execution.
 with KinovaStationHardwareInterface() as station:
    
-    # First thing: send to home position
-    station.go_home()
-
     # Set up the diagram builder
     builder = DiagramBuilder()
     builder.AddSystem(station)
@@ -77,8 +74,24 @@ with KinovaStationHardwareInterface() as station:
     # Connect simple controllers to inputs
 
     # Connect loggers to outputs
-    test_logger = LogOutput(station.GetOutputPort("test_output_port"), builder)
-    test_logger.set_name("test_logger")
+    q_logger = LogOutput(station.GetOutputPort("measured_arm_position"), builder)
+    q_logger.set_name("arm_position_logger")
+    qd_logger = LogOutput(station.GetOutputPort("measured_arm_velocity"), builder)
+    qd_logger.set_name("arm_velocity_logger")
+    tau_logger = LogOutput(station.GetOutputPort("measured_arm_torque"), builder)
+    tau_logger.set_name("arm_torque_logger")
+
+    pose_logger = LogOutput(station.GetOutputPort("measured_ee_pose"), builder)
+    pose_logger.set_name("pose_logger")
+    twist_logger = LogOutput(station.GetOutputPort("measured_ee_twist"), builder)
+    twist_logger.set_name("twist_logger")
+    wrench_logger = LogOutput(station.GetOutputPort("measured_ee_wrench"), builder)
+    wrench_logger.set_name("wrench_logger")
+
+    gp_logger = LogOutput(station.GetOutputPort("measured_gripper_position"), builder)
+    gp_logger.set_name("gripper_position_logger")
+    gv_logger = LogOutput(station.GetOutputPort("measured_gripper_velocity"), builder)
+    gv_logger.set_name("gripper_velocity_logger")
 
     # Build the system diagram
     diagram = builder.Build()
@@ -93,6 +106,9 @@ with KinovaStationHardwareInterface() as station:
 
     # Run the example
     if run:
+        # First thing: send to home position
+        station.go_home()
+
         # We use a simulator instance to run the example, but no actual simulation 
         # is being done: it's all on the hardware. 
         simulator = Simulator(diagram, diagram_context)
@@ -109,6 +125,7 @@ with KinovaStationHardwareInterface() as station:
         simulator.AdvanceTo(2.0)  # seconds
 
         # Print rate data
+        # TODO: print out target and actual rates in Hz
         print("")
         print("Target realtime rate: %s" % simulator.get_target_realtime_rate())
         print("Actual realtime rate: %s" % simulator.get_actual_realtime_rate())
