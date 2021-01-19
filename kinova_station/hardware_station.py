@@ -255,10 +255,63 @@ class KinovaStationHardwareInterface(Diagram):
         pass
 
     def send_gripper_position_target_example(self):
-        pass
+        # Create the GripperCommand we will send
+        gripper_command = Base_pb2.GripperCommand()
+        finger = gripper_command.gripper.finger.add()
+
+        # Close the gripper with position increments
+        print("Performing gripper test in position mode...")
+        gripper_command.mode = Base_pb2.GRIPPER_POSITION
+        position = 0.00
+        finger.finger_identifier = 1
+        while position < 1.0:
+            finger.value = position
+            print("Going to position {:0.2f}...".format(finger.value))
+            self.base.SendGripperCommand(gripper_command)
+            position += 0.1
+            time.sleep(1)
 
     def send_gripper_velocity_target_example(self):
-        pass
+        # Create the GripperCommand we will send
+        gripper_command = Base_pb2.GripperCommand()
+        finger = gripper_command.gripper.finger.add()
+
+        # Set speed to open gripper
+        print ("Opening gripper using speed command...")
+        gripper_command.mode = Base_pb2.GRIPPER_SPEED
+        finger.value = 0.1
+        self.base.SendGripperCommand(gripper_command)
+        gripper_request = Base_pb2.GripperRequest()
+
+        # Wait for reported position to be opened
+        gripper_request.mode = Base_pb2.GRIPPER_POSITION
+        while True:
+            gripper_measure = self.base.GetMeasuredGripperMovement(gripper_request)
+            if len (gripper_measure.finger):
+                print("Current position is : {0}".format(gripper_measure.finger[0].value))
+                if gripper_measure.finger[0].value < 0.01:
+                    break
+            else: # Else, no finger present in answer, end loop
+                break
+
+        # Set speed to close gripper
+        print ("Closing gripper using speed command...")
+        gripper_command.mode = Base_pb2.GRIPPER_SPEED
+        finger.value = -0.1
+        self.base.SendGripperCommand(gripper_command)
+
+        # Wait for reported speed to be 0
+        # Note: this is a nicer way of doing grasping, since we stop once an object is firmly
+        # in the gripper. 
+        gripper_request.mode = Base_pb2.GRIPPER_SPEED
+        while True:
+            gripper_measure = self.base.GetMeasuredGripperMovement(gripper_request)
+            if len (gripper_measure.finger):
+                print("Current speed is : {0}".format(gripper_measure.finger[0].value))
+                if gripper_measure.finger[0].value == 0.0:
+                    break
+            else: # Else, no finger present in answer, end loop
+                break
 
     def calc_arm_position_example(self):
         pass
@@ -280,10 +333,27 @@ class KinovaStationHardwareInterface(Diagram):
         pass
 
     def calc_gripper_position_example(self):
+        # Position is 0 full open, 1 fully closed
+        gripper_request = Base_pb2.GripperRequest()
+        gripper_request.mode = Base_pb2.GRIPPER_POSITION
+        gripper_measure = self.base.GetMeasuredGripperMovement(gripper_request)
+        
+        if len(gripper_measure.finger):
+            print("Current gripper position is : {0}".format(gripper_measure.finger[0].value))
+        else: # Else, no finger present in answer, end loop
+            print("No gripper detected")
         pass
 
     def calc_gripper_velocity_example(self):
-        pass
+        # Positive velocities close, negative velocities open
+        gripper_request = Base_pb2.GripperRequest()
+        gripper_request.mode = Base_pb2.GRIPPER_SPEED
+        gripper_measure = self.base.GetMeasuredGripperMovement(gripper_request)
+        
+        if len(gripper_measure.finger):
+            print("Current gripper speed is : {0}".format(gripper_measure.finger[0].value))
+        else: # Else, no finger present in answer, end loop
+            print("No gripper detected")
 
     def get_camera_rbg_image_example(self):
         pass
