@@ -314,13 +314,28 @@ class KinovaStationHardwareInterface(Diagram):
                 break
 
     def calc_arm_position_example(self):
-        pass
+        feedback = self.base_cyclic.RefreshFeedback()
+        q = np.zeros(7)
+        for i in range(7):
+            q[i] = np.radians(feedback.actuators[i].position)  # Kortex provides joint angles
+                                                               # in degrees for some reason
+        print("q: %s" % q)
 
     def calc_arm_velocity_example(self):
-        pass
+        feedback = self.base_cyclic.RefreshFeedback()
+        qd = np.zeros(7)
+        for i in range(7):
+            qd[i] = np.radians(feedback.actuators[i].velocity)  # Kortex provides joint angles
+                                                                # in degrees for some reason
+        print("qd: %s" % qd)
 
     def calc_arm_torque_example(self):
-        pass
+        feedback = self.base_cyclic.RefreshFeedback()
+        tau = np.zeros(7)
+        for i in range(7):
+            tau[i] = feedback.actuators[i].torque  # in Nm
+                                    
+        print("tau: %s" % tau)
 
     def calc_ee_pose_example(self):
         pass
