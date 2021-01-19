@@ -62,6 +62,9 @@ class KinovaStation(Diagram):
         # Which sort of gripper we're using. (Robotiq Hand-e, Robotiq 2F-85, or none)
         self.gripper_type = None   # None, hande, or 2f_85
 
+        # Whether or not we have a camera in the simulation
+        self.have_camera = False
+
     def Finalize(self):
         """
         Do some final setup stuff. Must be called after making modifications
@@ -183,6 +186,30 @@ class KinovaStation(Diagram):
                 wrench_calculator.get_output_port(),
                 "measured_ee_wrench")
 
+        # Configure camera
+        if self.has_camera:
+            
+            # Create the renderer and add to the scene graph
+            self.scene_graph.AddRenderer("kinova_camera_renderer", 
+                                         MakeRenderEngineVtk(RenderEngineVtkParams()))
+  
+            # Create and add the camera system
+            camera_parent_body_id = self.plant.GetBodyFrameIdIfExists(self.camera_parent_frame.body().index())
+            camera = self.builder.AddSystem(RgbdSensor(camera_parent_body_id,
+                                                        self.X_camera,
+                                                        self.color_camera,
+                                                        self.depth_camera))
+            camera.set_name("camera")
+
+            # Wire the camera to the scene graph
+            self.builder.Connect(
+                    self.scene_graph.get_query_output_port(),
+                    camera.query_object_input_port())
+           
+            # Send images as output 
+            #TODO
+
+
         # Build the diagram
         self.builder.BuildInto(self)
 
@@ -285,6 +312,32 @@ class KinovaStation(Diagram):
                 self.controller_plant.GetFrameByName("end_effector_link",self.controller_arm),
                 self.controller_plant.GetFrameByName("robotiq_arg2f_base_link", static_gripper), 
                 X_grip)
+
+    def AddCamera(self):
+        """
+        Add a simulated camera which is mounted to the robot end-effector, in roughly
+        the same position as it is on the real robot. 
+        """
+        # Set camera properites. This are just made-up properties that don't necessarily 
+        # correspond to the camera on the hardware (Intel Realsense D410).
+        renderer_name = "manip_station_renderer"
+        intrinsics = CameraInfo(width=848, height=480, fov_y=0.5)  # just a random guess
+        clipping = ClippingRange(0.01,3.0)
+        X_lens = RigidTransform()
+        camera_core = RenderCameraCore(renderer_name, intrinsics, clipping, X_lens)
+        depth_range = DepthRange(0.1, 2.0)
+
+        # Create the camera model
+        self.color_camera = ColorRenderCamera(camera_core, show_window=False)
+        self.depth_camera = DepthRenderCamera(camera_core, depth_range)
+        
+        # Set the frame and position of the camera
+        self.camera_parent_frame = self.plant.GetFrameByName("end_effector_link", self.arm)
+        self.X_camera = RigidTransform()         # position of camera in parent frame
+        self.X_camera.set_translation([0,0,0.1])
+
+        self.has_camera = True
+
         
     def AddArmWithHandeGripper(self):
         """

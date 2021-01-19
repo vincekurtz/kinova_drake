@@ -14,6 +14,7 @@ from kortex_api.SessionManager import SessionManager
 
 from kortex_api.autogen.client_stubs.DeviceConfigClientRpc import DeviceConfigClient
 from kortex_api.autogen.client_stubs.BaseClientRpc import BaseClient
+from kortex_api.autogen.client_stubs.BaseCyclicClientRpc import BaseCyclicClient
 
 from kortex_api.autogen.messages import DeviceConfig_pb2, Session_pb2, Base_pb2
 
@@ -88,6 +89,7 @@ class KinovaStationHardwareInterface(Diagram):
         # Create required services
         device_config = DeviceConfigClient(self.router)
         self.base = BaseClient(self.router)
+        self.base_cyclic = BaseCyclicClient(self.router)
 
         if self.base.GetArmState().active_state != Base_pb2.ARMSTATE_SERVOING_READY:
             print("")
@@ -188,11 +190,47 @@ class KinovaStationHardwareInterface(Diagram):
             print("Timeout while moving to home position")
         return finished
 
+    def send_ee_pose_example(self):
+        print("Starting Cartesian action movement ...")
+        action = Base_pb2.Action()
+        action.name = "Example Cartesian action movement"
+        action.application_data = ""
 
-    def send_twist_example(self):
-        
+        feedback = self.base_cyclic.RefreshFeedback()
+
+        cartesian_pose = action.reach_pose.target_pose
+        cartesian_pose.x = feedback.base.tool_pose_x          # (meters)
+        cartesian_pose.y = feedback.base.tool_pose_y - 0.1    # (meters)
+        cartesian_pose.z = feedback.base.tool_pose_z - 0.2    # (meters)
+        cartesian_pose.theta_x = feedback.base.tool_pose_theta_x # (degrees)
+        cartesian_pose.theta_y = feedback.base.tool_pose_theta_y # (degrees)
+        cartesian_pose.theta_z = feedback.base.tool_pose_theta_z # (degrees)
+
+        e = threading.Event()
+        notification_handle = self.base.OnNotificationActionTopic(
+            self.check_for_end_or_abort(e),
+            Base_pb2.NotificationOptions()
+        )
+
+        print("Executing action")
+        self.base.ExecuteAction(action)
+
+        print("Waiting for movement to finish ...")
+        TIMEOUT_DURATION = 20  # seconds
+        finished = e.wait(TIMEOUT_DURATION)
+        self.base.Unsubscribe(notification_handle)
+
+        if finished:
+            print("Cartesian movement completed")
+        else:
+            print("Timeout on action notification wait")
+        return finished
+
+        pass
+
+    def send_ee_twist_example(self):
         command = Base_pb2.TwistCommand()
-        command.reference_frame = Base_pb2.CARTESIAN_REFERENCE_FRAME_TOOL
+        command.reference_frame = Base_pb2.CARTESIAN_REFERENCE_FRAME_BASE  # is this consistent w/ the simulation?
         command.duration = 0
 
         twist = command.twist
@@ -212,4 +250,44 @@ class KinovaStationHardwareInterface(Diagram):
         print ("Stopping the robot...")
         self.base.Stop()
         time.sleep(1)
+
+    def send_ee_wrench_example(self):
+        pass
+
+    def send_gripper_position_target_example(self):
+        pass
+
+    def send_gripper_velocity_target_example(self):
+        pass
+
+    def calc_arm_position_example(self):
+        pass
+
+    def calc_arm_velocity_example(self):
+        pass
+
+    def calc_arm_torque_example(self):
+        pass
+
+    def calc_ee_pose_example(self):
+        pass
+
+    def calc_ee_twist_example(self):
+        pass
+
+    def calc_ee_wrench_example(self):
+        # Use measured joint torques + calculator in common.py, same as simulation
+        pass
+
+    def calc_gripper_position_example(self):
+        pass
+
+    def calc_gripper_velocity_example(self):
+        pass
+
+    def get_camera_rbg_image_example(self):
+        pass
+
+    def get_camera_depth_image_example(self):
+        pass
 

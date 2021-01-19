@@ -48,7 +48,7 @@ from kinova_station import KinovaStation, EndEffectorTarget, GripperTarget
 ########################### Parameters #################################
 
 # Make a plot of the inner workings of the station
-show_station_diagram = False
+show_station_diagram = True
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
@@ -67,6 +67,7 @@ gripper_command_type = GripperTarget.kPosition  # kPosition or kVelocity
 # Set up the kinova station
 station = KinovaStation(time_step=0.001)
 station.SetupSinglePegScenario(gripper_type="2f_85")
+station.AddCamera()
 station.Finalize()
 
 if show_station_diagram:
