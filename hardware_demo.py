@@ -47,12 +47,11 @@ from kinova_station import KinovaStationHardwareInterface, EndEffectorTarget, Gr
 
 ########################### Parameters #################################
 
-# Make a plot of the inner workings of the station
-show_station_diagram = False
-
-# Make a plot of the diagram for this example, where only the inputs
-# and outputs of the station are shown
+# Make a plot of the system diagram for this example
 show_toplevel_diagram = False
+
+# Run the example
+run = True
 
 # Choose which sort of commands are
 # sent to the arm and the gripper
@@ -62,6 +61,60 @@ gripper_command_type = GripperTarget.kPosition  # kPosition or kVelocity
 ########################################################################
 
 with KinovaStationHardwareInterface() as station:
-    #station.go_home("Home")
-    station.calc_ee_wrench_example()
+    # Note that unlike the simulation station, the hardware station needs
+    # to be used within a 'with' block. This is to allow for cleaner error
+    # handling, since the connection with the hardware needs to be closed 
+    # properly even if there is an error (e.g. KeyboardInterrupt) during
+    # execution.
+    
+    #station.go_home("Retract")
+    #station.calc_arm_position_example()
+
+    # Set up the diagram builder
+    builder = DiagramBuilder()
+    builder.AddSystem(station)
+
+    # Connect simple controllers to inputs
+
+    # Connect loggers to outputs
+    test_logger = LogOutput(station.GetOutputPort("test_output_port"), builder)
+    test_logger.set_name("test_logger")
+
+    # Build the system diagram
+    diagram = builder.Build()
+    diagram.set_name("toplevel_system_diagram")
+    diagram_context = diagram.CreateDefaultContext()
+
+    if show_toplevel_diagram:
+        # Make a plot of the system diagram
+        plt.figure()
+        plot_system_graphviz(diagram, max_depth=1)
+        plt.show()
+
+    # Run the example
+    if run:
+        # We use a simulator instance to run the example, but no actual simulation 
+        # is being done: it's all on the hardware. 
+        simulator = Simulator(diagram, diagram_context)
+        simulator.set_target_realtime_rate(1.0)
+        simulator.set_publish_every_time_step(True)  # not sure if this is correct
+
+        # We'll use a super simple integration scheme (since there is no state to update)
+        # and set the maximum timestep to correspond to roughly 40Hz 
+        integration_scheme = "explicit_euler"
+        time_step = 0.025
+
+        ResetIntegratorFromFlags(simulator, integration_scheme, time_step)
+
+        integrator = simulator.get_mutable_integrator()
+        print(integrator.get_fixed_step_mode())
+        print(integrator.get_maximum_step_size())
+
+        simulator.Initialize()
+        simulator.AdvanceTo(20.0)  # seconds
+
+        # Print rate data
+        print("")
+        print("Target realtime rate: %s" % simulator.get_target_realtime_rate())
+        print("Actual realtime rate: %s" % simulator.get_actual_realtime_rate())
 

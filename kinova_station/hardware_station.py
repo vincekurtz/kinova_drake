@@ -20,9 +20,9 @@ from kortex_api.autogen.messages import DeviceConfig_pb2, Session_pb2, Base_pb2
 
 
 
-class KinovaStationHardwareInterface(Diagram):
+class KinovaStationHardwareInterface(LeafSystem):
     """
-    A template system diagram for controlling a 7 DoF Kinova Gen3 robot, modeled 
+    A system block for controlling a 7 DoF Kinova Gen3 robot, modeled 
     after Drake's ManipulationStationHardwareInterface, but with the kinova 
     instead of a kuka arm.
    
@@ -57,11 +57,40 @@ class KinovaStationHardwareInterface(Diagram):
    
     """
     def __init__(self):
-        Diagram.__init__(self) 
-        self.set_name("kinova_manipulation_station_hardware_interface")
+        LeafSystem.__init__(self) 
+        self.set_name("kinova_hardware_interface")
 
-        # Set up controller model with robot arm + gripper mass only
-        self.arg = "hello"
+        # Declare input ports
+        self.ee_target_port = self.DeclareVectorInputPort(
+                                        "ee_target",
+                                        BasicVector(6))
+        self.ee_target_type_port = self.DeclareAbstractInputPort(
+                                        "ee_target_type",
+                                        AbstractValue.Make(EndEffectorTarget.kPose))
+        
+        self.gripper_target_port = self.DeclareVectorInputPort(
+                                             "gripper_target",
+                                             BasicVector(6))
+        self.gripper_target_type_port = self.DeclareAbstractInputPort(
+                                            "gripper_target_type",
+                                            AbstractValue.Make(GripperTarget.kPosition))
+
+        # Declare output ports
+        self.DeclareVectorOutputPort(
+                "test_output_port",
+                BasicVector(1),
+                self.CalcTestOutput)
+
+        # DEBUG
+        self.DeclareDiscreteState(np.zeros(1))
+
+    def DoCalcDiscreteVariableUpdates(self, context, events, discrete_state):
+        # DEBUG
+        print("in discrete variable updates")
+
+    def DoCalcTimeDerivatives(self, context, continuous_state):
+        # DEBUG
+        print("in continuous variable updates")
 
     def __enter__(self):
         """
@@ -121,12 +150,6 @@ class KinovaStationHardwareInterface(Diagram):
         self.transport.disconnect()
         print("Hardware Connection Closed.")
 
-    def Finalize(self):
-        pass
-
-        # Finalize the controller plant
-
-        # Set up input and output ports 
 
     def check_for_end_or_abort(self, e):
         """
@@ -402,8 +425,15 @@ class KinovaStationHardwareInterface(Diagram):
             print("No gripper detected")
 
     def get_camera_rbg_image_example(self):
+        # Note: can fetch camera params, see example 01-vision_intrinsics.py
         pass
 
     def get_camera_depth_image_example(self):
         pass
+
+    def CalcTestOutput(self, context, output):
+        print("hello world!")
+        print("time is %s" % context.get_time())
+
+        output.SetFromVector([3.14])
 
