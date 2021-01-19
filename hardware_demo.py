@@ -60,15 +60,15 @@ gripper_command_type = GripperTarget.kPosition  # kPosition or kVelocity
 
 ########################################################################
 
+# Note that unlike the simulation station, the hardware station needs
+# to be used within a 'with' block. This is to allow for cleaner error
+# handling, since the connection with the hardware needs to be closed 
+# properly even if there is an error (e.g. KeyboardInterrupt) during
+# execution.
 with KinovaStationHardwareInterface() as station:
-    # Note that unlike the simulation station, the hardware station needs
-    # to be used within a 'with' block. This is to allow for cleaner error
-    # handling, since the connection with the hardware needs to be closed 
-    # properly even if there is an error (e.g. KeyboardInterrupt) during
-    # execution.
-    
-    #station.go_home("Retract")
-    #station.calc_arm_position_example()
+   
+    # First thing: send to home position
+    station.go_home()
 
     # Set up the diagram builder
     builder = DiagramBuilder()
@@ -99,19 +99,14 @@ with KinovaStationHardwareInterface() as station:
         simulator.set_target_realtime_rate(1.0)
         simulator.set_publish_every_time_step(True)  # not sure if this is correct
 
-        # We'll use a super simple integration scheme (since there is no state to update)
+        # We'll use a super simple integration scheme (since we only update a dummy state)
         # and set the maximum timestep to correspond to roughly 40Hz 
         integration_scheme = "explicit_euler"
         time_step = 0.025
-
         ResetIntegratorFromFlags(simulator, integration_scheme, time_step)
 
-        integrator = simulator.get_mutable_integrator()
-        print(integrator.get_fixed_step_mode())
-        print(integrator.get_maximum_step_size())
-
         simulator.Initialize()
-        simulator.AdvanceTo(20.0)  # seconds
+        simulator.AdvanceTo(2.0)  # seconds
 
         # Print rate data
         print("")

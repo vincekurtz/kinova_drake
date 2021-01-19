@@ -81,16 +81,9 @@ class KinovaStationHardwareInterface(LeafSystem):
                 BasicVector(1),
                 self.CalcTestOutput)
 
-        # DEBUG
-        self.DeclareDiscreteState(np.zeros(1))
-
-    def DoCalcDiscreteVariableUpdates(self, context, events, discrete_state):
-        # DEBUG
-        print("in discrete variable updates")
-
-    def DoCalcTimeDerivatives(self, context, continuous_state):
-        # DEBUG
-        print("in continuous variable updates")
+        # Create a dummy continuous state so that the simulator
+        # knows not to just jump to the last possible timestep
+        self.DeclareContinuousState(1)
 
     def __enter__(self):
         """
@@ -150,6 +143,10 @@ class KinovaStationHardwareInterface(LeafSystem):
         self.transport.disconnect()
         print("Hardware Connection Closed.")
 
+    def DoCalcTimeDerivatives(self, context, continuous_state):
+        # The continuous state is just a dummy for the simulator,
+        # so nothing needs to be done here
+        pass
 
     def check_for_end_or_abort(self, e):
         """
@@ -432,7 +429,6 @@ class KinovaStationHardwareInterface(LeafSystem):
         pass
 
     def CalcTestOutput(self, context, output):
-        print("hello world!")
         print("time is %s" % context.get_time())
 
         output.SetFromVector([3.14])
