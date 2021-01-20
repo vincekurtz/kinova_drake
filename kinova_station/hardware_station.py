@@ -359,9 +359,21 @@ class KinovaStationHardwareInterface(LeafSystem):
 
     def get_camera_rbg_image_example(self):
         # Note: can fetch camera params, see example 01-vision_intrinsics.py
+        # The way to do this seems to be through GStreamer. 
+        # CLI command:
+        #
+        #   gst-launch-1.0 rtspsrc location=rtsp://192.168.1.10/color latency=30 ! rtph264depay ! avdec_h264 ! autovideosink
+        #
+        # (See Gen3 user manual)
         pass
 
     def get_camera_depth_image_example(self):
+        # The way to do this seems to be through GStreamer. 
+        # CLI command:
+        #
+        #   gst-launch-1.0 rtspsrc location=rtsp://192.168.1.10/depth latency=30 ! rtpgstdepay ! videoconvert ! autovideosink
+        #
+        # (See Gen3 user manual)
         pass
 
     def CalcArmPosition(self, context, output):
