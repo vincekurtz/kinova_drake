@@ -138,7 +138,7 @@ class BayesObserver(LeafSystem):
 
         if t >= 9:
             # Wait until we have a hold on the object to do any estimation
-            print(tau)
+            print("End-effector torque: %s" % tau)
 
             # Construct the regression matrix Y
             Y, b = single_body_regression_matrix(vd, v)

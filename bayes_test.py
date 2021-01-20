@@ -61,10 +61,10 @@ builder.Connect(
         station.GetOutputPort("measured_ee_pose"),
         observer.GetInputPort("ee_pose"))
 builder.Connect(
-        station.GetOutputPort("measured_ee_pose"),
+        station.GetOutputPort("measured_ee_twist"),
         observer.GetInputPort("ee_twist"))
 builder.Connect(
-        station.GetOutputPort("measured_ee_pose"),
+        station.GetOutputPort("measured_ee_wrench"),
         observer.GetInputPort("ee_wrench"))
 estimation_logger = LogOutput(observer.GetOutputPort("manipuland_parameter_estimate"), builder)
 
@@ -74,10 +74,10 @@ diagram.set_name("diagram")
 diagram_context = diagram.CreateDefaultContext()
 
 ## DEBUG
-#import matplotlib.pyplot as plt
-#plt.figure()
-#plot_system_graphviz(diagram, max_depth=1)
-#plt.show()
+import matplotlib.pyplot as plt
+plt.figure()
+plot_system_graphviz(diagram, max_depth=1)
+plt.show()
 
 # Set initial positions
 q0 = np.array([0.0, -0.2, 1, -0.8, 1, -0.1, 0.5])*np.pi
