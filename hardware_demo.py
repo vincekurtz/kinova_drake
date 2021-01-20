@@ -55,7 +55,7 @@ run = True
 
 # Choose which sort of commands are
 # sent to the arm and the gripper
-ee_command_type = EndEffectorTarget.kTwist      # kPose, kTwist, or kWrench
+ee_command_type = EndEffectorTarget.kPose      # kPose, kTwist, or kWrench
 gripper_command_type = GripperTarget.kPosition  # kPosition or kVelocity
 
 ########################################################################
@@ -73,7 +73,7 @@ with KinovaStationHardwareInterface() as station:
 
     # Connect end-effector target source
     if ee_command_type == EndEffectorTarget.kPose:
-        pose_des = np.array([np.pi,0.0,0.0, 0.6,0.0,0.2])
+        pose_des = np.array([0.6*np.pi,0.0,np.pi/2, 0.58,0.0,0.2])
         target_source = builder.AddSystem(ConstantVectorSource(pose_des))
     elif ee_command_type == EndEffectorTarget.kTwist:
         twist_des = np.array([0.3,0,0.0,0.0,0.0,0.05])

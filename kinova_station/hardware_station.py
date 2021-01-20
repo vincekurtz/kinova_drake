@@ -302,6 +302,39 @@ class KinovaStationHardwareInterface(LeafSystem):
         # Note: this API call takes about 25ms
         self.base.SendTwistCommand(command)
 
+    def send_pose_command(self, pose):
+        """
+        Convienience method for sending a target end-effector pose
+        to the robot. 
+
+        WARNING: unlike the twist and wrench commands, this command
+        stops everything and just moves the end-effector to the 
+        desired pose.
+        """
+        action = Base_pb2.Action()
+        action.name = "End-effector pose command"
+        action.application_data = ""
+        
+        cartesian_pose = action.reach_pose.target_pose
+        cartesian_pose.theta_x = np.degrees(pose[0])
+        cartesian_pose.theta_y = np.degrees(pose[1])
+        cartesian_pose.theta_z = np.degrees(pose[2])
+        cartesian_pose.x = pose[3]
+        cartesian_pose.y = pose[4]
+        cartesian_pose.z = pose[5]
+        
+        e = threading.Event()
+        notification_handle = self.base.OnNotificationActionTopic(
+            self.check_for_end_or_abort(e),
+            Base_pb2.NotificationOptions()
+        )
+
+        self.base.ExecuteAction(action)
+
+        TIMEOUT_DURATION = 20  # seconds
+        finished = e.wait(TIMEOUT_DURATION)
+        self.base.Unsubscribe(notification_handle)
+
     def send_ee_pose_example(self):
         print("Starting Cartesian action movement ...")
         action = Base_pb2.Action()
@@ -422,8 +455,6 @@ class KinovaStationHardwareInterface(LeafSystem):
         ee_twist[4] = self.feedback.base.tool_twist_linear_y
         ee_twist[5] = self.feedback.base.tool_twist_linear_z
 
-        print(ee_twist)
-
         output.SetFromVector(ee_twist)
 
     def CalcEndEffectorWrench(self, context, output):
@@ -496,10 +527,17 @@ class KinovaStationHardwareInterface(LeafSystem):
             raise RuntimeError("Invalid gripper target type %s" % gripper_target_type)
 
         if ee_target_type == EndEffectorTarget.kPose:
-            print("Pose target")
+            # WARNING: unlike the twist and wrench commands, this command
+            # stops everything and just moves the end-effector to the 
+            # desired pose.
+            self.send_pose_command(ee_target)
+
         elif ee_target_type == EndEffectorTarget.kTwist:
             self.send_twist_command(ee_target)
+
         elif ee_target_type == EndEffectorTarget.kWrench:
+            # WARNING: this method is experimental. Full torque control via a 1kHz
+            # UDP connection and C code is probably preferable for force control.
             print("Wrench target")
         else:
             raise RuntimeError("Invalid end-effector target type %s" % ee_target_type)
