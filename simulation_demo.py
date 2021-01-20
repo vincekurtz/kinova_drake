@@ -44,15 +44,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from kinova_station import KinovaStation, EndEffectorTarget, GripperTarget
+from observers.camera_viewer import CameraViewer
 
 ########################### Parameters #################################
 
 # Make a plot of the inner workings of the station
-show_station_diagram = True
+show_station_diagram = False
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
-show_toplevel_diagram = False
+show_toplevel_diagram = True
 
 # Run a quick simulation
 simulate = True
@@ -66,8 +67,8 @@ gripper_command_type = GripperTarget.kPosition  # kPosition or kVelocity
 
 # Set up the kinova station
 station = KinovaStation(time_step=0.001)
-station.SetupSinglePegScenario(gripper_type="2f_85")
-station.AddCamera()
+station.SetupSinglePegScenario(gripper_type="hande")
+station.AddCamera(show_window=True)
 station.Finalize()
 
 if show_station_diagram:
@@ -146,6 +147,14 @@ pose_logger.set_name("pose_logger")
 
 twist_logger = LogOutput(station.GetOutputPort("measured_ee_twist"), builder)
 twist_logger.set_name("twist_logger")
+
+# Camera observer allows us to view what the camera sees
+camera_viewer = builder.AddSystem(CameraViewer())
+camera_viewer.set_name("camera_viewer")
+
+builder.Connect(
+        station.GetOutputPort("camera_rgb_image"),
+        camera_viewer.GetInputPort("color_image"))
     
 # Build the system diagram
 diagram = builder.Build()
@@ -160,7 +169,8 @@ if show_toplevel_diagram:
 
 if simulate:
     # Set default arm positions
-    q0 = np.array([0.0, -np.pi/5, np.pi, -0.8*np.pi, np.pi, -0.1*np.pi, 0.5*np.pi])
+    #q0 = np.array([0.0, -np.pi/5, np.pi, -0.8*np.pi, np.pi, -0.1*np.pi, 0.5*np.pi])
+    q0 = np.array([0.0, -np.pi/5, np.pi, -0.8*np.pi, np.pi, 0.2*np.pi, 0.5*np.pi])  # to point camera at the peg
     station.SetArmPositions(diagram, diagram_context, q0)
 
     # Set starting position for any objects in the scene

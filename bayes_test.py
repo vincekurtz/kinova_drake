@@ -15,7 +15,7 @@ from observers.bayes_observer import BayesObserver
 # Set up the station
 time_step = 0.001
 station = KinovaStation(time_step=time_step)
-station.SetupSinglePegScenario(gripper_type="2f_85")
+station.SetupSinglePegScenario(gripper_type="hande")
 station.Finalize()
 
 # Set up the system diagram

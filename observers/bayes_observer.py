@@ -138,6 +138,7 @@ class BayesObserver(LeafSystem):
 
         if t >= 9:
             # Wait until we have a hold on the object to do any estimation
+            print(tau)
 
             # Construct the regression matrix Y
             Y, b = single_body_regression_matrix(vd, v)
@@ -147,7 +148,7 @@ class BayesObserver(LeafSystem):
             self.taus.append(tau)
 
             # Get a least-squares estimate of the parameters
-            self.CalcLSE(feasibility_constrained=False)
+            #self.CalcLSE(feasibility_constrained=False)
 
         output.SetFromVector(np.array([1]))
 

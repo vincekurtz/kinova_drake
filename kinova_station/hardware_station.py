@@ -475,7 +475,7 @@ class KinovaStationHardwareInterface(LeafSystem):
     
     def DoCalcTimeDerivatives(self, context, continuous_state):
         """
-        This method gets called every timestep. It's nominal purpose
+        This method gets called every timestep. Its nominal purpose
         is to update the (dummy) continuous variable for the simulator, 
         but here we'll use it to parse inputs and send the corresponding 
         commands to the robot. 
@@ -496,6 +496,16 @@ class KinovaStationHardwareInterface(LeafSystem):
             self.send_gripper_velocity_command(gripper_target[0])
         else:
             raise RuntimeError("Invalid gripper target type %s" % gripper_target_type)
+
+        if ee_target_type == EndEffectorTarget.kPose:
+            print("Pose target")
+        elif ee_target_type == EndEffectorTarget.kTwist:
+            print("Twist target")
+            print(ee_target)
+        elif ee_target_type == EndEffectorTarget.kWrench:
+            print("Wrench target")
+        else:
+            raise RuntimeError("Invalid end-effector target type %s" % ee_target_type)
 
         print("")
 

@@ -63,7 +63,7 @@ class KinovaStation(Diagram):
         self.gripper_type = None   # None, hande, or 2f_85
 
         # Whether or not we have a camera in the simulation
-        self.have_camera = False
+        self.has_camera = False
 
     def Finalize(self):
         """
@@ -189,10 +189,6 @@ class KinovaStation(Diagram):
         # Configure camera
         if self.has_camera:
             
-            # Create the renderer and add to the scene graph
-            self.scene_graph.AddRenderer("kinova_camera_renderer", 
-                                         MakeRenderEngineVtk(RenderEngineVtkParams()))
-  
             # Create and add the camera system
             camera_parent_body_id = self.plant.GetBodyFrameIdIfExists(self.camera_parent_frame.body().index())
             camera = self.builder.AddSystem(RgbdSensor(camera_parent_body_id,
@@ -207,7 +203,12 @@ class KinovaStation(Diagram):
                     camera.query_object_input_port())
            
             # Send images as output 
-            #TODO
+            self.builder.ExportOutput(
+                    camera.color_image_output_port(),
+                    "camera_rgb_image")
+            self.builder.ExportOutput(
+                    camera.depth_image_32F_output_port(),
+                    "camera_depth_image")
 
 
         # Build the diagram
@@ -313,28 +314,32 @@ class KinovaStation(Diagram):
                 self.controller_plant.GetFrameByName("robotiq_arg2f_base_link", static_gripper), 
                 X_grip)
 
-    def AddCamera(self):
+    def AddCamera(self, show_window=False):
         """
         Add a simulated camera which is mounted to the robot end-effector, in roughly
         the same position as it is on the real robot. 
         """
+        # Add renderer to scene graph
+        renderer_name = "kinova_camera_renderer"
+        self.scene_graph.AddRenderer(renderer_name, 
+                                     MakeRenderEngineVtk(RenderEngineVtkParams()))
+  
         # Set camera properites. This are just made-up properties that don't necessarily 
         # correspond to the camera on the hardware (Intel Realsense D410).
-        renderer_name = "manip_station_renderer"
-        intrinsics = CameraInfo(width=848, height=480, fov_y=0.5)  # just a random guess
+        intrinsics = CameraInfo(width=640, height=480, fov_y=1.5)  # just a random guess
         clipping = ClippingRange(0.01,3.0)
         X_lens = RigidTransform()
         camera_core = RenderCameraCore(renderer_name, intrinsics, clipping, X_lens)
         depth_range = DepthRange(0.1, 2.0)
 
         # Create the camera model
-        self.color_camera = ColorRenderCamera(camera_core, show_window=False)
+        self.color_camera = ColorRenderCamera(camera_core, show_window=show_window)
         self.depth_camera = DepthRenderCamera(camera_core, depth_range)
         
         # Set the frame and position of the camera
         self.camera_parent_frame = self.plant.GetFrameByName("end_effector_link", self.arm)
         self.X_camera = RigidTransform()         # position of camera in parent frame
-        self.X_camera.set_translation([0,0,0.1])
+        self.X_camera.set_translation([0,-0.1,0.0])
 
         self.has_camera = True
 
