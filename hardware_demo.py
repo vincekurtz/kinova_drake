@@ -76,7 +76,7 @@ with KinovaStationHardwareInterface() as station:
         pose_des = np.array([np.pi,0.0,0.0, 0.6,0.0,0.2])
         target_source = builder.AddSystem(ConstantVectorSource(pose_des))
     elif ee_command_type == EndEffectorTarget.kTwist:
-        twist_des = np.array([0,0,0.0,0.0,0.0,0.0])
+        twist_des = np.array([0.3,0,0.0,0.0,0.0,0.05])
         target_source = builder.AddSystem(ConstantVectorSource(twist_des))
     elif ee_command_type == EndEffectorTarget.kWrench:
         wrench_des = np.array([0,0,0.0,0.1,0.0,0.0])

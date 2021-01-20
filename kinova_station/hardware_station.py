@@ -282,6 +282,26 @@ class KinovaStationHardwareInterface(LeafSystem):
                 mode = Base_pb2.GRIPPER_SPEED,
                 command = velocity)
 
+    def send_twist_command(self, cmd_twist):
+        """
+        Convienience method for sending an end-effector twist command
+        to the robot. 
+        """
+        command = Base_pb2.TwistCommand()
+        command.reference_frame = Base_pb2.CARTESIAN_REFERENCE_FRAME_BASE
+        command.duration = 0
+
+        twist = command.twist
+        twist.angular_x = np.degrees(cmd_twist[0])
+        twist.angular_y = np.degrees(cmd_twist[1])
+        twist.angular_z = np.degrees(cmd_twist[2])
+        twist.linear_x = cmd_twist[3]
+        twist.linear_y = cmd_twist[4]
+        twist.linear_z = cmd_twist[5]
+
+        # Note: this API call takes about 25ms
+        self.base.SendTwistCommand(command)
+
     def send_ee_pose_example(self):
         print("Starting Cartesian action movement ...")
         action = Base_pb2.Action()
@@ -319,29 +339,6 @@ class KinovaStationHardwareInterface(LeafSystem):
         return finished
 
         pass
-
-    def send_ee_twist_example(self):
-        command = Base_pb2.TwistCommand()
-        command.reference_frame = Base_pb2.CARTESIAN_REFERENCE_FRAME_BASE  # is this consistent w/ the simulation?
-        command.duration = 0
-
-        twist = command.twist
-        twist.linear_x = 0
-        twist.linear_y = 0.03
-        twist.linear_z = 0
-        twist.angular_x = 0
-        twist.angular_y = 0
-        twist.angular_z = 5
-
-        print ("Sending the twist command for 5 seconds...")
-        self.base.SendTwistCommand(command)
-
-        # Let time for twist to be executed
-        time.sleep(5)
-
-        print ("Stopping the robot...")
-        self.base.Stop()
-        time.sleep(1)
 
     def send_ee_wrench_example(self):
         pass
@@ -425,6 +422,8 @@ class KinovaStationHardwareInterface(LeafSystem):
         ee_twist[4] = self.feedback.base.tool_twist_linear_y
         ee_twist[5] = self.feedback.base.tool_twist_linear_z
 
+        print(ee_twist)
+
         output.SetFromVector(ee_twist)
 
     def CalcEndEffectorWrench(self, context, output):
@@ -470,7 +469,6 @@ class KinovaStationHardwareInterface(LeafSystem):
         gripper_request.mode = Base_pb2.GRIPPER_SPEED
         gripper_measure = self.base.GetMeasuredGripperMovement(gripper_request)
 
-        print([gripper_measure.finger[0].value])
         output.SetFromVector([gripper_measure.finger[0].value])
     
     def DoCalcTimeDerivatives(self, context, continuous_state):
@@ -500,8 +498,7 @@ class KinovaStationHardwareInterface(LeafSystem):
         if ee_target_type == EndEffectorTarget.kPose:
             print("Pose target")
         elif ee_target_type == EndEffectorTarget.kTwist:
-            print("Twist target")
-            print(ee_target)
+            self.send_twist_command(ee_target)
         elif ee_target_type == EndEffectorTarget.kWrench:
             print("Wrench target")
         else:

@@ -31,6 +31,7 @@ class CameraViewer(LeafSystem):
         self.color_image_port = self.DeclareAbstractInputPort(
                 "color_image",
                 AbstractValue.Make(sample_color_image))
+        # TODO: include depth image
 
         # Dummy continuous variable so we update at each timestep
         self.DeclareContinuousState(1)
@@ -45,4 +46,4 @@ class CameraViewer(LeafSystem):
 
         color_image = self.color_image_port.Eval(context)
 
-        print(color_image)
+        # TODO: do some sort of visualization, maybe with matplotlib
