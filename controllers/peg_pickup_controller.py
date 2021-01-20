@@ -77,7 +77,7 @@ class PegPickupController(LeafSystem):
                 "grasp" : {"target_pose" : np.array([-np.pi/2,0,0, 0.5,-0.12,0.5]),
                                "start_time" : 8,
                                "end_time" : np.inf,
-                               "gripper_closed" : False },
+                               "gripper_closed" : True },
                 #"move" : {"target_pose" : np.array([-np.pi/2,0,np.pi/2, 0.0,0.5,0.5]),
                 #               "start_time" : 10,
                 #               "end_time" : 15,

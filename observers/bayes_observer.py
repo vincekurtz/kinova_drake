@@ -136,21 +136,48 @@ class BayesObserver(LeafSystem):
         vd = (v - self.v_last)/self.dt
         self.v_last = v
 
-        if t >= 9:
+        m_hat = 0
+
+        #if t >= 9:
+        #    # Wait until we have a hold on the object to do any estimation
+        #    print("End-effector torque: %s" % tau)
+
+        #    # Construct the regression matrix Y
+        #    Y, b = single_body_regression_matrix(vd, v)
+
+        #    # Record regression matrix and applied wrenches
+        #    self.Ys.append(Y)
+        #    self.taus.append(tau)
+
+        #    # Get a least-squares estimate of the parameters
+        #    #self.CalcLSE(feasibility_constrained=False)
+
+        # Do a simple estimation of the mass of the held object
+        if t >= 10:
             # Wait until we have a hold on the object to do any estimation
-            print("End-effector torque: %s" % tau)
+            # Also need to wait until object isn't moving, since we're not
+            # considering any sort of inertia effects
 
-            # Construct the regression matrix Y
-            Y, b = single_body_regression_matrix(vd, v)
+            # We'll do regression with 
+            #
+            #       f = ma
+            #     f_z+mg = ma
+            #       (a-g)*m = f_z
+            #       
+            f_z = tau[5]  # force applied in z-direction on end-effector
+            g = -9.81     # acceleration due to gravity
+            a = vd[5]     # acceleration of end-effector in z direction
 
-            # Record regression matrix and applied wrenches
-            self.Ys.append(Y)
-            self.taus.append(tau)
+            # Get a point estimate of the mass based only on the current data 
+            # (basically least-squares)
+            m_hat = f_z/(a-g)
 
-            # Get a least-squares estimate of the parameters
-            #self.CalcLSE(feasibility_constrained=False)
+            # Perform a Bayesian estimate
+            #m_hat = self.DoBayesianUpdate(Y=
+            
+            print(m_hat)
 
-        output.SetFromVector(np.array([1]))
+        output.SetFromVector([m_hat])
 
 
 def single_body_regression_matrix(a,v):

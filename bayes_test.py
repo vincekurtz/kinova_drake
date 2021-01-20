@@ -7,7 +7,10 @@
 ##
 
 import numpy as np
+import matplotlib.pyplot as plt
+
 from pydrake.all import *
+
 from kinova_station import *
 from controllers.peg_pickup_controller import PegPickupController
 from observers.bayes_observer import BayesObserver
@@ -66,6 +69,7 @@ builder.Connect(
 builder.Connect(
         station.GetOutputPort("measured_ee_wrench"),
         observer.GetInputPort("ee_wrench"))
+
 estimation_logger = LogOutput(observer.GetOutputPort("manipuland_parameter_estimate"), builder)
 
 # Set up system diagram
@@ -74,10 +78,9 @@ diagram.set_name("diagram")
 diagram_context = diagram.CreateDefaultContext()
 
 ## DEBUG
-import matplotlib.pyplot as plt
-plt.figure()
-plot_system_graphviz(diagram, max_depth=1)
-plt.show()
+#plt.figure()
+#plot_system_graphviz(diagram, max_depth=1)
+#plt.show()
 
 # Set initial positions
 q0 = np.array([0.0, -0.2, 1, -0.8, 1, -0.1, 0.5])*np.pi
@@ -90,5 +93,20 @@ simulator.set_target_realtime_rate(10.0)
 simulator.set_publish_every_time_step(False)
 
 # Run simulation
-simulator.Initialize()
-simulator.AdvanceTo(20)
+try:
+    simulator.Initialize()
+    simulator.AdvanceTo(20)
+except KeyboardInterrupt:
+    pass
+
+# Make plot of estimate
+t = estimation_logger.sample_times()
+m_hat = estimation_logger.data().T
+
+plt.plot(t,m_hat)
+plt.xlabel("Time (s)")
+plt.ylabel("Estimated Mass (kg)")
+plt.gca().axhline(0.028, color="grey", linestyle="--", label="Ground Truth")
+plt.xlim(left=10)
+
+plt.show()
