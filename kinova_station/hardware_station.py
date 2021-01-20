@@ -282,26 +282,6 @@ class KinovaStationHardwareInterface(LeafSystem):
                 mode = Base_pb2.GRIPPER_SPEED,
                 command = velocity)
 
-    def send_twist_command(self, cmd_twist):
-        """
-        Convienience method for sending an end-effector twist command
-        to the robot. 
-        """
-        command = Base_pb2.TwistCommand()
-        command.reference_frame = Base_pb2.CARTESIAN_REFERENCE_FRAME_BASE
-        command.duration = 0
-
-        twist = command.twist
-        twist.angular_x = np.degrees(cmd_twist[0])
-        twist.angular_y = np.degrees(cmd_twist[1])
-        twist.angular_z = np.degrees(cmd_twist[2])
-        twist.linear_x = cmd_twist[3]
-        twist.linear_y = cmd_twist[4]
-        twist.linear_z = cmd_twist[5]
-
-        # Note: this API call takes about 25ms
-        self.base.SendTwistCommand(command)
-
     def send_pose_command(self, pose):
         """
         Convienience method for sending a target end-effector pose
@@ -334,47 +314,48 @@ class KinovaStationHardwareInterface(LeafSystem):
         TIMEOUT_DURATION = 20  # seconds
         finished = e.wait(TIMEOUT_DURATION)
         self.base.Unsubscribe(notification_handle)
+    
+    def send_twist_command(self, cmd_twist):
+        """
+        Convienience method for sending an end-effector twist command
+        to the robot. 
+        """
+        command = Base_pb2.TwistCommand()
+        command.reference_frame = Base_pb2.CARTESIAN_REFERENCE_FRAME_BASE
+        command.duration = 0
 
-    def send_ee_pose_example(self):
-        print("Starting Cartesian action movement ...")
-        action = Base_pb2.Action()
-        action.name = "Example Cartesian action movement"
-        action.application_data = ""
+        twist = command.twist
+        twist.angular_x = np.degrees(cmd_twist[0])
+        twist.angular_y = np.degrees(cmd_twist[1])
+        twist.angular_z = np.degrees(cmd_twist[2])
+        twist.linear_x = cmd_twist[3]
+        twist.linear_y = cmd_twist[4]
+        twist.linear_z = cmd_twist[5]
 
-        feedback = self.base_cyclic.RefreshFeedback()
+        # Note: this API call takes about 25ms
+        self.base.SendTwistCommand(command)
 
-        cartesian_pose = action.reach_pose.target_pose
-        cartesian_pose.x = feedback.base.tool_pose_x          # (meters)
-        cartesian_pose.y = feedback.base.tool_pose_y - 0.1    # (meters)
-        cartesian_pose.z = feedback.base.tool_pose_z - 0.2    # (meters)
-        cartesian_pose.theta_x = feedback.base.tool_pose_theta_x # (degrees)
-        cartesian_pose.theta_y = feedback.base.tool_pose_theta_y # (degrees)
-        cartesian_pose.theta_z = feedback.base.tool_pose_theta_z # (degrees)
+    def send_wrench_command(self, cmd_wrench):
+        """
+        Convienience method for sending an end-effector wrench command
+        to the robot. 
+        
+        WARNING: this method is experimental. Force control should probably
+        be done with full torque-control over a 1kHz control loop (UDP) in C++. 
+        """
+        command = Base_pb2.WrenchCommand()
+        command.reference_frame = Base_pb2.CARTESIAN_REFERENCE_FRAME_BASE
+        command.duration = 0
 
-        e = threading.Event()
-        notification_handle = self.base.OnNotificationActionTopic(
-            self.check_for_end_or_abort(e),
-            Base_pb2.NotificationOptions()
-        )
+        wrench = command.wrench
+        wrench.torque_x = cmd_wrench[0]
+        wrench.torque_y = cmd_wrench[1]
+        wrench.torque_z = cmd_wrench[2]
+        wrench.force_x = cmd_wrench[3]
+        wrench.force_y = cmd_wrench[4]
+        wrench.force_z = cmd_wrench[5]
 
-        print("Executing action")
-        self.base.ExecuteAction(action)
-
-        print("Waiting for movement to finish ...")
-        TIMEOUT_DURATION = 20  # seconds
-        finished = e.wait(TIMEOUT_DURATION)
-        self.base.Unsubscribe(notification_handle)
-
-        if finished:
-            print("Cartesian movement completed")
-        else:
-            print("Timeout on action notification wait")
-        return finished
-
-        pass
-
-    def send_ee_wrench_example(self):
-        pass
+        self.base.SendWrenchCommand(command)
 
     def get_camera_rbg_image_example(self):
         # Note: can fetch camera params, see example 01-vision_intrinsics.py
@@ -538,10 +519,8 @@ class KinovaStationHardwareInterface(LeafSystem):
         elif ee_target_type == EndEffectorTarget.kWrench:
             # WARNING: this method is experimental. Full torque control via a 1kHz
             # UDP connection and C code is probably preferable for force control.
-            print("Wrench target")
+            self.send_wrench_command(ee_target)
         else:
             raise RuntimeError("Invalid end-effector target type %s" % ee_target_type)
-
-        print("")
 
 
