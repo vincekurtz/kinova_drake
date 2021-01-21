@@ -25,15 +25,20 @@ class BayesObserver(LeafSystem):
                             ---------------------------------
     
     """
-    def __init__(self, plant, time_step):
+    def __init__(self, time_step, gripper="hande"):
         LeafSystem.__init__(self)
 
         self.dt = time_step
 
-        # Store an internal model of the full arm + gripper mass
-        self.plant = plant
-        self.context = self.plant.CreateDefaultContext()
-        self.ee_frame = self.plant.GetFrameByName("end_effector_link")
+        # Create an internal model of the plant (arm + gripper + object)
+        # with symbolic values for unknown parameters
+        self.plant, self.context = self.CreateSymbolicPlant(gripper)
+
+        print(self.plant.num_positions())
+        print(self.plant.num_velocities())
+
+        print(type(self.plant))
+        print(type(self.context))
 
         # Declare input ports
         self.q_port = self.DeclareVectorInputPort(
@@ -68,6 +73,46 @@ class BayesObserver(LeafSystem):
 
         # Store covariance
         self.cov = 0.0
+
+    def CreateSymbolicPlant(self, gripper):
+        assert gripper=="hande", "2F-85 gripper not implemented yet"
+
+        plant = MultibodyPlant(1.0)  # timestep not used
+
+        # Add the arm
+        arm_urdf = "./models/gen3_7dof/urdf/GEN3_URDF_V12.urdf"
+        arm = Parser(plant=plant).AddModelFromFile(arm_urdf, "arm")
+
+        plant.WeldFrames(plant.world_frame(),
+                         plant.GetFrameByName("base_link", arm))
+
+        # Add the gripper
+        gripper_urdf = "./models/hande_gripper/urdf/robotiq_hande_static.urdf"
+        gripper = Parser(plant=plant).AddModelFromFile(gripper_urdf, "gripper")
+
+        plant.WeldFrames(plant.GetFrameByName("end_effector_link", arm),
+                         plant.GetFrameByName("hande_base_link", gripper))
+
+        # Add the object we're holding
+        peg_urdf = "./models/manipulands/peg.sdf"
+        peg = Parser(plant=plant).AddModelFromFile(peg_urdf,"peg")
+
+        X_peg = RigidTransform()
+        X_peg.set_translation([0,0,0.13])
+        X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,0,np.pi/2])))
+        plant.WeldFrames(plant.GetFrameByName("end_effector_link",arm),
+                         plant.GetFrameByName("base_link", peg), X_peg)
+
+        # Make unknown parameters symbolic
+        plant.Finalize()
+        plant_sym = plant.ToSymbolic()
+        context_sym = plant_sym.CreateDefaultContext()
+
+        m = Variable("m")
+        peg_sym = plant_sym.GetBodyByName("base_link", peg)
+        peg_sym.SetMass(context_sym, m)     # see also: SetSpatialInertiaInBodyFrame
+
+        return plant_sym, context_sym
 
     def DoBayesianInference(self, X, y, n):
         """

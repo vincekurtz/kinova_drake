@@ -71,7 +71,7 @@ builder.Connect(
 
 
 # Add bayesian inference system (records wrenches, estimates inertial parameters)
-observer = builder.AddSystem(BayesObserver(plant=station.controller_plant, time_step=time_step))
+observer = builder.AddSystem(BayesObserver(time_step=time_step))
 observer.set_name("bayesian_observer")
 
 builder.Connect(
