@@ -122,7 +122,7 @@ class BayesObserver(LeafSystem):
         self.plant.SetPositions(self.context, q)
         self.plant.SetVelocities(self.context, qd)
 
-        object_position_in_ee_frame = np.array([0,0.05,0.05])
+        object_position_in_ee_frame = np.array([0,0.0,0.0])
         J_ee = self.plant.CalcJacobianSpatialVelocity(self.context,
                                                       JacobianWrtVariable.kV,
                                                       self.ee_frame,
@@ -145,10 +145,6 @@ class BayesObserver(LeafSystem):
                                                          self.ee_frame,
                                                          object_position_in_ee_frame,
                                                          self.plant.world_frame())
-        print(ee_position)
-        print(object_position)
-        print("")
-
 
         J_ee = J_ee[5,:]  # just consider velocity in z direction
         Jdqd_ee = Jdqd_ee[5]

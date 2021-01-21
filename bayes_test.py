@@ -18,7 +18,18 @@ from observers.bayes_observer import BayesObserver
 # Set up the station
 time_step = 0.002
 station = KinovaStation(time_step=time_step)
-station.SetupSinglePegScenario(gripper_type="hande")
+station.AddGround()
+station.AddArmWithHandeGripper()
+
+# Weld peg to the end-effector
+peg_urdf = "./models/manipulands/peg.sdf"
+peg = Parser(plant=station.plant).AddModelFromFile(peg_urdf,"peg")
+
+station.plant.WeldFrames(station.plant.GetFrameByName("end_effector_link",station.arm),
+                         station.plant.GetFrameByName("base_link", peg))
+
+#station.SetupSinglePegScenario(gripper_type="hande")
+station.ConnectToDrakeVisualizer()
 station.Finalize()
 
 # Set up the system diagram
@@ -102,19 +113,19 @@ try:
 except KeyboardInterrupt:
     pass
 
-# Make plot of estimate
-t = estimation_logger.sample_times()
-m_hat = estimation_logger.data().flatten()
-m_var = covariance_logger.data().flatten()
-
-plt.plot(t,m_hat, label="Estimate")
-plt.fill_between(t, m_hat-m_var, m_hat+m_var, label="Variance", color="green",alpha=0.5)
-plt.gca().axhline(0.028, color="grey", linestyle="--", label="Ground Truth")
-
-plt.xlabel("Time (s)")
-plt.ylabel("Estimated Mass (kg)")
-
-plt.xlim(left=10)
-plt.legend()
-
-plt.show()
+## Make plot of estimate
+#t = estimation_logger.sample_times()
+#m_hat = estimation_logger.data().flatten()
+#m_var = covariance_logger.data().flatten()
+#
+#plt.plot(t,m_hat, label="Estimate")
+#plt.fill_between(t, m_hat-m_var, m_hat+m_var, label="Variance", color="green",alpha=0.5)
+#plt.gca().axhline(0.028, color="grey", linestyle="--", label="Ground Truth")
+#
+#plt.xlabel("Time (s)")
+#plt.ylabel("Estimated Mass (kg)")
+#
+#plt.xlim(left=10)
+#plt.legend()
+#
+#plt.show()
