@@ -66,6 +66,9 @@ class BayesObserver(LeafSystem):
         # Amount of data to store at any given time
         self.batch_size = np.inf
 
+        # Store covariance
+        self.cov = 0.0
+
     def DoBayesianInference(self, X, y, n):
         """
         Perform Bayesian linear regression to estimate theta, where
@@ -73,9 +76,21 @@ class BayesObserver(LeafSystem):
             y = X*theta + epsilon
 
         """
-        theta_hat = 1/(X.T@X) * X.T@y
+        k = 1   # number of parameters
 
-        print(theta_hat)
+        theta_hat = 1/(X.T@X) * X.T@y  # Least squares estimate (mean)
+        SigmaN = 1/(X.T@X)               # Covariance excluding measurement noise
+
+        # Posterior distribution of measurement noise variance (scaled inverse chi-squared)
+        nu = n-k
+        s_squared = 1/nu*(y-X*theta_hat).T@(y-X*theta_hat)
+
+        # Maximum likelihood estimate of measurement noise variance
+        sigma_hat_squared = nu*s_squared / (nu + 2)
+
+        # Covariance inlcuding measurement noise
+        self.cov = sigma_hat_squared * SigmaN
+
 
         return theta_hat
 
@@ -83,8 +98,7 @@ class BayesObserver(LeafSystem):
         """
         Send the current covariance of the parameter estimate as output.
         """
-        cov = [0]
-        output.SetFromVector(cov)
+        output.SetFromVector([self.cov])
 
     def CalcParameterEstimate(self, context, output):
         """
@@ -139,12 +153,19 @@ class BayesObserver(LeafSystem):
             A = J_ee.T*y     # A*theta = b
             b = tau - tau_g
 
-            self.As.append(A)
-            self.bs.append(b)
+            # Simple point estimate based on this singlular data point
+            m_hat = 1/(A.T@A) * A.T@b
 
-            m_hat = self.DoBayesianInference(np.hstack(self.As), 
-                                             np.hstack(self.bs),
-                                             len(self.As))
+
+            ## Full Bayesian inference (TODO: once point estimate is reasonable
+            ##                                while end-effector is moving)
+            #self.As.append(A)
+            #self.bs.append(b)
+
+            #if len(self.As) > 2:  # avoid singularity
+            #    m_hat = self.DoBayesianInference(np.hstack(self.As), 
+            #                                     np.hstack(self.bs),
+            #                                     len(self.As))
 
         # Get rid of old data
         if len(self.As) > self.batch_size:
