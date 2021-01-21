@@ -71,6 +71,9 @@ builder.Connect(
         observer.GetInputPort("ee_wrench"))
 
 estimation_logger = LogOutput(observer.GetOutputPort("manipuland_parameter_estimate"), builder)
+estimation_logger.set_name("estimation_logger")
+covariance_logger = LogOutput(observer.GetOutputPort("manipuland_parameter_covariance"), builder)
+covariance_logger.set_name("covariance_logger")
 
 # Set up system diagram
 diagram = builder.Build()
@@ -101,12 +104,16 @@ except KeyboardInterrupt:
 
 # Make plot of estimate
 t = estimation_logger.sample_times()
-m_hat = estimation_logger.data().T
+m_hat = estimation_logger.data().flatten()
+m_var = covariance_logger.data().flatten()
 
 plt.plot(t,m_hat, label="Estimate")
+plt.fill_between(t, m_hat-m_var, m_hat+m_var, label="Variance", color="green",alpha=0.5)
+plt.gca().axhline(0.028, color="grey", linestyle="--", label="Ground Truth")
+
 plt.xlabel("Time (s)")
 plt.ylabel("Estimated Mass (kg)")
-plt.gca().axhline(0.028, color="grey", linestyle="--", label="Ground Truth")
+
 plt.xlim(left=10)
 plt.legend()
 

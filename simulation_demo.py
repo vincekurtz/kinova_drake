@@ -49,7 +49,7 @@ from observers.camera_viewer import CameraViewer
 ########################### Parameters #################################
 
 # Make a plot of the inner workings of the station
-show_station_diagram = False
+show_station_diagram = True
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
@@ -178,6 +178,21 @@ if include_camera:
     builder.Connect(
             station.GetOutputPort("camera_depth_image"),
             point_cloud_generator.depth_image_input_port())
+
+    # TODO: connect camera pose to point cloud generator
+    X_camera = RigidTransform()       # Camera fixed to arm is not supported by the meshcat
+    X_camera.set_translation([0,1,1]) # visualizer, so we'll just move the point cloud to
+                                      # the side so it's not overlapping with the scene
+    X_camera.set_rotation(RotationMatrix(RollPitchYaw([-0.8*np.pi,0,0])))
+
+    camera_pose_source = builder.AddSystem(
+            ConstantValueSource(AbstractValue.Make(X_camera)))
+    camera_pose_source.set_name("camera_transform")
+
+    builder.Connect(
+            camera_pose_source.get_output_port(),
+            point_cloud_generator.GetInputPort("camera_pose"))
+
 
     # Visualize the point cloud with meshcat
     meshcat_point_cloud = builder.AddSystem(MeshcatPointCloudVisualizer(station.meshcat))

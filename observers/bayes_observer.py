@@ -18,7 +18,7 @@ class BayesObserver(LeafSystem):
                     |         BayesObserver         |
     ee_twist -----> |                               | ------> manipuland_parameter_estimate
                     |                               |
-    ee_wrench ----> |                               |
+    ee_wrench ----> |                               | ------> manipuland_parameter_covariance
                     |                               |
                     |                               |
                     |                               |
@@ -51,6 +51,10 @@ class BayesObserver(LeafSystem):
                 "manipuland_parameter_estimate",
                 BasicVector(1),
                 self.CalcParameterEstimate)
+        self.DeclareVectorOutputPort(
+                "manipuland_parameter_covariance",
+                BasicVector(1),
+                self.SendParameterCovariance)
 
         # Store last end-effector velocity for computing accelerations
         self.v_last = np.zeros(6)
@@ -122,7 +126,7 @@ class BayesObserver(LeafSystem):
 
         if res.is_success():
             theta_hat = res.GetSolution(theta)
-            print(theta_hat[0])
+            #print(theta_hat[0])
 
     def DoBayesianUpdate(self, Y, F):
         """
@@ -162,15 +166,27 @@ class BayesObserver(LeafSystem):
 
         # Update prior for next time
         self.mu_0 = mu_n
-        self.Sigma_0 = Sigma_n
+        #self.Sigma_0 = Sigma_n
 
-        self.a_0 = an
-        self.b_0 = bn
+        #self.a_0 = an
+        #self.b_0 = bn
 
         # Return MAP estimate
         return mu_n
         
+    def SendParameterCovariance(self, context, output):
+        """
+        Send the current covariance of the parameter estimate as output.
+        Recall that
 
+            P(theta | sigma_epsilon ) ~ N(mu, sigma_epsilon*Sigma)
+        """
+
+        sigma_epsilon_mle = self.b_0 / (self.a_0 + 1)  # Mode of inverse gamma distribution
+
+        cov = sigma_epsilon_mle * self.Sigma_0
+
+        output.SetFromVector([cov])
 
     def CalcParameterEstimate(self, context, output):
         """
@@ -230,7 +246,6 @@ class BayesObserver(LeafSystem):
             Y = np.array([a-g])   # Y*theta = F
             F = np.array([f_z])
             m_hat = self.DoBayesianUpdate(Y=Y, F=F)
-            print(m_hat)
 
         output.SetFromVector([m_hat])
 

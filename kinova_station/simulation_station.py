@@ -25,8 +25,9 @@ class KinovaStation(Diagram):
                                |                               | --> measured_gripper_position
                                |                               | --> measured_gripper_velocity
                                |                               |
-                               |                               | --> camera_rgb_image (TODO)
-                               |                               | --> camera_depth_image (TODO)
+                               |                               | --> camera_rgb_image
+                               |                               | --> camera_depth_image
+                               |                               | --> camera_transform
                                |                               |
                                |                               |
                                ---------------------------------
@@ -209,6 +210,9 @@ class KinovaStation(Diagram):
             self.builder.ExportOutput(
                     camera.depth_image_32F_output_port(),
                     "camera_depth_image")
+
+            # Send pose of camera in world frame as output
+            # TODO
 
 
         # Build the diagram
