@@ -32,13 +32,7 @@ class BayesObserver(LeafSystem):
 
         # Create an internal model of the plant (arm + gripper + object)
         # with symbolic values for unknown parameters
-        self.plant, self.context = self.CreateSymbolicPlant(gripper)
-
-        print(self.plant.num_positions())
-        print(self.plant.num_velocities())
-
-        print(type(self.plant))
-        print(type(self.context))
+        self.plant, self.context, self.theta = self.CreateSymbolicPlant(gripper)
 
         # Declare input ports
         self.q_port = self.DeclareVectorInputPort(
@@ -75,6 +69,13 @@ class BayesObserver(LeafSystem):
         self.cov = 0.0
 
     def CreateSymbolicPlant(self, gripper):
+        """
+        Creates a symbolic model of the plant with unknown variables theta
+        parameterizing an object that we're grasping. 
+
+        Returns the symbolic plant, a corresponding context with symbolic variables theta,
+        and these variables. 
+        """
         assert gripper=="hande", "2F-85 gripper not implemented yet"
 
         plant = MultibodyPlant(1.0)  # timestep not used
@@ -112,7 +113,7 @@ class BayesObserver(LeafSystem):
         peg_sym = plant_sym.GetBodyByName("base_link", peg)
         peg_sym.SetMass(context_sym, m)     # see also: SetSpatialInertiaInBodyFrame
 
-        return plant_sym, context_sym
+        return plant_sym, context_sym, np.array([m])
 
     def DoBayesianInference(self, X, y, n):
         """
@@ -158,75 +159,27 @@ class BayesObserver(LeafSystem):
         q = self.q_port.Eval(context)
         qd = self.qd_port.Eval(context)
         tau = self.tau_port.Eval(context)
+        
+        self.plant.SetPositions(self.context, q)
+        self.plant.SetVelocities(self.context, qd)
 
         # Estimate acceleration numerically
         qdd = (qd - self.qd_last)/self.dt
         self.qd_last = qd
 
-        # Compute end-effector jacobian
-        self.plant.SetPositions(self.context, q)
-        self.plant.SetVelocities(self.context, qd)
+        # Get a symbolic expression for torques required to achieve the
+        # current acceleration
+        f_ext = MultibodyForces_[Expression](self.plant)  # zero
+        tau_sym = self.plant.CalcInverseDynamics(self.context, qdd, f_ext)
 
-        object_position_in_ee_frame = np.array([0,0.0,0.0])
-        J_ee = self.plant.CalcJacobianSpatialVelocity(self.context,
-                                                      JacobianWrtVariable.kV,
-                                                      self.ee_frame,
-                                                      object_position_in_ee_frame,
-                                                      self.plant.world_frame(),
-                                                      self.plant.world_frame())
-        Jdqd_ee = self.plant.CalcBiasSpatialAcceleration(self.context,
-                                                         JacobianWrtVariable.kV,
-                                                         self.ee_frame,
-                                                         object_position_in_ee_frame,
-                                                         self.plant.world_frame(),
-                                                         self.plant.world_frame()).get_coeffs()
+        # Write this expression for torques as linear in the parameters theta
+        A, b = DecomposeAffineExpressions(tau_sym, self.theta)
 
+        # Get a least-squares estimate of theta
+        theta_gt = np.array([0.028])  # ground truth
 
-        ee_position = self.plant.CalcPointsPositions(self.context,
-                                                     self.ee_frame,
-                                                     np.zeros(3),
-                                                     self.plant.world_frame())
-        object_position = self.plant.CalcPointsPositions(self.context,
-                                                         self.ee_frame,
-                                                         object_position_in_ee_frame,
-                                                         self.plant.world_frame())
+        gt_err = (A@theta_gt + b - tau)
+        print(np.max(gt_err))
 
-        J_ee = J_ee[5,:]  # just consider velocity in z direction
-        Jdqd_ee = Jdqd_ee[5]
-
-        # Compute torque due to gravity
-        tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
-
-        # Default estimate 
         m_hat = 0
-        
-        # Wait until we have a hold on the object to do any estimation
-        if t >= 9:
-            # Compute regression matrix y(q,qd,qdd)
-            a_ee = J_ee@qdd + Jdqd_ee   # task-space acceleration
-            y = a_ee + 9.81
-
-            # Compute and store regression coefficients
-            A = J_ee.T*y     # A*theta = b
-            b = tau - tau_g
-
-            # Simple point estimate based on this singlular data point
-            m_hat = 1/(A.T@A) * A.T@b
-
-
-            ## Full Bayesian inference (TODO: once point estimate is reasonable
-            ##                                while end-effector is moving)
-            #self.As.append(A)
-            #self.bs.append(b)
-
-            #if len(self.As) > 2:  # avoid singularity
-            #    m_hat = self.DoBayesianInference(np.hstack(self.As), 
-            #                                     np.hstack(self.bs),
-            #                                     len(self.As))
-
-        # Get rid of old data
-        if len(self.As) > self.batch_size:
-            self.As.pop(0)
-            self.bs.pop(0)
-
         output.SetFromVector([m_hat])
