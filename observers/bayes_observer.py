@@ -59,6 +59,13 @@ class BayesObserver(LeafSystem):
         self.Ys = []
         self.taus = []
 
+        # Priors
+        self.a_0 = np.array([1])   # Noise epsilon ~ N(0,sigma_eps^2)
+        self.b_0 = np.array([1])   # where sigma_eps^2 ~ InvGamma(a0, b0)
+
+        self.mu_0 = np.array([0.05])    # P(theta | sigma_eps^2) ~ N(mu0, sigma_eps^2*Sigma0)
+        self.Sigma_0 = np.array([0.01])
+
     def CalcRegressionMatrix(self, q, v, vd):
         """
         Construct the regression matrix Y(q, v, vd) for a single rigid body,
@@ -117,6 +124,53 @@ class BayesObserver(LeafSystem):
             theta_hat = res.GetSolution(theta)
             print(theta_hat[0])
 
+    def DoBayesianUpdate(self, Y, F):
+        """
+        Get a bayesian parameter estimate of theta given the data
+        (Y,F), where
+
+            Y*theta = F + epsilon
+
+            epsilon ~ N(0,sigma_epsilon)
+
+        This method updates the stored priors
+
+            P(theta | sigma_epsilon) ~ N(mu, sigma_epsilon*Sigma)
+            P(sigma_epsilon) ~ InvGamma(a,b)
+
+        and returns the maximum a-posteriori estimate (mu).
+        """     
+        # TODO: convert/check with higher-dimensional example
+
+        # Get number of data points 
+        n = F.shape[0]
+
+        # least squares estimate
+        theta_hat_LSE = F / Y
+        
+        # Posterior estimate parameters
+        Sigma_0_inv = 1/self.Sigma_0     
+        Sigma_n = 1/(Y.T*Y + Sigma_0_inv)
+        Sigma_n_inv = 1/Sigma_n
+
+        mu_n = Sigma_n*( Sigma_0_inv*self.mu_0 + Y.T*Y*theta_hat_LSE )
+
+        # Posterior noise parameters
+        an = self.a_0 + n/2
+        bn = self.b_0 + 1/2*(F.T*F + self.mu_0.T*Sigma_0_inv*self.mu_0 -\
+                mu_n.T*Sigma_n_inv*mu_n)
+
+        # Update prior for next time
+        self.mu_0 = mu_n
+        self.Sigma_0 = Sigma_n
+
+        self.a_0 = an
+        self.b_0 = bn
+
+        # Return MAP estimate
+        return mu_n
+        
+
 
     def CalcParameterEstimate(self, context, output):
         """
@@ -173,8 +227,9 @@ class BayesObserver(LeafSystem):
             m_hat = f_z/(a-g)
 
             # Perform a Bayesian estimate
-            #m_hat = self.DoBayesianUpdate(Y=
-            
+            Y = np.array([a-g])   # Y*theta = F
+            F = np.array([f_z])
+            m_hat = self.DoBayesianUpdate(Y=Y, F=F)
             print(m_hat)
 
         output.SetFromVector([m_hat])

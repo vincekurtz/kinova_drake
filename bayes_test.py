@@ -16,7 +16,7 @@ from controllers.peg_pickup_controller import PegPickupController
 from observers.bayes_observer import BayesObserver
 
 # Set up the station
-time_step = 0.001
+time_step = 0.002
 station = KinovaStation(time_step=time_step)
 station.SetupSinglePegScenario(gripper_type="hande")
 station.Finalize()
@@ -103,10 +103,11 @@ except KeyboardInterrupt:
 t = estimation_logger.sample_times()
 m_hat = estimation_logger.data().T
 
-plt.plot(t,m_hat)
+plt.plot(t,m_hat, label="Estimate")
 plt.xlabel("Time (s)")
 plt.ylabel("Estimated Mass (kg)")
 plt.gca().axhline(0.028, color="grey", linestyle="--", label="Ground Truth")
 plt.xlim(left=10)
+plt.legend()
 
 plt.show()
