@@ -25,8 +25,8 @@
 #                              |                               | --> measured_gripper_position
 #                              |                               | --> measured_gripper_velocity
 #                              |                               |
-#                              |                               | --> camera_rgb_image (TODO)
-#                              |                               | --> camera_depth_image (TODO)
+#                              |                               | --> camera_rgb_image
+#                              |                               | --> camera_depth_image
 #                              |                               |
 #                              |                               |
 #                              ---------------------------------
@@ -63,12 +63,22 @@ simulate = True
 ee_command_type = EndEffectorTarget.kTwist      # kPose, kTwist, or kWrench
 gripper_command_type = GripperTarget.kPosition  # kPosition or kVelocity
 
+# If we're running a simulation, whether to include a simulated camera
+# and show the associated image
+include_camera = True
+show_camera_window = False
+
+# Which gripper to use (hande or 2f_85)
+gripper_type = "hande"
+
 ########################################################################
 
 # Set up the kinova station
 station = KinovaStation(time_step=0.001)
-station.SetupSinglePegScenario(gripper_type="hande")
-station.AddCamera(show_window=True)
+station.SetupSinglePegScenario(gripper_type=gripper_type)
+if include_camera:
+    station.AddCamera(show_window=show_camera_window)
+    station.ConnectToMeshcatVisualizer()
 station.Finalize()
 
 if show_station_diagram:
@@ -89,7 +99,7 @@ if ee_command_type == EndEffectorTarget.kPose:
 
 elif ee_command_type == EndEffectorTarget.kTwist:
     twist_des = np.array([0,0,0.0,
-                          0.0,0.0,0.0])
+                          0.0,0.0,0.1])
     target_source = builder.AddSystem(ConstantVectorSource(twist_des))
 
 elif ee_command_type == EndEffectorTarget.kWrench:
@@ -148,13 +158,34 @@ pose_logger.set_name("pose_logger")
 twist_logger = LogOutput(station.GetOutputPort("measured_ee_twist"), builder)
 twist_logger.set_name("twist_logger")
 
-# Camera observer allows us to view what the camera sees
-camera_viewer = builder.AddSystem(CameraViewer())
-camera_viewer.set_name("camera_viewer")
+# Camera observer allows us to access camera data
+if include_camera:
+    camera_viewer = builder.AddSystem(CameraViewer())
+    camera_viewer.set_name("camera_viewer")
 
-builder.Connect(
-        station.GetOutputPort("camera_rgb_image"),
-        camera_viewer.GetInputPort("color_image"))
+    builder.Connect(
+            station.GetOutputPort("camera_rgb_image"),
+            camera_viewer.GetInputPort("color_image"))
+    builder.Connect(
+            station.GetOutputPort("camera_depth_image"),
+            camera_viewer.GetInputPort("depth_image"))
+
+    # Convert the depth image to a point cloud
+    point_cloud_generator = builder.AddSystem(DepthImageToPointCloud(
+                                        CameraInfo(width=640, height=480, fov_y=1.0),
+                                        pixel_type=PixelType.kDepth32F))
+    point_cloud_generator.set_name("point_cloud_generator")
+    builder.Connect(
+            station.GetOutputPort("camera_depth_image"),
+            point_cloud_generator.depth_image_input_port())
+
+    # Visualize the point cloud with meshcat
+    meshcat_point_cloud = builder.AddSystem(MeshcatPointCloudVisualizer(station.meshcat))
+    meshcat_point_cloud.set_name("point_cloud_viz")
+    builder.Connect(
+            point_cloud_generator.point_cloud_output_port(),
+            meshcat_point_cloud.get_input_port())
+
     
 # Build the system diagram
 diagram = builder.Build()

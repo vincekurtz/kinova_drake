@@ -6,6 +6,7 @@
 ##
 
 from pydrake.all import *
+import cv2
 
 class CameraViewer(LeafSystem):
     """
@@ -26,12 +27,15 @@ class CameraViewer(LeafSystem):
         # Create example images which will be used to define the 
         # (abstract) import port types
         sample_color_image = Image[PixelType.kRgba8U](width=640,height=480)
+        sample_depth_image = Image[PixelType.kDepth32F](width=640,height=480)
 
         # Declare input ports
         self.color_image_port = self.DeclareAbstractInputPort(
                 "color_image",
                 AbstractValue.Make(sample_color_image))
-        # TODO: include depth image
+        self.depth_image_port = self.DeclareAbstractInputPort(
+                "depth_image",
+                AbstractValue.Make(sample_depth_image))
 
         # Dummy continuous variable so we update at each timestep
         self.DeclareContinuousState(1)
@@ -45,5 +49,14 @@ class CameraViewer(LeafSystem):
         """
 
         color_image = self.color_image_port.Eval(context)
+        depth_image = self.depth_image_port.Eval(context)
 
-        # TODO: do some sort of visualization, maybe with matplotlib
+        # color_image.data and depth_image.data contain raw np arrays
+        # with the image. So we can do things like load into opencv, etc
+        
+        # Example of displaying the depth image (then waiting for a keystroke
+        # to move to the next timestep:
+        #cv2.imshow("depth_image", depth_image.data)
+        #cv2.waitKey(0)
+        #cv2.destroyAllWindows()
+
