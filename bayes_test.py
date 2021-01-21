@@ -116,19 +116,19 @@ try:
 except KeyboardInterrupt:
     pass
 
-## Make plot of estimate
-#t = estimation_logger.sample_times()
-#m_hat = estimation_logger.data().flatten()
-#m_var = covariance_logger.data().flatten()
-#
-#plt.plot(t,m_hat, label="Estimate")
-#plt.fill_between(t, m_hat-m_var, m_hat+m_var, label="Variance", color="green",alpha=0.5)
-#plt.gca().axhline(0.028, color="grey", linestyle="--", label="Ground Truth")
-#
-#plt.xlabel("Time (s)")
-#plt.ylabel("Estimated Mass (kg)")
-#
-#plt.xlim(left=10)
-#plt.legend()
-#
-#plt.show()
+# Make plot of estimate
+t = estimation_logger.sample_times()
+m_hat = estimation_logger.data().flatten()
+m_var = covariance_logger.data().flatten()
+
+plt.plot(t,m_hat, label="Estimate")
+plt.fill_between(t, m_hat-m_var, m_hat+m_var, label="Variance", color="green",alpha=0.5)
+plt.gca().axhline(0.028, color="grey", linestyle="--", label="Ground Truth")
+
+plt.xlabel("Time (s)")
+plt.ylabel("Estimated Mass (kg)")
+
+plt.xlim(left=10)
+plt.legend()
+
+plt.show()

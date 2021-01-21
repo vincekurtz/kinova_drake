@@ -57,6 +57,7 @@ class BayesObserver(LeafSystem):
 
         # Store last joint velocities for computing accelerations
         self.qd_last = np.zeros(7)
+        self.tau_last = np.zeros(7)
 
         # Store regression coefficients
         self.As = []
@@ -177,9 +178,15 @@ class BayesObserver(LeafSystem):
 
         # Get a least-squares estimate of theta
         theta_gt = np.array([0.028])  # ground truth
-
-        gt_err = (A@theta_gt + b - tau)
-        print(np.max(gt_err))
+        gt_err = (A@theta_gt + b - self.tau_last)
 
         m_hat = 0
+        if context.get_time() > 0.1:  # remove some singularities at the first timestep
+            m_hat = np.linalg.inv(A.T@A)@A.T@(self.tau_last-b)
+            print(m_hat)
+
+        # send output
         output.SetFromVector([m_hat])
+       
+        # Store applied control torque
+        self.tau_last = tau
