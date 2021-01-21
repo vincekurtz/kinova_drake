@@ -59,6 +59,26 @@ class BayesObserver(LeafSystem):
         # Store last joint velocities for computing accelerations
         self.qd_last = np.zeros(7)
 
+        # Store regression coefficients
+        self.As = []
+        self.bs = []
+
+        # Amount of data to store at any given time
+        self.batch_size = np.inf
+
+    def DoBayesianInference(self, X, y, n):
+        """
+        Perform Bayesian linear regression to estimate theta, where
+
+            y = X*theta + epsilon
+
+        """
+        theta_hat = 1/(X.T@X) * X.T@y
+
+        print(theta_hat)
+
+        return theta_hat
+
     def SendParameterCovariance(self, context, output):
         """
         Send the current covariance of the parameter estimate as output.
@@ -115,11 +135,20 @@ class BayesObserver(LeafSystem):
             a_ee = J_ee@qdd + Jdqd_ee   # task-space acceleration
             y = a_ee + 9.81
 
+            # Compute and store regression coefficients
             A = J_ee.T*y     # A*theta = b
             b = tau - tau_g
 
-            m_hat = 1/(A.T@A) * A.T@b
+            self.As.append(A)
+            self.bs.append(b)
 
-            print(m_hat)
+            m_hat = self.DoBayesianInference(np.hstack(self.As), 
+                                             np.hstack(self.bs),
+                                             len(self.As))
+
+        # Get rid of old data
+        if len(self.As) > self.batch_size:
+            self.As.pop(0)
+            self.bs.pop(0)
 
         output.SetFromVector([m_hat])
