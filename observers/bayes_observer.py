@@ -110,7 +110,8 @@ class BayesObserver(LeafSystem):
         plant_sym = plant.ToSymbolic()
         context_sym = plant_sym.CreateDefaultContext()
 
-        m = Variable("m")
+        #m = Variable("m")
+        m = 0.028    # DEBUG: set to true mass
         peg_sym = plant_sym.GetBodyByName("base_link", peg)
         peg_sym.SetMass(context_sym, m)     # see also: SetSpatialInertiaInBodyFrame
 
@@ -173,17 +174,24 @@ class BayesObserver(LeafSystem):
         f_ext = MultibodyForces_[Expression](self.plant)  # zero
         tau_sym = self.plant.CalcInverseDynamics(self.context, qdd, f_ext)
 
-        # Write this expression for torques as linear in the parameters theta
-        A, b = DecomposeAffineExpressions(tau_sym, self.theta)
+        # DEBUG: tau_sym and tau (or tau_sym and tau_last) should be very close,
+        # but they aren't! Why?? missing gravity somewhere?
+        print(tau - tau_sym)
+        print(self.tau_last - tau_sym)
+        print("")
 
-        # Get a least-squares estimate of theta
-        theta_gt = np.array([0.028])  # ground truth
-        gt_err = (A@theta_gt + b - self.tau_last)
+
+        ## Write this expression for torques as linear in the parameters theta
+        #A, b = DecomposeAffineExpressions(tau_sym, self.theta)
+
+        ## Get a least-squares estimate of theta
+        #theta_gt = np.array([0.028])  # ground truth
+        #gt_err = (A@theta_gt + b - self.tau_last)
 
         m_hat = 0
-        if context.get_time() > 0.1:  # remove some singularities at the first timestep
-            m_hat = np.linalg.inv(A.T@A)@A.T@(self.tau_last-b)
-            print(m_hat)
+        #if context.get_time() > 0.1:  # remove some singularities at the first timestep
+        #    m_hat = np.linalg.inv(A.T@A)@A.T@(self.tau_last-b)
+        #    print(m_hat)
 
         # send output
         output.SetFromVector([m_hat])
