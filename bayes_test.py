@@ -57,18 +57,18 @@ builder.Connect(
 
 
 # Add bayesian inference system (records wrenches, estimates inertial parameters)
-observer = builder.AddSystem(BayesObserver(time_step))
+observer = builder.AddSystem(BayesObserver(plant=station.controller_plant, time_step=time_step))
 observer.set_name("bayesian_observer")
 
 builder.Connect(
-        station.GetOutputPort("measured_ee_pose"),
-        observer.GetInputPort("ee_pose"))
+        station.GetOutputPort("measured_arm_position"),
+        observer.GetInputPort("joint_positions"))
 builder.Connect(
-        station.GetOutputPort("measured_ee_twist"),
-        observer.GetInputPort("ee_twist"))
+        station.GetOutputPort("measured_arm_velocity"),
+        observer.GetInputPort("joint_velocities"))
 builder.Connect(
-        station.GetOutputPort("measured_ee_wrench"),
-        observer.GetInputPort("ee_wrench"))
+        station.GetOutputPort("measured_arm_torque"),
+        observer.GetInputPort("joint_torques"))
 
 estimation_logger = LogOutput(observer.GetOutputPort("manipuland_parameter_estimate"), builder)
 estimation_logger.set_name("estimation_logger")

@@ -132,7 +132,7 @@ class KinovaStation(Diagram):
         # Controller outputs measured arm torques, end-effector pose, end-effector twist
         self.builder.ExportOutput(
                 cartesian_controller.GetOutputPort("applied_arm_torque"),
-                "measured_arm_torques")
+                "measured_arm_torque")
         self.builder.ExportOutput(
                 cartesian_controller.GetOutputPort("measured_ee_pose"),
                 "measured_ee_pose")
