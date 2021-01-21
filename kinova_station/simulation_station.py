@@ -248,6 +248,12 @@ class KinovaStation(Diagram):
                 HalfSpace(),
                 "ground_collision",
                 surface_friction)
+        self.plant.RegisterVisualGeometry(
+                self.plant.world_body(),
+                X_BG,
+                HalfSpace(),
+                "ground_visual",
+                np.array([0.5,0.5,0.5,0]))  # transparent
 
     def AddArm(self):
         """
@@ -326,7 +332,7 @@ class KinovaStation(Diagram):
   
         # Set camera properites. This are just made-up properties that don't necessarily 
         # correspond to the camera on the hardware (Intel Realsense D410).
-        intrinsics = CameraInfo(width=640, height=480, fov_y=1.5)  # just a random guess
+        intrinsics = CameraInfo(width=640, height=480, fov_y=1.0)  # just a random guess
         clipping = ClippingRange(0.01,3.0)
         X_lens = RigidTransform()
         camera_core = RenderCameraCore(renderer_name, intrinsics, clipping, X_lens)
@@ -399,16 +405,20 @@ class KinovaStation(Diagram):
                                        scene_graph=self.scene_graph,
                                        params=visualizer_params)
 
-    def ConnectToMeshcatVisualizer(self):
-        # Need to first start meshcat server with
-        #
-        #  bazel run @meshcat_python//:meshcat-server
-        #
-        # TODO: start meshcat server from here
+    def ConnectToMeshcatVisualizer(self, start_server=True):
+        if start_server:
+            # Start meshcat server. This saves the step of opening meshcat separately,
+            # but does mean you need to refresh the page each time you re-run something.
+            from meshcat.servers.zmqserver import start_zmq_server_as_subprocess
+            proc, zmq_url, web_url = start_zmq_server_as_subprocess()
 
-        ConnectMeshcatVisualizer(builder=self.builder,
+        # Defining self.meshcat in this way allows us to connect to 
+        # things like a point-cloud visualizer later
+        self.meshcat = ConnectMeshcatVisualizer(builder=self.builder,
+                                 zmq_url = zmq_url,
                                  scene_graph=self.scene_graph,
                                  output_port=self.scene_graph.get_query_output_port())
+
 
 class GripperController(LeafSystem):
     """
