@@ -25,8 +25,11 @@ station.AddArmWithHandeGripper()
 peg_urdf = "./models/manipulands/peg.sdf"
 peg = Parser(plant=station.plant).AddModelFromFile(peg_urdf,"peg")
 
+X_peg = RigidTransform()
+X_peg.set_translation([0,0,0.13])
+X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,0,np.pi/2])))
 station.plant.WeldFrames(station.plant.GetFrameByName("end_effector_link",station.arm),
-                         station.plant.GetFrameByName("base_link", peg))
+                         station.plant.GetFrameByName("base_link", peg), X_peg)
 
 #station.SetupSinglePegScenario(gripper_type="hande")
 station.ConnectToDrakeVisualizer()
