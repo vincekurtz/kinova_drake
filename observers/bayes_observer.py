@@ -59,16 +59,22 @@ class BayesObserver(LeafSystem):
         # Store last end-effector velocity for computing accelerations
         self.v_last = np.zeros(6)
 
-        # Store applied torques (really end-effector wrenches) and regression matrices (Y)
+        # Store applied end-effector wrenches (F) and regression matrices (Y)
         self.Ys = []
-        self.taus = []
+        self.Fs = []
 
         # Priors
-        self.a_0 = np.array([1])   # Noise epsilon ~ N(0,sigma_eps^2)
-        self.b_0 = np.array([1])   # where sigma_eps^2 ~ InvGamma(a0, b0)
+        self.a0 = np.array([1])   # Noise epsilon ~ N(0,sigma_eps^2)
+        self.b0 = np.array([1])   # where sigma_eps^2 ~ InvGamma(a0, b0)
 
-        self.mu_0 = np.array([0.05])    # P(theta | sigma_eps^2) ~ N(mu0, sigma_eps^2*Sigma0)
-        self.Sigma_0 = np.array([0.01])
+        self.mu0 = np.array([0.05])    # P(theta | sigma_eps^2) ~ N(mu0, sigma_eps^2*Sigma0)
+        self.Sigma0 = np.array([0.1])
+
+        # Posteriors
+        self.aN = self.a0
+        self.bN = self.b0
+        self.muN = self.mu0
+        self.SigmaN = self.Sigma0
 
     def CalcRegressionMatrix(self, q, v, vd):
         """
@@ -128,51 +134,44 @@ class BayesObserver(LeafSystem):
             theta_hat = res.GetSolution(theta)
             #print(theta_hat[0])
 
-    def DoBayesianUpdate(self, Y, F):
+    def DoBayesianUpdate(self):
         """
         Get a bayesian parameter estimate of theta given the data
         (Y,F), where
 
-            Y*theta = F + epsilon
+            F = Y*theta + epsilon
+            epsilon ~ N(0,sigma_epsilon^2)
 
-            epsilon ~ N(0,sigma_epsilon)
-
-        This method updates the stored priors
-
-            P(theta | sigma_epsilon) ~ N(mu, sigma_epsilon*Sigma)
-            P(sigma_epsilon) ~ InvGamma(a,b)
-
-        and returns the maximum a-posteriori estimate (mu).
         """     
-        # TODO: convert/check with higher-dimensional example
 
-        # Get number of data points 
-        n = F.shape[0]
+        Y = np.vstack(self.Ys)
+        F = np.vstack(self.Fs)
 
-        # least squares estimate
-        theta_hat_LSE = F / Y
+        # Get number of data points
+        n = Y.shape[0]
+        k = 1   # size of parameter vector theta
         
-        # Posterior estimate parameters
-        Sigma_0_inv = 1/self.Sigma_0     
-        Sigma_n = 1/(Y.T*Y + Sigma_0_inv)
-        Sigma_n_inv = 1/Sigma_n
+        # We assume a uniform prior on (theta, log(sigma_epsilon))
 
-        mu_n = Sigma_n*( Sigma_0_inv*self.mu_0 + Y.T*Y*theta_hat_LSE )
+        # P(theta | data, sigma_epsilon) ~ N(theta_hat, sigma_epsilon^2*Sigma)
+        YTY_inv = np.linalg.inv(Y.T@Y)
+        theta_hat = YTY_inv@Y.T@F
+        Sigma = YTY_inv
 
-        # Posterior noise parameters
-        an = self.a_0 + n/2
-        bn = self.b_0 + 1/2*(F.T*F + self.mu_0.T*Sigma_0_inv*self.mu_0 -\
-                mu_n.T*Sigma_n_inv*mu_n)
+        # P(sigma_epsilon^2 | data) ~ ScaledInvChiSquared(nu, s^2)
+        nu = n - k
+        s_squared = 1 / (n-k) * (F - Y@theta_hat).T@(F - Y@theta_hat)
 
-        # Update prior for next time
-        self.mu_0 = mu_n
-        #self.Sigma_0 = Sigma_n
+        # Convert to InvGamma(a,b)
+        self.aN = nu/2
+        self.bN = nu*s_squared/2
 
-        #self.a_0 = an
-        #self.b_0 = bn
+        # Save stuff
+        self.SigmaN = Sigma
 
-        # Return MAP estimate
-        return mu_n
+        print("mean: %s" % theta_hat)
+
+        return theta_hat[0]
         
     def SendParameterCovariance(self, context, output):
         """
@@ -182,11 +181,13 @@ class BayesObserver(LeafSystem):
             P(theta | sigma_epsilon ) ~ N(mu, sigma_epsilon*Sigma)
         """
 
-        sigma_epsilon_mle = self.b_0 / (self.a_0 + 1)  # Mode of inverse gamma distribution
+        sigma_epsilon_mle = self.bN / (self.aN + 1)  # Mode of inverse gamma distribution
 
-        cov = sigma_epsilon_mle * self.Sigma_0
+        cov = sigma_epsilon_mle * self.SigmaN
 
-        output.SetFromVector([cov])
+        print("cov: %s" % cov)
+
+        output.SetFromVector(cov)
 
     def CalcParameterEstimate(self, context, output):
         """
@@ -242,10 +243,23 @@ class BayesObserver(LeafSystem):
             # (basically least-squares)
             m_hat = f_z/(a-g)
 
-            # Perform a Bayesian estimate
-            Y = np.array([a-g])   # Y*theta = F
+            # Perform a Bayesian estimate of theta, where F = Y*theta + eps
+            eps = np.random.normal(0,1)  # simulate some measurement noise
+            Y = np.array([a-g]) + eps
             F = np.array([f_z])
-            m_hat = self.DoBayesianUpdate(Y=Y, F=F)
+            
+            self.Ys.append(Y)
+            self.Fs.append(F)
+
+            batch_size = 500
+            if len(self.Ys) > batch_size:
+                # Start removing oldest elements from the stored data
+                self.Ys.pop(0)
+                self.Fs.pop(0)
+
+            if len(self.Ys) > 2:
+                # Avoid singularity
+                m_hat = self.DoBayesianUpdate()
 
         output.SetFromVector([m_hat])
 
