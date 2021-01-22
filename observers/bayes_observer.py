@@ -169,15 +169,18 @@ class BayesObserver(LeafSystem):
         qdd = (qd - self.qd_last)/self.dt
         self.qd_last = qd
 
+        # Compute generalized forces due to gravity
+        tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
+
         # Get a symbolic expression for torques required to achieve the
         # current acceleration
-        f_ext = MultibodyForces_[Expression](self.plant)  # zero
+        f_ext = MultibodyForces_[Expression](self.plant)
+        f_ext.SetZero()
         tau_sym = self.plant.CalcInverseDynamics(self.context, qdd, f_ext)
 
-        # DEBUG: tau_sym and tau (or tau_sym and tau_last) should be very close,
-        # but they aren't! Why?? missing gravity somewhere?
-        print(tau - tau_sym)
-        print(self.tau_last - tau_sym)
+        # We should have tau - tau_g = tau_sym
+        print(tau - tau_g - tau_sym)  
+        print(self.tau_last - tau_g - tau_sym)
         print("")
 
 
