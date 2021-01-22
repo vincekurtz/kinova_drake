@@ -76,6 +76,8 @@ class BayesObserver(LeafSystem):
         self.qd_last = np.zeros(7)
         self.tau_last = np.zeros(7)
 
+        self.H_last = 0
+
     def CreateSymbolicPlant(self, gripper):
         """
         Creates a symbolic model of the plant with unknown variables theta
@@ -219,58 +221,92 @@ class BayesObserver(LeafSystem):
         
         self.plant.SetPositions(self.context, q)
         self.plant.SetVelocities(self.context, qd)
-
-        # Estimate acceleration numerically
-        qdd = (qd - self.qd_last)/self.dt
-        self.qd_last = qd
-
+        
         # Compute generalized forces due to gravity
         tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
 
-        # Get a symbolic expression for torques required to achieve the
-        # current acceleration
-        f_ext = MultibodyForces_[Expression](self.plant)
-        f_ext.SetZero()
-        tau_sym = self.plant.CalcInverseDynamics(self.context, qdd, f_ext) + tau_g
+        # Compute Hamiltonian (overall system energy)
+        U = self.plant.CalcPotentialEnergy(self.context)
+        K = self.plant.CalcKineticEnergy(self.context)
+        H = K + U   
 
-        # Write this expression for torques as linear in the parameters theta
-        # TODO: this is slow. Any way to speed up?
-        A, b = DecomposeAffineExpressions(tau_sym, self.theta)
+        # Compute time derivative of hamiltonian
+        Hdot = (H - self.H_last)/self.dt
 
-        # Store linear regression data
+        # Use the fact that
         #
-        #   tau_sym = A*theta + b = tau_last
+        #   qd'*tau = Hdot
+        # 
+        # and 
+        # 
+        #   Hdot = A*theta + b
         #
-        # (i.e. torques computed with inverse dynamics over our symbolic model, tau_sym,
-        #  should match the torques that were actually applied, tau_last)
-        self.xs.append(A)                  # y_i = x_i'*theta + epsilon
-        self.ys.append(self.tau_last - b)
+        # to estimate theta
+        A, b = DecomposeAffineExpressions(np.array([Hdot]), self.theta)
 
-        if context.get_time() > 0.0:
+        X = A             # y = X*theta
+        y = self.qd.T@tau - b
 
-            ## Simple point estimate
-            #m_hat = np.linalg.inv(A.T@A)@A.T@(self.tau_last-b)
+        #mhat = np.linalg.inv(X.T@X)@X.T@y
+        m_hat = (y/X)[0,0]
 
-            # Least-squares estimate
-            #m_hat = self.DoLeastSquares(np.vstack(self.xs), np.hstack(self.ys))
+        print(m_hat)
 
-            # Full Bayesian estimate
-            #n = len(self.xs)  # number of data points
-            #m_hat = self.DoFullBayesianInference(np.vstack(self.xs), np.hstack(self.ys), n)
 
-            # Iterative Bayesian estimate
-            m_hat = self.DoIterativeBayesianInference(A, self.tau_last-b)
-        else:
-            # Ingore the first timestep, since we don't have tau_last for that step
-            m_hat = 0
+        # Store Hamiltonian for computing Hdot
+        self.H_last = H
 
-        # Get rid of old data
-        if len(self.xs) > self.batch_size:
-            self.xs.pop(0)
-            self.ys.pop(0)
+        ## Estimate acceleration numerically
+        #qdd = (qd - self.qd_last)/self.dt
 
+        ## Compute generalized forces due to gravity
+        #tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
+
+        ## Get a symbolic expression for torques required to achieve the
+        ## current acceleration
+        #f_ext = MultibodyForces_[Expression](self.plant)
+        #f_ext.SetZero()
+        #tau_sym = self.plant.CalcInverseDynamics(self.context, qdd, f_ext) + tau_g
+
+        ## Write this expression for torques as linear in the parameters theta
+        ## TODO: this is slow. Any way to speed up?
+        #A, b = DecomposeAffineExpressions(tau_sym, self.theta)
+
+        ## Store linear regression data
+        ##
+        ##   tau_sym = A*theta + b = tau_last
+        ##
+        ## (i.e. torques computed with inverse dynamics over our symbolic model, tau_sym,
+        ##  should match the torques that were actually applied, tau_last)
+        #self.xs.append(A)                  # y_i = x_i'*theta + epsilon
+        #self.ys.append(self.tau_last - b)
+
+        #if context.get_time() > 0.0:
+
+        #    ## Simple point estimate
+        #    #m_hat = np.linalg.inv(A.T@A)@A.T@(self.tau_last-b)
+
+        #    # Least-squares estimate
+        #    #m_hat = self.DoLeastSquares(np.vstack(self.xs), np.hstack(self.ys))
+
+        #    # Full Bayesian estimate
+        #    #n = len(self.xs)  # number of data points
+        #    #m_hat = self.DoFullBayesianInference(np.vstack(self.xs), np.hstack(self.ys), n)
+
+        #    # Iterative Bayesian estimate
+        #    m_hat = self.DoIterativeBayesianInference(A, self.tau_last-b)
+        #else:
+        #    # Ingore the first timestep, since we don't have tau_last for that step
+        #    m_hat = 0
+
+        ## Get rid of old data
+        #if len(self.xs) > self.batch_size:
+        #    self.xs.pop(0)
+        #    self.ys.pop(0)
+        
         # send output
         output.SetFromVector([m_hat])
 
         # Save torques applied at this timestep
         self.tau_last = tau
+        self.qd_last = qd
