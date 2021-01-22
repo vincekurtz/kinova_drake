@@ -60,10 +60,11 @@ class BayesObserver(LeafSystem):
         self.ys = []
 
         # Prior parameters for iterative Bayes
-        self.mu0 = np.array([0.5])          # mean
-        self.Lambda0 = np.array([[0.01]])   # precision (inverse of covariance)
-        self.a0 = 0.1         # shape
-        self.b0 = 0.1         # scale
+        self.mu0 = np.array([0.0])          # mean and precision corresponding to uniform
+        self.Lambda0 = np.array([[0.0]])    # prior over parameters theta
+
+        self.a0 = 1         # shape and scale corresponding to uniform prior over
+        self.b0 = 0         # log(measurment noise std deviation) [ log(sigma) ]
 
         # Amount of data to store at any given time
         self.batch_size = np.inf
@@ -254,11 +255,11 @@ class BayesObserver(LeafSystem):
             #m_hat = self.DoLeastSquares(np.vstack(self.xs), np.hstack(self.ys))
 
             # Full Bayesian estimate
-            n = len(self.xs)  # number of data points
-            m_hat = self.DoFullBayesianInference(np.vstack(self.xs), np.hstack(self.ys), n)
+            #n = len(self.xs)  # number of data points
+            #m_hat = self.DoFullBayesianInference(np.vstack(self.xs), np.hstack(self.ys), n)
 
             # Iterative Bayesian estimate
-            #m_hat = self.DoIterativeBayesianInference(A, self.tau_last-b)
+            m_hat = self.DoIterativeBayesianInference(A, self.tau_last-b)
         else:
             # Ingore the first timestep, since we don't have tau_last for that step
             m_hat = 0
