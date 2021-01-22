@@ -57,7 +57,6 @@ class BayesObserver(LeafSystem):
 
         # Store last joint velocities for computing accelerations
         self.qd_last = np.zeros(7)
-        self.tau_last = np.zeros(7)
 
         # Store regression coefficients
         self.As = []
@@ -68,6 +67,8 @@ class BayesObserver(LeafSystem):
 
         # Store covariance
         self.cov = 0.0
+
+        self.tau_last = np.zeros(7)
 
     def CreateSymbolicPlant(self, gripper):
         """
@@ -178,30 +179,24 @@ class BayesObserver(LeafSystem):
         f_ext.SetZero()
         tau_sym = self.plant.CalcInverseDynamics(self.context, qdd, f_ext) + tau_g
 
-        # We should have tau - tau_g = tau_sym
-        #print(tau - tau_sym)  
-        #print(self.tau_last - tau_sym)
-        #print("")
-
-
         # Write this expression for torques as linear in the parameters theta
+        # TODO: this is slow. Any way to speed up?
         A, b = DecomposeAffineExpressions(tau_sym, self.theta)
 
-        # Get a least-squares estimate of theta
-        theta_gt = np.array([0.028])  # ground truth
-        gt_err = (A@theta_gt - (tau - b))
-
-        m_hat = np.linalg.inv(A.T@A)@A.T@(tau-b)
-
-        print(m_hat)
-
-        #m_hat = 0
-        #if context.get_time() > 0.1:  # remove some singularities at the first timestep
-        #    m_hat = np.linalg.inv(A.T@A)@A.T@(self.tau_last-b)
-        #    print(m_hat)
+        if context.get_time() > 0:
+            # Get a least-squares estimate of theta, using the fact that we should have
+            #
+            #   tau_sym = A*theta + b = tau_last
+            #
+            # (i.e. torques computed with inverse dynamics over our symbolic model, tau_sym,
+            #  should match the torques that were actually applied, tau_last)
+            m_hat = np.linalg.inv(A.T@A)@A.T@(self.tau_last-b)
+        else:
+            # Ingore the first timestep, since we don't have tau_last for that step
+            m_hat = 0
 
         # send output
         output.SetFromVector([m_hat])
-       
-        # Store applied control torque
+
+        # Save torques applied at this timestep
         self.tau_last = tau

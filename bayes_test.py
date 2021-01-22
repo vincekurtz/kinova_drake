@@ -16,7 +16,7 @@ from controllers.peg_pickup_controller import PegPickupController
 from observers.bayes_observer import BayesObserver
 
 # Set up the station
-time_step = 0.002
+time_step = 0.003
 station = KinovaStation(time_step=time_step)
 station.AddGround()
 station.AddArmWithHandeGripper()
@@ -84,20 +84,30 @@ builder.Connect(
         station.GetOutputPort("measured_arm_torque"),
         observer.GetInputPort("joint_torques"))
 
-estimation_logger = LogOutput(observer.GetOutputPort("manipuland_parameter_estimate"), builder)
+# Add a low-pass filter
+low_pass_filter = builder.AddSystem(FirstOrderLowPassFilter(time_constant=0.1))
+low_pass_filter.set_name("low_pass_filter")
+
+builder.Connect(
+        observer.GetOutputPort("manipuland_parameter_estimate"),
+        low_pass_filter.get_input_port())
+
+
+estimation_logger = LogOutput(low_pass_filter.get_output_port(), builder)
 estimation_logger.set_name("estimation_logger")
 covariance_logger = LogOutput(observer.GetOutputPort("manipuland_parameter_covariance"), builder)
 covariance_logger.set_name("covariance_logger")
+
 
 # Set up system diagram
 diagram = builder.Build()
 diagram.set_name("diagram")
 diagram_context = diagram.CreateDefaultContext()
 
-## DEBUG
-#plt.figure()
-#plot_system_graphviz(diagram, max_depth=1)
-#plt.show()
+# DEBUG
+plt.figure()
+plot_system_graphviz(diagram, max_depth=1)
+plt.show()
 
 # Set initial positions
 q0 = np.array([0.0, -0.2, 1, -0.8, 1, -0.1, 0.5])*np.pi
@@ -112,7 +122,7 @@ simulator.set_publish_every_time_step(False)
 # Run simulation
 try:
     simulator.Initialize()
-    simulator.AdvanceTo(20)
+    simulator.AdvanceTo(10)
 except KeyboardInterrupt:
     pass
 
@@ -128,7 +138,7 @@ plt.gca().axhline(0.028, color="grey", linestyle="--", label="Ground Truth")
 plt.xlabel("Time (s)")
 plt.ylabel("Estimated Mass (kg)")
 
-plt.xlim(left=10)
+#plt.xlim(left=10)
 plt.legend()
 
 plt.show()
