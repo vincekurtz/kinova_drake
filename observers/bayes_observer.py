@@ -25,10 +25,45 @@ class BayesObserver(LeafSystem):
                             ---------------------------------
     
     """
-    def __init__(self, time_step, gripper="hande"):
-        LeafSystem.__init__(self)
+    def __init__(self, time_step, gripper="hande", method="standard", estimator="bayes", batch_size=np.inf):
+        """
+        Creates an instance of this estimation block with the above input and output ports. 
 
+        Parameters: 
+            time_step  :   the timestep for the simulation, used for estimating derivatives
+            grippper   :   "hande" or "2f_85", the gripper to use in our internal system model
+            method     :   The method we'll use for setting up the regression. The 'standard' 
+                           method is based on
+                           
+                                M*qdd + C*qd + tau_g = Y(q,qd,qdd)*theta = tau,
+                           
+                           (i.e., the system dynamics are linear in the inertial parameters),
+                           while the 'energy' method is based on
+                            
+                                Hdot = A*theta + b = qd'*tau,
+                            
+                           (i.e., the system energy dot is linear in the inertial parameters.)
+            estimator  :   The method we'll use for estimation. Must be one of:
+
+                            - 'LSE' - standard least-squares
+
+                            - 'bayes' - iterative Bayesian estimation based on NormalInverseGamma prior
+
+                            - 'full_bayes' - full Bayesian linear regression.
+
+            batch_size :   Number of data points to consider for regression. Only relevant to
+                           the 'LSE'and 'full_bayes' methods. 
+        """
+        LeafSystem.__init__(self)
         self.dt = time_step
+
+        assert method == "standard" or method == "energy", "Invalid method %s" % method
+        assert estimator == "LSE" or estimator == "bayes" or estimator == "full_bayes", "Invalid estimator %s" % estimator
+        assert gripper=="hande", "2F-85 gripper not implemented yet"
+
+        self.method = method
+        self.estimator = estimator
+        self.batch_size = batch_size
 
         # Create an internal model of the plant (arm + gripper + object)
         # with symbolic values for unknown parameters
@@ -66,8 +101,6 @@ class BayesObserver(LeafSystem):
         self.a0 = 1         # shape and scale corresponding to uniform prior over
         self.b0 = 0         # log(measurment noise std deviation) [ log(sigma) ]
 
-        # Amount of data to store at any given time
-        self.batch_size = np.inf
 
         # Store covariance
         self.cov = [0.0]
@@ -86,8 +119,6 @@ class BayesObserver(LeafSystem):
         Returns the symbolic plant, a corresponding context with symbolic variables theta,
         and these variables. 
         """
-        assert gripper=="hande", "2F-85 gripper not implemented yet"
-
         plant = MultibodyPlant(1.0)  # timestep not used
 
         # Add the arm
@@ -146,7 +177,10 @@ class BayesObserver(LeafSystem):
 
         # Posterior distribution of measurement noise variance (scaled inverse chi-squared)
         nu = n-k
-        s_squared = 1/nu*(y-X@theta_hat).T@(y-X@theta_hat)
+        if nu == 0:
+            s_squared = 1e12   # a very big number
+        else:
+            s_squared = (1/nu)*(y-X@theta_hat).T@(y-X@theta_hat)
 
         # Maximum likelihood estimate of measurement noise variance
         sigma_hat_squared = nu*s_squared / (nu + 2)
@@ -221,92 +255,80 @@ class BayesObserver(LeafSystem):
         
         self.plant.SetPositions(self.context, q)
         self.plant.SetVelocities(self.context, qd)
+
+        # Set up the linear regression y = X*theta
+        if self.method == "energy":
+            
+            # Compute Hamiltonian (overall system energy)
+            U = self.plant.CalcPotentialEnergy(self.context)
+            K = self.plant.CalcKineticEnergy(self.context)
+            H = K + U   
+
+            # Compute time derivative of hamiltonian
+            Hdot = (H - self.H_last)/self.dt
+
+            # qd'*tau = Hdot  is linear in theta
+            A, b = DecomposeAffineExpressions(np.array([Hdot]), self.theta)
+
+            X = A
+            y = qd.T@tau - b
         
-        # Compute generalized forces due to gravity
-        tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
+            # Save Hamiltonian for computing Hdot
+            self.H_last = H
+        
+        else:  # standard method
 
-        # Compute Hamiltonian (overall system energy)
-        U = self.plant.CalcPotentialEnergy(self.context)
-        K = self.plant.CalcKineticEnergy(self.context)
-        H = K + U   
+            # Estimate acceleration numerically
+            qdd = (qd - self.qd_last)/self.dt
 
-        # Compute time derivative of hamiltonian
-        Hdot = (H - self.H_last)/self.dt
+            # Compute generalized forces due to gravity
+            tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
 
-        # Use the fact that
-        #
-        #   qd'*tau = Hdot
-        # 
-        # and 
-        # 
-        #   Hdot = A*theta + b
-        #
-        # to estimate theta
-        A, b = DecomposeAffineExpressions(np.array([Hdot]), self.theta)
+            # Get a symbolic expression for torques required to achieve the
+            # current acceleration
+            f_ext = MultibodyForces_[Expression](self.plant)
+            f_ext.SetZero()
+            tau_sym = self.plant.CalcInverseDynamics(self.context, qdd, f_ext) + tau_g
 
-        X = A             # y = X*theta
-        y = self.qd.T@tau - b
+            # Write this expression for torques as linear in the parameters theta
+            # TODO: this is slow. Any way to speed up?
+            A, b = DecomposeAffineExpressions(tau_sym, self.theta)
 
-        #mhat = np.linalg.inv(X.T@X)@X.T@y
-        m_hat = (y/X)[0,0]
+            X = A
+            y = self.tau_last - b
 
-        print(m_hat)
+        # Ingore first timestep since derivative estimates will be way off
+        if context.get_time() > 0:
 
+            # Store linear regression data (not needed for iterative Bayes)
+            self.xs.append(X)
+            self.ys.append(y)
 
-        # Store Hamiltonian for computing Hdot
-        self.H_last = H
+            # Least-squares estimate
+            if self.estimator == "LSE":
+                m_hat = self.DoLeastSquares(np.vstack(self.xs), np.hstack(self.ys))
 
-        ## Estimate acceleration numerically
-        #qdd = (qd - self.qd_last)/self.dt
+            # Full Bayesian estimate
+            elif self.estimator == "full_bayes":
+                n = len(self.xs)  # number of data points
+                m_hat = self.DoFullBayesianInference(np.vstack(self.xs), np.hstack(self.ys), n)
 
-        ## Compute generalized forces due to gravity
-        #tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
+            # Iterative Bayesian estimate
+            elif self.estimator == "bayes":
+                m_hat = self.DoIterativeBayesianInference(X, y)
 
-        ## Get a symbolic expression for torques required to achieve the
-        ## current acceleration
-        #f_ext = MultibodyForces_[Expression](self.plant)
-        #f_ext.SetZero()
-        #tau_sym = self.plant.CalcInverseDynamics(self.context, qdd, f_ext) + tau_g
+        else:
+            m_hat = 0
+    
+        # Save data for computing derivatives
+        self.tau_last = tau
+        self.qd_last = qd
 
-        ## Write this expression for torques as linear in the parameters theta
-        ## TODO: this is slow. Any way to speed up?
-        #A, b = DecomposeAffineExpressions(tau_sym, self.theta)
-
-        ## Store linear regression data
-        ##
-        ##   tau_sym = A*theta + b = tau_last
-        ##
-        ## (i.e. torques computed with inverse dynamics over our symbolic model, tau_sym,
-        ##  should match the torques that were actually applied, tau_last)
-        #self.xs.append(A)                  # y_i = x_i'*theta + epsilon
-        #self.ys.append(self.tau_last - b)
-
-        #if context.get_time() > 0.0:
-
-        #    ## Simple point estimate
-        #    #m_hat = np.linalg.inv(A.T@A)@A.T@(self.tau_last-b)
-
-        #    # Least-squares estimate
-        #    #m_hat = self.DoLeastSquares(np.vstack(self.xs), np.hstack(self.ys))
-
-        #    # Full Bayesian estimate
-        #    #n = len(self.xs)  # number of data points
-        #    #m_hat = self.DoFullBayesianInference(np.vstack(self.xs), np.hstack(self.ys), n)
-
-        #    # Iterative Bayesian estimate
-        #    m_hat = self.DoIterativeBayesianInference(A, self.tau_last-b)
-        #else:
-        #    # Ingore the first timestep, since we don't have tau_last for that step
-        #    m_hat = 0
-
-        ## Get rid of old data
-        #if len(self.xs) > self.batch_size:
-        #    self.xs.pop(0)
-        #    self.ys.pop(0)
+        # Get rid of old data
+        if len(self.xs) > self.batch_size:
+            self.xs.pop(0)
+            self.ys.pop(0)
         
         # send output
         output.SetFromVector([m_hat])
 
-        # Save torques applied at this timestep
-        self.tau_last = tau
-        self.qd_last = qd
