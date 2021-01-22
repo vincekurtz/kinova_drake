@@ -63,7 +63,7 @@ class BayesObserver(LeafSystem):
         self.batch_size = 500
 
         # Store covariance
-        self.cov = 0.0
+        self.cov = [0.0]
 
         # Store applied joint torques and measured joint velocities from the last timestep
         self.qd_last = np.zeros(7)
@@ -121,23 +121,27 @@ class BayesObserver(LeafSystem):
         """
         Perform Bayesian linear regression to estimate theta, where
 
-            y = X*theta + epsilon
+            y = X*theta + epsilon,
+            epsilon ~ N(0, sigma^2)
 
+        Assumes a uniform prior on (theta, log(sigma)).
+        (See Gelman BDA3, chaper 14.2)
         """
         k = 1   # number of parameters
 
-        theta_hat = 1/(X.T@X) * X.T@y  # Least squares estimate (mean)
-        SigmaN = 1/(X.T@X)               # Covariance excluding measurement noise
+        XTX_inv = np.linalg.inv(X.T@X)
+        theta_hat = XTX_inv@X.T@y      # Least squares estimate (mean)
+        V_theta = XTX_inv              # Covariance excluding measurement noise
 
         # Posterior distribution of measurement noise variance (scaled inverse chi-squared)
         nu = n-k
-        s_squared = 1/nu*(y-X*theta_hat).T@(y-X*theta_hat)
+        s_squared = 1/nu*(y-X@theta_hat).T@(y-X@theta_hat)
 
         # Maximum likelihood estimate of measurement noise variance
         sigma_hat_squared = nu*s_squared / (nu + 2)
 
         # Covariance inlcuding measurement noise
-        self.cov = sigma_hat_squared * SigmaN
+        self.cov = sigma_hat_squared * V_theta
 
         return theta_hat
 
@@ -156,7 +160,7 @@ class BayesObserver(LeafSystem):
         """
         Send the current covariance of the parameter estimate as output.
         """
-        output.SetFromVector([self.cov])
+        output.SetFromVector(self.cov)
 
     def CalcParameterEstimate(self, context, output):
         """
@@ -192,25 +196,26 @@ class BayesObserver(LeafSystem):
         # TODO: this is slow. Any way to speed up?
         A, b = DecomposeAffineExpressions(tau_sym, self.theta)
 
-        if context.get_time() > 0:
-            # Estimate theta, using the fact that we should have
-            #
-            #   tau_sym = A*theta + b = tau_last
-            #
-            # (i.e. torques computed with inverse dynamics over our symbolic model, tau_sym,
-            #  should match the torques that were actually applied, tau_last)
+        # Store linear regression data
+        #
+        #   tau_sym = A*theta + b = tau_last
+        #
+        # (i.e. torques computed with inverse dynamics over our symbolic model, tau_sym,
+        #  should match the torques that were actually applied, tau_last)
+        self.xs.append(A)                  # y_i = x_i'*theta + epsilon
+        self.ys.append(self.tau_last - b)
 
-            self.xs.append(A)                  # y_i = x_i'*theta + epsilon
-            self.ys.append(self.tau_last - b)
+        if context.get_time() > 0.0:
 
             ## Simple point estimate
             #m_hat = np.linalg.inv(A.T@A)@A.T@(self.tau_last-b)
 
             # Least-squares estimate
-            m_hat = self.DoLeastSquares(np.vstack(self.xs), np.hstack(self.ys))
+            #m_hat = self.DoLeastSquares(np.vstack(self.xs), np.hstack(self.ys))
 
             # Bayesian estimate
-            # TODO
+            n = len(self.xs)  # number of data points
+            m_hat = self.DoBayesianInference(np.vstack(self.xs), np.hstack(self.ys), n)
         else:
             # Ingore the first timestep, since we don't have tau_last for that step
             m_hat = 0
