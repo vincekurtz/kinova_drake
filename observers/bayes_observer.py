@@ -55,19 +55,18 @@ class BayesObserver(LeafSystem):
                 BasicVector(1),
                 self.SendParameterCovariance)
 
-        # Store last joint velocities for computing accelerations
-        self.qd_last = np.zeros(7)
-
-        # Store regression coefficients
-        self.As = []
-        self.bs = []
+        # Store regression coefficients (x_i = y_i*theta + epsilon)
+        self.xs = []
+        self.ys = []
 
         # Amount of data to store at any given time
-        self.batch_size = np.inf
+        self.batch_size = 500
 
         # Store covariance
         self.cov = 0.0
 
+        # Store applied joint torques and measured joint velocities from the last timestep
+        self.qd_last = np.zeros(7)
         self.tau_last = np.zeros(7)
 
     def CreateSymbolicPlant(self, gripper):
@@ -140,6 +139,16 @@ class BayesObserver(LeafSystem):
         # Covariance inlcuding measurement noise
         self.cov = sigma_hat_squared * SigmaN
 
+        return theta_hat
+
+    def DoLeastSquares(self, X, y):
+        """
+        Return a least-squares estimate of theta, where
+
+            y = X*theta
+
+        """
+        theta_hat = np.linalg.inv(X.T@X)@X.T@y
 
         return theta_hat
 
@@ -184,16 +193,32 @@ class BayesObserver(LeafSystem):
         A, b = DecomposeAffineExpressions(tau_sym, self.theta)
 
         if context.get_time() > 0:
-            # Get a least-squares estimate of theta, using the fact that we should have
+            # Estimate theta, using the fact that we should have
             #
             #   tau_sym = A*theta + b = tau_last
             #
             # (i.e. torques computed with inverse dynamics over our symbolic model, tau_sym,
             #  should match the torques that were actually applied, tau_last)
-            m_hat = np.linalg.inv(A.T@A)@A.T@(self.tau_last-b)
+
+            self.xs.append(A)                  # y_i = x_i'*theta + epsilon
+            self.ys.append(self.tau_last - b)
+
+            ## Simple point estimate
+            #m_hat = np.linalg.inv(A.T@A)@A.T@(self.tau_last-b)
+
+            # Least-squares estimate
+            m_hat = self.DoLeastSquares(np.vstack(self.xs), np.hstack(self.ys))
+
+            # Bayesian estimate
+            # TODO
         else:
             # Ingore the first timestep, since we don't have tau_last for that step
             m_hat = 0
+
+        # Get rid of old data
+        if len(self.xs) > self.batch_size:
+            self.xs.pop(0)
+            self.ys.pop(0)
 
         # send output
         output.SetFromVector([m_hat])
