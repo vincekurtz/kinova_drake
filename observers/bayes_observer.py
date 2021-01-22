@@ -59,8 +59,14 @@ class BayesObserver(LeafSystem):
         self.xs = []
         self.ys = []
 
+        # Prior parameters for iterative Bayes
+        self.mu0 = np.array([0.5])          # mean
+        self.Lambda0 = np.array([[0.01]])   # precision (inverse of covariance)
+        self.a0 = 0.1         # shape
+        self.b0 = 0.1         # scale
+
         # Amount of data to store at any given time
-        self.batch_size = 500
+        self.batch_size = np.inf
 
         # Store covariance
         self.cov = [0.0]
@@ -117,12 +123,14 @@ class BayesObserver(LeafSystem):
 
         return plant_sym, context_sym, np.array([m])
 
-    def DoBayesianInference(self, X, y, n):
+    def DoFullBayesianInference(self, X, y, n):
         """
         Perform Bayesian linear regression to estimate theta, where
 
             y = X*theta + epsilon,
             epsilon ~ N(0, sigma^2)
+
+        and (y, X) include all the availible data.
 
         Assumes a uniform prior on (theta, log(sigma)).
         (See Gelman BDA3, chaper 14.2)
@@ -144,6 +152,38 @@ class BayesObserver(LeafSystem):
         self.cov = sigma_hat_squared * V_theta
 
         return theta_hat
+
+    def DoIterativeBayesianInference(self, X, y):
+        """
+        Perform Bayesian linear regression to estimate theta, where
+
+            y = X*theta + epsilon,
+            epsilon ~ N(0, sigma^2)
+
+        and (y, X) are just the data from the latest timestep. 
+
+        Updates a normal inverse-gamma prior as per
+        https://en.wikipedia.org/wiki/Bayesian_linear_regression#Posterior_distribution
+        """
+
+        LambdaN = X.T@X + self.Lambda0                                  # precision
+        muN = np.linalg.inv(LambdaN)@( self.Lambda0@self.mu0 + X.T@y )  # mean
+
+        n = 1   # number of data points
+        aN = self.a0 + n/2                                                                 # shape
+        bN = self.b0 + 0.5*(y.T@y + self.mu0.T@self.Lambda0@self.mu0 - muN.T@LambdaN@muN)  # scale
+
+        # MAP estiamte of overall covariance
+        sigma_squared_map = bN / (aN + 1)
+        self.cov = sigma_squared_map*np.linalg.inv(LambdaN)
+
+        # Update the priors
+        self.Lambda0 = LambdaN
+        self.mu0 = muN
+        self.a0 = aN
+        self.b0 = bN
+
+        return muN
 
     def DoLeastSquares(self, X, y):
         """
@@ -213,9 +253,12 @@ class BayesObserver(LeafSystem):
             # Least-squares estimate
             #m_hat = self.DoLeastSquares(np.vstack(self.xs), np.hstack(self.ys))
 
-            # Bayesian estimate
+            # Full Bayesian estimate
             n = len(self.xs)  # number of data points
-            m_hat = self.DoBayesianInference(np.vstack(self.xs), np.hstack(self.ys), n)
+            m_hat = self.DoFullBayesianInference(np.vstack(self.xs), np.hstack(self.ys), n)
+
+            # Iterative Bayesian estimate
+            #m_hat = self.DoIterativeBayesianInference(A, self.tau_last-b)
         else:
             # Ingore the first timestep, since we don't have tau_last for that step
             m_hat = 0

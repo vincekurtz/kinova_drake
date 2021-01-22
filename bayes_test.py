@@ -129,6 +129,7 @@ plt.xlabel("Time (s)")
 plt.ylabel("Estimated Mass (kg)")
 
 #plt.xlim(left=10)
+plt.ylim(bottom=0)
 plt.legend()
 
 plt.show()
