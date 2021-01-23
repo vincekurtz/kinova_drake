@@ -40,10 +40,10 @@ class PegPickupController(LeafSystem):
                                     BasicVector(6))
         self.gripper_pos_port = self.DeclareVectorInputPort(
                                         "gripper_position",
-                                        BasicVector(2))
+                                        BasicVector(1))
         self.gripper_vel_port = self.DeclareVectorInputPort(
                                         "gripper_velocity",
-                                        BasicVector(2))
+                                        BasicVector(1))
 
         # Declare output ports (desired end-effector and gripper behavior)
         self.DeclareVectorOutputPort(
@@ -56,7 +56,7 @@ class PegPickupController(LeafSystem):
                 self.SetEndEffectorCommandType)
         self.DeclareVectorOutputPort(
                 "gripper_command",
-                BasicVector(2),
+                BasicVector(1),
                 self.CalcGripperCommand)
         self.DeclareAbstractOutputPort(
                 "gripper_command_type",
@@ -142,9 +142,9 @@ class PegPickupController(LeafSystem):
        
         # Set gripper target position accordingly
         if self.command_sequence[mode]["gripper_closed"]:
-            cmd_pos = np.zeros(2)
+            cmd_pos = np.array([1.0])
         else:
-            cmd_pos = np.array([0.04,0.04])
+            cmd_pos = np.array([0.0])
 
         output.SetFromVector(cmd_pos)
 
