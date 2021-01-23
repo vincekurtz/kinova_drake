@@ -27,6 +27,7 @@
 #                              |                               |
 #                              |                               | --> camera_rgb_image
 #                              |                               | --> camera_depth_image
+#                              |                               | --> camera_transform
 #                              |                               |
 #                              |                               |
 #                              ---------------------------------
@@ -49,11 +50,11 @@ from observers.camera_viewer import CameraViewer
 ########################### Parameters #################################
 
 # Make a plot of the inner workings of the station
-show_station_diagram = True
+show_station_diagram = False
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
-show_toplevel_diagram = True
+show_toplevel_diagram = False
 
 # Run a quick simulation
 simulate = True
@@ -180,17 +181,20 @@ if include_camera:
             point_cloud_generator.depth_image_input_port())
 
     # TODO: connect camera pose to point cloud generator
-    X_camera = RigidTransform()       # Camera fixed to arm is not supported by the meshcat
-    X_camera.set_translation([0,1,1]) # visualizer, so we'll just move the point cloud to
-                                      # the side so it's not overlapping with the scene
-    X_camera.set_rotation(RotationMatrix(RollPitchYaw([-0.8*np.pi,0,0])))
+    #X_camera = RigidTransform()       # Camera fixed to arm is not supported by the meshcat
+    #X_camera.set_translation([0,1,1]) # visualizer, so we'll just move the point cloud to
+    #                                  # the side so it's not overlapping with the scene
+    #X_camera.set_rotation(RotationMatrix(RollPitchYaw([-0.8*np.pi,0,0])))
 
-    camera_pose_source = builder.AddSystem(
-            ConstantValueSource(AbstractValue.Make(X_camera)))
-    camera_pose_source.set_name("camera_transform")
+    #camera_pose_source = builder.AddSystem(
+    #        ConstantValueSource(AbstractValue.Make(X_camera)))
+    #camera_pose_source.set_name("camera_transform")
 
+    #builder.Connect(
+    #        camera_pose_source.get_output_port(),
+    #        point_cloud_generator.GetInputPort("camera_pose"))
     builder.Connect(
-            camera_pose_source.get_output_port(),
+            station.GetOutputPort("camera_transform"),
             point_cloud_generator.GetInputPort("camera_pose"))
 
 

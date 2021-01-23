@@ -84,3 +84,49 @@ class EndEffectorWrenchCalculator(LeafSystem):
         w = Jbar@(tau-tau_g)
 
         output.SetFromVector(w)
+
+class CameraPosePublisher(LeafSystem):
+    """
+    A simple system which takes as input the pose of the end-effector frame in the world
+    (as a 6D Vector) and outputs a RigidTransform between the world and the camera frame.
+
+                    -------------------------
+                    |                       |
+    ee_pose ------> |  CameraPosePublisher  | -----> camera_transform
+                    |                       |
+                    -------------------------
+    """
+    def __init__(self, X_EC):
+        """
+        Takes as a parameter a RigidTransform expressing the pose of the camera (C) expressed
+        in the end-effector frame (E).
+        """
+        LeafSystem.__init__(self)
+
+        self.X_EC = X_EC
+        
+        self.ee_pose_port = self.DeclareVectorInputPort(
+                                    "ee_pose",
+                                    BasicVector(6))
+
+        self.DeclareAbstractOutputPort(
+                "camera_transform",
+                lambda: AbstractValue.Make(RigidTransform()),
+                self.CalcCameraPose)
+
+    def CalcCameraPose(self, context, output):
+        """
+        Compute the transform between the world frame and the camera frame and 
+        send as output. 
+        """
+        # Create RigidTransform for pose of end-effector in world frame
+        ee_pose = self.ee_pose_port.Eval(context)
+        X_WE = RigidTransform(
+                    RotationMatrix(RollPitchYaw(ee_pose[:3])),
+                    ee_pose[3:])
+
+        # Compute RigidTransform for pose of camera in world frame
+        X_WC = X_WE.multiply(self.X_EC)
+
+        output.set_value(X_WC)
+

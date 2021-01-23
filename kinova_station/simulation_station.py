@@ -1,8 +1,8 @@
 from pydrake.all import *
 from kinova_station.common import (EndEffectorTarget, 
                                    GripperTarget, 
-                                   EndEffectorWrenchCalculator)
-
+                                   EndEffectorWrenchCalculator,
+                                   CameraPosePublisher)
 class KinovaStation(Diagram):
     """
     A template system diagram for controlling a 7 DoF Kinova Gen3 robot, modeled 
@@ -212,7 +212,15 @@ class KinovaStation(Diagram):
                     "camera_depth_image")
 
             # Send pose of camera in world frame as output
-            # TODO
+            camera_transform_pub = self.builder.AddSystem(CameraPosePublisher(self.X_camera))
+            camera_transform_pub.set_name("camera_transform_publisher")
+
+            self.builder.Connect(
+                    cartesian_controller.GetOutputPort("measured_ee_pose"),
+                    camera_transform_pub.GetInputPort("ee_pose"))
+            self.builder.ExportOutput(
+                    camera_transform_pub.GetOutputPort("camera_transform"),
+                    "camera_transform")
 
 
         # Build the diagram
@@ -878,6 +886,7 @@ class CartesianController(LeafSystem):
 
         output.SetFromVector(tau)
 
+
 def add_2f_85_bushings(plant, gripper):
     """
     The Robotiq 2F-85 gripper has a complicated mechanical component which includes
@@ -947,3 +956,5 @@ def add_2f_85_bushings(plant, gripper):
                 force_stiffness_constants, force_damping_constants)
     plant.AddForceElement(left_finger_bushing)
     plant.AddForceElement(right_finger_bushing)
+
+
