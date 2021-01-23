@@ -99,8 +99,8 @@ if ee_command_type == EndEffectorTarget.kPose:
     target_source = builder.AddSystem(ConstantVectorSource(pose_des))
 
 elif ee_command_type == EndEffectorTarget.kTwist:
-    twist_des = np.array([0,0,0.0,
-                          0.0,0.0,0.1])
+    twist_des = np.array([0,0,0.5,
+                          0.1,-0.1,0.01])
     target_source = builder.AddSystem(ConstantVectorSource(twist_des))
 
 elif ee_command_type == EndEffectorTarget.kWrench:
@@ -159,17 +159,17 @@ pose_logger.set_name("pose_logger")
 twist_logger = LogOutput(station.GetOutputPort("measured_ee_twist"), builder)
 twist_logger.set_name("twist_logger")
 
-# Camera observer allows us to access camera data
 if include_camera:
-    camera_viewer = builder.AddSystem(CameraViewer())
-    camera_viewer.set_name("camera_viewer")
+    # Camera observer allows us to access camera data
+    #camera_viewer = builder.AddSystem(CameraViewer())
+    #camera_viewer.set_name("camera_viewer")
 
-    builder.Connect(
-            station.GetOutputPort("camera_rgb_image"),
-            camera_viewer.GetInputPort("color_image"))
-    builder.Connect(
-            station.GetOutputPort("camera_depth_image"),
-            camera_viewer.GetInputPort("depth_image"))
+    #builder.Connect(
+    #        station.GetOutputPort("camera_rgb_image"),
+    #        camera_viewer.GetInputPort("color_image"))
+    #builder.Connect(
+    #        station.GetOutputPort("camera_depth_image"),
+    #        camera_viewer.GetInputPort("depth_image"))
 
     # Convert the depth image to a point cloud
     point_cloud_generator = builder.AddSystem(DepthImageToPointCloud(
@@ -180,23 +180,10 @@ if include_camera:
             station.GetOutputPort("camera_depth_image"),
             point_cloud_generator.depth_image_input_port())
 
-    # TODO: connect camera pose to point cloud generator
-    #X_camera = RigidTransform()       # Camera fixed to arm is not supported by the meshcat
-    #X_camera.set_translation([0,1,1]) # visualizer, so we'll just move the point cloud to
-    #                                  # the side so it's not overlapping with the scene
-    #X_camera.set_rotation(RotationMatrix(RollPitchYaw([-0.8*np.pi,0,0])))
-
-    #camera_pose_source = builder.AddSystem(
-    #        ConstantValueSource(AbstractValue.Make(X_camera)))
-    #camera_pose_source.set_name("camera_transform")
-
-    #builder.Connect(
-    #        camera_pose_source.get_output_port(),
-    #        point_cloud_generator.GetInputPort("camera_pose"))
+    # Connect camera pose to point cloud generator
     builder.Connect(
             station.GetOutputPort("camera_transform"),
             point_cloud_generator.GetInputPort("camera_pose"))
-
 
     # Visualize the point cloud with meshcat
     meshcat_point_cloud = builder.AddSystem(MeshcatPointCloudVisualizer(station.meshcat))
@@ -205,7 +192,6 @@ if include_camera:
             point_cloud_generator.point_cloud_output_port(),
             meshcat_point_cloud.get_input_port())
 
-    
 # Build the system diagram
 diagram = builder.Build()
 diagram.set_name("toplevel_system_diagram")
@@ -233,4 +219,4 @@ if simulate:
 
     # Run simulation
     simulator.Initialize()
-    simulator.AdvanceTo(10.0)
+    simulator.AdvanceTo(4.0)
