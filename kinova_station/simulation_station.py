@@ -431,6 +431,23 @@ class KinovaStation(Diagram):
                                  scene_graph=self.scene_graph,
                                  output_port=self.scene_graph.get_query_output_port())
 
+    def go_home(self, diagram, diagram_context, name="Home"):
+        """
+        Move the arm to the specified home position. Must be one of
+        'Home', 'Retract', or 'Zero'.
+        """
+        if name == "Home":
+            q0 = np.array([0, np.pi/12, np.pi, 4.014-2*np.pi, 0, 0.9599, np.pi/2])
+        elif name == "Retract":
+            q0 = np.array([0, 5.93-2*np.pi, np.pi, 3.734-2*np.pi, 0, 5.408-2*np.pi, np.pi/2])
+        elif name == "Zero":
+            q0 = np.zeros(7)
+        else:
+            raise RuntimeError("Home position name must be one of ['Home', 'Retract', 'Zero']")
+
+        self.SetArmPositions(diagram, diagram_context, q0)
+
+
 
 class GripperController(LeafSystem):
     """

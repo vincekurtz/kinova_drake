@@ -205,9 +205,9 @@ if show_toplevel_diagram:
 
 if simulate:
     # Set default arm positions
-    #q0 = np.array([0.0, -np.pi/5, np.pi, -0.8*np.pi, np.pi, -0.1*np.pi, 0.5*np.pi])
     q0 = np.array([0.0, -np.pi/5, np.pi, -0.8*np.pi, np.pi, 0.2*np.pi, 0.5*np.pi])  # to point camera at the peg
     station.SetArmPositions(diagram, diagram_context, q0)
+    #station.go_home(diagram, diagram_context, name="Retract")
 
     # Set starting position for any objects in the scene
     station.SetManipulandStartPositions(diagram, diagram_context)
@@ -219,4 +219,4 @@ if simulate:
 
     # Run simulation
     simulator.Initialize()
-    simulator.AdvanceTo(4.0)
+    simulator.AdvanceTo(1.0)
