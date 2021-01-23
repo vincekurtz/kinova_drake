@@ -62,7 +62,7 @@ simulate = True
 # If we're running a simulation, choose which sort of commands are
 # sent to the arm and the gripper
 ee_command_type = EndEffectorTarget.kTwist      # kPose, kTwist, or kWrench
-gripper_command_type = GripperTarget.kPosition  # kPosition or kVelocity
+gripper_command_type = GripperTarget.kVelocity  # kPosition or kVelocity
 
 # If we're running a simulation, whether to include a simulated camera
 # and show the associated image
@@ -126,13 +126,11 @@ target_type_source.set_name("ee_type_source")
 
 # Set gripper command
 if gripper_command_type == GripperTarget.kPosition:
-    q_grip_des = np.array([0.06,0.06])  # Closed at [0,0], 
-                                        # Hand-e open at [0.03,0.03], 
-                                        # 2F-85 open at [0.06,0.06]
+    q_grip_des = np.array([0])   # open at 0, closed at 1
     gripper_target_source = builder.AddSystem(ConstantVectorSource(q_grip_des))
 
 elif gripper_command_type == GripperTarget.kVelocity:
-    v_grip_des = -np.array([0.01,0.01])
+    v_grip_des = np.array([1.0])
     gripper_target_source = builder.AddSystem(ConstantVectorSource(v_grip_des))
 
 # Send gripper command and type
@@ -158,6 +156,9 @@ pose_logger.set_name("pose_logger")
 
 twist_logger = LogOutput(station.GetOutputPort("measured_ee_twist"), builder)
 twist_logger.set_name("twist_logger")
+
+gripper_logger = LogOutput(station.GetOutputPort("measured_gripper_velocity"), builder)
+gripper_logger.set_name("gripper_logger")
 
 if include_camera:
     # Camera observer allows us to access camera data

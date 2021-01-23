@@ -496,7 +496,7 @@ class GripperController(LeafSystem):
         # Declare input ports
         self.target_port = self.DeclareVectorInputPort(
                                   "gripper_target",
-                                  BasicVector(2))
+                                  BasicVector(1))
         self.target_type_port = self.DeclareAbstractInputPort(
                                   "gripper_target_type",
                                   AbstractValue.Make(GripperTarget.kPosition))
@@ -510,15 +510,15 @@ class GripperController(LeafSystem):
                 "applied_gripper_torque",
                 BasicVector(2),
                 self.CalcGripperTorque)
-        self.DeclareVectorOutputPort(         # TODO: gripper position and velocity
-                "measured_gripper_position",  # commands should be 1d to match hardware
-                BasicVector(2),
+        self.DeclareVectorOutputPort(
+                "measured_gripper_position",
+                BasicVector(1),
                 self.CalcGripperPosition,
                 {self.time_ticket()}   # indicate that this doesn't depend on any inputs,
                 )                      # but should still be updated each timestep
         self.DeclareVectorOutputPort(
                 "measured_gripper_velocity",
-                BasicVector(2),
+                BasicVector(1),
                 self.CalcGripperVelocity,
                 {self.time_ticket()})
 
@@ -595,11 +595,31 @@ class GripperController(LeafSystem):
 
     def CalcGripperPosition(self, context, output):
         state = self.state_port.Eval(context)
-        output.SetFromVector(self.ComputePosition(state))
+
+        if self.type == "hande":
+            width = 0.03
+        else:  #2f_85
+            width = 0.06
+
+        # Send a single number to match the hardware
+        both_finger_positions = self.ComputePosition(state)
+        net_position = 1/width* np.mean(both_finger_positions)
+
+        output.SetFromVector([net_position])
         
     def CalcGripperVelocity(self, context, output):
         state = self.state_port.Eval(context)
-        output.SetFromVector(self.ComputeVelocity(state))
+        
+        if self.type == "hande":
+            width = 0.03
+        else:  #2f_85
+            width = 0.06
+
+        # Send a single number to match the hardware
+        both_finger_velocity = self.ComputeVelocity(state)
+        net_velocity = 1/width* np.mean(both_finger_velocity)
+
+        output.SetFromVector([net_velocity])
 
     def CalcGripperTorque(self, context, output):
         state = self.state_port.Eval(context)
@@ -611,20 +631,22 @@ class GripperController(LeafSystem):
 
         # Set PD gains depending on gripper type
         if self.type == "hande":
+            width = 0.03
             Kp = 100*np.eye(2)
             Kd = 2*np.sqrt(Kp)
-
         else:
+            width = 0.06
             Kp = 10*np.eye(2)
             Kd = 2*np.sqrt(0.01*Kp)
         
         # Set target positions and velocities based on the current control mode
         if target_type == GripperTarget.kPosition:
+            target = width - width*target*np.ones(2)
             target_finger_position = target
             target_finger_velocity = np.zeros(2)
         elif target_type == GripperTarget.kVelocity:
             target_finger_position = finger_position
-            target_finger_velocity = target
+            target_finger_velocity = -width*target
         else:
             raise RuntimeError("Invalid gripper target type: %s" % target_type)
 
