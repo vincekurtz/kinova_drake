@@ -18,7 +18,21 @@ from observers.bayes_observer import BayesObserver
 # Set up the station
 time_step = 0.002
 station = KinovaStation(time_step=time_step)
-station.SetupSinglePegScenario(gripper_type="hande")
+station.AddGround()
+station.AddArmWithHandeGripper()
+
+# Weld peg to the end-effector
+peg_urdf = "./models/manipulands/peg.sdf"
+peg = Parser(plant=station.plant).AddModelFromFile(peg_urdf,"peg")
+
+X_peg = RigidTransform()
+X_peg.set_translation([0,0,0.13])
+X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,0,np.pi/2])))
+station.plant.WeldFrames(station.plant.GetFrameByName("end_effector_link",station.arm),
+                         station.plant.GetFrameByName("base_link", peg), X_peg)
+
+#station.SetupSinglePegScenario(gripper_type="hande")
+station.ConnectToDrakeVisualizer()
 station.Finalize()
 
 # Set up the system diagram
@@ -57,18 +71,18 @@ builder.Connect(
 
 
 # Add bayesian inference system (records wrenches, estimates inertial parameters)
-observer = builder.AddSystem(BayesObserver(time_step))
+observer = builder.AddSystem(BayesObserver(time_step=time_step))
 observer.set_name("bayesian_observer")
 
 builder.Connect(
-        station.GetOutputPort("measured_ee_pose"),
-        observer.GetInputPort("ee_pose"))
+        station.GetOutputPort("measured_arm_position"),
+        observer.GetInputPort("joint_positions"))
 builder.Connect(
-        station.GetOutputPort("measured_ee_twist"),
-        observer.GetInputPort("ee_twist"))
+        station.GetOutputPort("measured_arm_velocity"),
+        observer.GetInputPort("joint_velocities"))
 builder.Connect(
-        station.GetOutputPort("measured_ee_wrench"),
-        observer.GetInputPort("ee_wrench"))
+        station.GetOutputPort("measured_arm_torque"),
+        observer.GetInputPort("joint_torques"))
 
 estimation_logger = LogOutput(observer.GetOutputPort("manipuland_parameter_estimate"), builder)
 estimation_logger.set_name("estimation_logger")
@@ -80,7 +94,7 @@ diagram = builder.Build()
 diagram.set_name("diagram")
 diagram_context = diagram.CreateDefaultContext()
 
-## DEBUG
+# DEBUG: show system diagram
 #plt.figure()
 #plot_system_graphviz(diagram, max_depth=1)
 #plt.show()
@@ -98,7 +112,7 @@ simulator.set_publish_every_time_step(False)
 # Run simulation
 try:
     simulator.Initialize()
-    simulator.AdvanceTo(20)
+    simulator.AdvanceTo(10)
 except KeyboardInterrupt:
     pass
 
@@ -106,15 +120,17 @@ except KeyboardInterrupt:
 t = estimation_logger.sample_times()
 m_hat = estimation_logger.data().flatten()
 m_var = covariance_logger.data().flatten()
+m_80_CI = 1.281552*np.sqrt(m_var)   # 80% credible interval
 
 plt.plot(t,m_hat, label="Estimate")
-plt.fill_between(t, m_hat-m_var, m_hat+m_var, label="Variance", color="green",alpha=0.5)
+plt.fill_between(t, m_hat-m_80_CI, m_hat+m_80_CI, label="80% CI", color="green",alpha=0.5)
 plt.gca().axhline(0.028, color="grey", linestyle="--", label="Ground Truth")
 
 plt.xlabel("Time (s)")
 plt.ylabel("Estimated Mass (kg)")
 
-plt.xlim(left=10)
+#plt.xlim(left=10)
+#plt.ylim(bottom=0, top=0.1)
 plt.legend()
 
 plt.show()

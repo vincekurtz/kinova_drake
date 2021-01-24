@@ -11,43 +11,77 @@ class BayesObserver(LeafSystem):
     An observer which estimates the inertial parameters of a grasped object using
     Bayesian inference. 
 
-                    ---------------------------------
-                    |                               |
-                    |                               |
-    ee_pose ------> |                               |
-                    |         BayesObserver         |
-    ee_twist -----> |                               | ------> manipuland_parameter_estimate
-                    |                               |
-    ee_wrench ----> |                               | ------> manipuland_parameter_covariance
-                    |                               |
-                    |                               |
-                    |                               |
-                    ---------------------------------
+                            ---------------------------------
+                            |                               |
+                            |                               |
+    joint_positions ------> |                               |
+                            |         BayesObserver         |
+    joint_velocities -----> |                               | ------> manipuland_parameter_estimate
+                            |                               |
+    joint_torques --------> |                               | ------> manipuland_parameter_covariance
+                            |                               |
+                            |                               |
+                            |                               |
+                            ---------------------------------
     
     """
-    def __init__(self, time_step):
-        LeafSystem.__init__(self)
+    def __init__(self, time_step, gripper="hande", method="standard", estimator="bayes", batch_size=np.inf):
+        """
+        Creates an instance of this estimation block with the above input and output ports. 
 
+        Parameters: 
+            time_step  :   the timestep for the simulation, used for estimating derivatives
+            grippper   :   "hande" or "2f_85", the gripper to use in our internal system model
+            method     :   The method we'll use for setting up the regression. The 'standard' 
+                           method is based on
+                           
+                                M*qdd + C*qd + tau_g = Y(q,qd,qdd)*theta = tau,
+                           
+                           (i.e., the system dynamics are linear in the inertial parameters),
+                           while the 'energy' method is based on
+                            
+                                Hdot = A*theta + b = qd'*tau,
+                            
+                           (i.e., the system energy dot is linear in the inertial parameters.)
+            estimator  :   The method we'll use for estimation. Must be one of:
+
+                            - 'LSE' - standard least-squares
+
+                            - 'bayes' - iterative Bayesian estimation based on NormalInverseGamma prior
+
+                            - 'full_bayes' - full Bayesian linear regression.
+
+            batch_size :   Number of data points to consider for regression. Only relevant to
+                           the 'LSE'and 'full_bayes' methods. 
+        """
+        LeafSystem.__init__(self)
         self.dt = time_step
 
-        # Declare input ports
-        self.ee_pose_port = self.DeclareVectorInputPort(
-                                    "ee_pose",
-                                    BasicVector(6))
-        self.ee_twist_port = self.DeclareVectorInputPort(
-                                    "ee_twist",
-                                    BasicVector(6))
-        self.ee_wrench_port = self.DeclareVectorInputPort(
-                                    "ee_wrench",
-                                    BasicVector(6))
+        assert method == "standard" or method == "energy", "Invalid method %s" % method
+        assert estimator == "LSE" or estimator == "bayes" or estimator == "full_bayes", "Invalid estimator %s" % estimator
+        assert gripper=="hande", "2F-85 gripper not implemented yet"
 
-        # Declare output port 
-        #example_estimate = 10   # TODO: create custom parameter estimate class
-        #self.DeclareAbstractOutputPort(
-        #        "manipuland_parameter_estimate",
-        #        lambda: AbstractValue.Make(example_estimate),
-        #        self.CalcParameterEstimate)
-        self.DeclareVectorOutputPort(    # need a vector valued port to log
+        self.method = method
+        self.estimator = estimator
+        self.batch_size = batch_size
+
+        # Create an internal model of the plant (arm + gripper + object)
+        # with symbolic values for unknown parameters
+        self.plant, self.context, self.theta = self.CreateSymbolicPlant(gripper)
+
+        # Declare input ports
+        self.q_port = self.DeclareVectorInputPort(
+                                    "joint_positions",
+                                    BasicVector(7))
+        self.qd_port = self.DeclareVectorInputPort(
+                                    "joint_velocities",
+                                    BasicVector(7))
+        self.tau_port = self.DeclareVectorInputPort(
+                                    "joint_torques",
+                                    BasicVector(7))
+
+        # Declare output ports
+        self.DeclareVectorOutputPort(
                 "manipuland_parameter_estimate",
                 BasicVector(1),
                 self.CalcParameterEstimate)
@@ -56,138 +90,154 @@ class BayesObserver(LeafSystem):
                 BasicVector(1),
                 self.SendParameterCovariance)
 
-        # Store last end-effector velocity for computing accelerations
-        self.v_last = np.zeros(6)
+        # Store regression coefficients (x_i = y_i*theta + epsilon)
+        self.xs = []
+        self.ys = []
 
-        # Store applied end-effector wrenches (F) and regression matrices (Y)
-        self.Ys = []
-        self.Fs = []
+        # Prior parameters for iterative Bayes
+        self.mu0 = np.array([0.0])          # mean and precision corresponding to uniform
+        self.Lambda0 = np.array([[0.0]])    # prior over parameters theta
 
-        # Priors
-        self.a0 = np.array([1])   # Noise epsilon ~ N(0,sigma_eps^2)
-        self.b0 = np.array([1])   # where sigma_eps^2 ~ InvGamma(a0, b0)
+        self.a0 = 1         # shape and scale corresponding to uniform prior over
+        self.b0 = 0         # log(measurment noise std deviation) [ log(sigma) ]
 
-        self.mu0 = np.array([0.05])    # P(theta | sigma_eps^2) ~ N(mu0, sigma_eps^2*Sigma0)
-        self.Sigma0 = np.array([0.1])
 
-        # Posteriors
-        self.aN = self.a0
-        self.bN = self.b0
-        self.muN = self.mu0
-        self.SigmaN = self.Sigma0
+        # Store covariance
+        self.cov = [0.0]
 
-    def CalcRegressionMatrix(self, q, v, vd):
+        # Store applied joint torques and measured joint velocities from the last timestep
+        self.qd_last = np.zeros(7)
+        self.tau_last = np.zeros(7)
+
+        self.H_last = 0
+
+    def CreateSymbolicPlant(self, gripper):
         """
-        Construct the regression matrix Y(q, v, vd) for a single rigid body,
-        where the rigid-body dynamics are given by 
+        Creates a symbolic model of the plant with unknown variables theta
+        parameterizing an object that we're grasping. 
 
-            M*vd + C*qd + tau_g = tau 
-            Y(q, v, vd)*theta = theta
-
-        where theta = [mass                     ]
-                      [center-of-mass position  ]
-                      [inertia matrix           ]
-
-        are the (lumped) inertial parameters.
+        Returns the symbolic plant, a corresponding context with symbolic variables theta,
+        and these variables. 
         """
-        pass
+        plant = MultibodyPlant(1.0)  # timestep not used
 
-    def CalcLSE(self, feasibility_constrained=True):
+        # Add the arm
+        arm_urdf = "./models/gen3_7dof/urdf/GEN3_URDF_V12.urdf"
+        arm = Parser(plant=plant).AddModelFromFile(arm_urdf, "arm")
+
+        plant.WeldFrames(plant.world_frame(),
+                         plant.GetFrameByName("base_link", arm))
+
+        # Add the gripper
+        gripper_urdf = "./models/hande_gripper/urdf/robotiq_hande_static.urdf"
+        gripper = Parser(plant=plant).AddModelFromFile(gripper_urdf, "gripper")
+
+        plant.WeldFrames(plant.GetFrameByName("end_effector_link", arm),
+                         plant.GetFrameByName("hande_base_link", gripper))
+
+        # Add the object we're holding
+        peg_urdf = "./models/manipulands/peg.sdf"
+        peg = Parser(plant=plant).AddModelFromFile(peg_urdf,"peg")
+
+        X_peg = RigidTransform()
+        X_peg.set_translation([0,0,0.13])
+        X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,0,np.pi/2])))
+        plant.WeldFrames(plant.GetFrameByName("end_effector_link",arm),
+                         plant.GetFrameByName("base_link", peg), X_peg)
+
+        # Make unknown parameters symbolic
+        plant.Finalize()
+        plant_sym = plant.ToSymbolic()
+        context_sym = plant_sym.CreateDefaultContext()
+
+        m = Variable("m")
+        #m = 0.028    # DEBUG: set to true mass
+        peg_sym = plant_sym.GetBodyByName("base_link", peg)
+        peg_sym.SetMass(context_sym, m)     # see also: SetSpatialInertiaInBodyFrame
+
+        return plant_sym, context_sym, np.array([m])
+
+    def DoFullBayesianInference(self, X, y, n):
         """
-        Perform a least squares estimate of the inertial parameters theta, i.e.,
+        Perform Bayesian linear regression to estimate theta, where
 
-            min sum( Y_i*theta - tau_i ),
+            y = X*theta + epsilon,
+            epsilon ~ N(0, sigma^2)
 
-        where regression matrices Y_i and applied torques tau_i are stored in
-        self.Ys and self.taus.
+        and (y, X) include all the availible data.
 
-        Optionally, include a LMI feasibility constraint.
+        Assumes a uniform prior on (theta, log(sigma)).
+        (See Gelman BDA3, chaper 14.2)
         """
-        Y = np.vstack(self.Ys)
-        tau = np.hstack(self.taus)
+        k = 1   # number of parameters
 
-        # Set up the optimization problem
-        mp = MathematicalProgram()
-        theta = mp.NewContinuousVariables(10,1,"theta")
+        XTX_inv = np.linalg.inv(X.T@X)
+        theta_hat = XTX_inv@X.T@y      # Least squares estimate (mean)
+        V_theta = XTX_inv              # Covariance excluding measurement noise
 
-        m = theta[0]      # mass
-        h = theta[1:4]    # mass * center-of-mass position
-        I = np.array([[theta[4,0], theta[7,0], theta[8,0]],   # inertia 
-                      [theta[7,0], theta[5,0], theta[9,0]],
-                      [theta[8,0], theta[9,0], theta[6,0]]])
+        # Posterior distribution of measurement noise variance (scaled inverse chi-squared)
+        nu = n-k
+        if nu == 0:
+            s_squared = 1e12   # a very big number
+        else:
+            s_squared = (1/nu)*(y-X@theta_hat).T@(y-X@theta_hat)
 
-        # min || Y*theta - tau ||^2
-        Q = Y.T@Y
-        b = -tau.T@Y
-        mp.AddQuadraticCost(Q=Q,b=b,vars=theta)
+        # Maximum likelihood estimate of measurement noise variance
+        sigma_hat_squared = nu*s_squared / (nu + 2)
 
-        if feasibility_constrained:
-            # s.t. Pat's LMI realizability conditions
-            Sigma = 0.5*np.trace(I)*np.eye(3) - I
-            J = np.block([[ Sigma, h],
-                          [ h.T,   m]])
-            mp.AddPositiveSemidefiniteConstraint(J)
+        # Covariance inlcuding measurement noise
+        self.cov = sigma_hat_squared * V_theta
 
-        res = Solve(mp)
+        return theta_hat
 
-        if res.is_success():
-            theta_hat = res.GetSolution(theta)
-            #print(theta_hat[0])
-
-    def DoBayesianUpdate(self):
+    def DoIterativeBayesianInference(self, X, y):
         """
-        Get a bayesian parameter estimate of theta given the data
-        (Y,F), where
+        Perform Bayesian linear regression to estimate theta, where
 
-            F = Y*theta + epsilon
-            epsilon ~ N(0,sigma_epsilon^2)
+            y = X*theta + epsilon,
+            epsilon ~ N(0, sigma^2)
 
-        """     
+        and (y, X) are just the data from the latest timestep. 
 
-        Y = np.vstack(self.Ys)
-        F = np.vstack(self.Fs)
+        Updates a normal inverse-gamma prior as per
+        https://en.wikipedia.org/wiki/Bayesian_linear_regression#Posterior_distribution
+        """
 
-        # Get number of data points
-        n = Y.shape[0]
-        k = 1   # size of parameter vector theta
-        
-        # We assume a uniform prior on (theta, log(sigma_epsilon))
+        LambdaN = X.T@X + self.Lambda0                                  # precision
+        muN = np.linalg.inv(LambdaN)@( self.Lambda0@self.mu0 + X.T@y )  # mean
 
-        # P(theta | data, sigma_epsilon) ~ N(theta_hat, sigma_epsilon^2*Sigma)
-        YTY_inv = np.linalg.inv(Y.T@Y)
-        theta_hat = YTY_inv@Y.T@F
-        Sigma = YTY_inv
+        n = 1   # number of data points
+        aN = self.a0 + n/2                                                                 # shape
+        bN = self.b0 + 0.5*(y.T@y + self.mu0.T@self.Lambda0@self.mu0 - muN.T@LambdaN@muN)  # scale
 
-        # P(sigma_epsilon^2 | data) ~ ScaledInvChiSquared(nu, s^2)
-        nu = n - k
-        s_squared = 1 / (n-k) * (F - Y@theta_hat).T@(F - Y@theta_hat)
+        # MAP estiamte of overall covariance
+        sigma_squared_map = bN / (aN + 1)
+        self.cov = sigma_squared_map*np.linalg.inv(LambdaN)
 
-        # Convert to InvGamma(a,b)
-        self.aN = nu/2
-        self.bN = nu*s_squared/2
+        # Update the priors
+        self.Lambda0 = LambdaN
+        self.mu0 = muN
+        self.a0 = aN
+        self.b0 = bN
 
-        # Save stuff
-        self.SigmaN = Sigma
+        return muN
 
-        print("mean: %s" % theta_hat)
+    def DoLeastSquares(self, X, y):
+        """
+        Return a least-squares estimate of theta, where
 
-        return theta_hat[0]
-        
+            y = X*theta
+
+        """
+        theta_hat = np.linalg.inv(X.T@X)@X.T@y
+
+        return theta_hat
+
     def SendParameterCovariance(self, context, output):
         """
         Send the current covariance of the parameter estimate as output.
-        Recall that
-
-            P(theta | sigma_epsilon ) ~ N(mu, sigma_epsilon*Sigma)
         """
-
-        sigma_epsilon_mle = self.bN / (self.aN + 1)  # Mode of inverse gamma distribution
-
-        cov = sigma_epsilon_mle * self.SigmaN
-
-        print("cov: %s" % cov)
-
-        output.SetFromVector(cov)
+        output.SetFromVector(self.cov)
 
     def CalcParameterEstimate(self, context, output):
         """
@@ -199,205 +249,86 @@ class BayesObserver(LeafSystem):
         """
         # Get data from input ports
         t = context.get_time()
-        q = self.ee_pose_port.Eval(context)
-        v = self.ee_twist_port.Eval(context)
-        tau = self.ee_wrench_port.Eval(context)
+        q = self.q_port.Eval(context)
+        qd = self.qd_port.Eval(context)
+        tau = self.tau_port.Eval(context)
+        
+        self.plant.SetPositions(self.context, q)
+        self.plant.SetVelocities(self.context, qd)
 
-        # Estimate acceleration numerically
-        vd = (v - self.v_last)/self.dt
-        self.v_last = v
-
-        m_hat = 0
-
-        #if t >= 9:
-        #    # Wait until we have a hold on the object to do any estimation
-        #    print("End-effector torque: %s" % tau)
-
-        #    # Construct the regression matrix Y
-        #    Y, b = single_body_regression_matrix(vd, v)
-
-        #    # Record regression matrix and applied wrenches
-        #    self.Ys.append(Y)
-        #    self.taus.append(tau)
-
-        #    # Get a least-squares estimate of the parameters
-        #    #self.CalcLSE(feasibility_constrained=False)
-
-        # Do a simple estimation of the mass of the held object
-        if t >= 10:
-            # Wait until we have a hold on the object to do any estimation
-            # Also need to wait until object isn't moving, since we're not
-            # considering any sort of inertia effects
-
-            # We'll do regression with 
-            #
-            #       f = ma
-            #     f_z+mg = ma
-            #       (a-g)*m = f_z
-            #       
-            f_z = tau[5]  # force applied in z-direction on end-effector
-            g = -9.81     # acceleration due to gravity
-            a = vd[5]     # acceleration of end-effector in z direction
-
-            # Get a point estimate of the mass based only on the current data 
-            # (basically least-squares)
-            m_hat = f_z/(a-g)
-
-            # Perform a Bayesian estimate of theta, where F = Y*theta + eps
-            eps = np.random.normal(0,1)  # simulate some measurement noise
-            Y = np.array([a-g]) + eps
-            F = np.array([f_z])
+        # Set up the linear regression y = X*theta
+        if self.method == "energy":
             
-            self.Ys.append(Y)
-            self.Fs.append(F)
+            # Compute Hamiltonian (overall system energy)
+            U = self.plant.CalcPotentialEnergy(self.context)
+            K = self.plant.CalcKineticEnergy(self.context)
+            H = K + U   
 
-            batch_size = 500
-            if len(self.Ys) > batch_size:
-                # Start removing oldest elements from the stored data
-                self.Ys.pop(0)
-                self.Fs.pop(0)
+            # Compute time derivative of hamiltonian
+            Hdot = (H - self.H_last)/self.dt
 
-            if len(self.Ys) > 2:
-                # Avoid singularity
-                m_hat = self.DoBayesianUpdate()
+            # qd'*tau = Hdot  is linear in theta
+            A, b = DecomposeAffineExpressions(np.array([Hdot]), self.theta)
 
+            X = A
+            y = qd.T@tau - b
+        
+            # Save Hamiltonian for computing Hdot
+            self.H_last = H
+        
+        else:  # standard method
+
+            # Estimate acceleration numerically
+            qdd = (qd - self.qd_last)/self.dt
+
+            # Compute generalized forces due to gravity
+            tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
+
+            # Get a symbolic expression for torques required to achieve the
+            # current acceleration
+            f_ext = MultibodyForces_[Expression](self.plant)
+            f_ext.SetZero()
+            tau_sym = self.plant.CalcInverseDynamics(self.context, qdd, f_ext) + tau_g
+
+            # Write this expression for torques as linear in the parameters theta
+            # TODO: this is slow. Any way to speed up?
+            A, b = DecomposeAffineExpressions(tau_sym, self.theta)
+
+            X = A
+            y = self.tau_last - b
+
+        # Ingore first timestep since derivative estimates will be way off
+        if context.get_time() > 0:
+
+            # Store linear regression data (not needed for iterative Bayes)
+            self.xs.append(X)
+            self.ys.append(y)
+
+            # Least-squares estimate
+            if self.estimator == "LSE":
+                m_hat = self.DoLeastSquares(np.vstack(self.xs), np.hstack(self.ys))
+
+            # Full Bayesian estimate
+            elif self.estimator == "full_bayes":
+                n = len(self.xs)  # number of data points
+                m_hat = self.DoFullBayesianInference(np.vstack(self.xs), np.hstack(self.ys), n)
+
+            # Iterative Bayesian estimate
+            elif self.estimator == "bayes":
+                m_hat = self.DoIterativeBayesianInference(X, y)
+
+        else:
+            m_hat = 0
+    
+        # Save data for computing derivatives
+        self.tau_last = tau
+        self.qd_last = qd
+
+        # Get rid of old data
+        if len(self.xs) > self.batch_size:
+            self.xs.pop(0)
+            self.ys.pop(0)
+        
+        # send output
         output.SetFromVector([m_hat])
 
-
-def single_body_regression_matrix(a,v):
-    """
-    Given a spatial acceleration (a) and a spatial velocity (v) of
-    a rigid object expressed in the end-effector frame, compute the 
-    regression matrix Y(a,v) which relates (lumped) inertial parameters
-    theta to spatial forces (f) applied in the end-effector frame. 
-        f = Y(a,v)*theta. 
-    We assume that theta = [ m  ]    (mass of object)
-                           [ mc ]    (mass times position of CoM in end-effector frame
-                           [ Ixx ]   (rotational inertia about end-effector frame)
-                           [ Iyy ]
-                           [ Izz ]
-                           [ Ixy ]
-                           [ Ixz ]
-                           [ Iyz ]
-    Note that the position of the CoM in the end-effector frame can be computed as
-        c = mc/m.
-    Similarly, the rotational inertia about the CoM can be computed using
-        Ibar = Ibar_com + m*S(c)*S(c)'.
-    """      
-
-    # Create symbolic version of parameters theta
-    m = Variable("m")                # mass
-    #m = 1.0
-    mc = MakeVectorVariable(3,"mc")  # mass times position of CoM in end-effector frame
-
-    Ixx = Variable("Ixx")            # rotational inerta *about end-effector frame*
-    Iyy = Variable("Iyy")            # (not CoM frame)
-    Izz = Variable("Izz")
-    Ixy = Variable("Ixy")
-    Ixz = Variable("Ixz")
-    Iyz = Variable("Iyz")
-    Ibar = np.array([[Ixx, Ixy, Ixz],   
-                     [Ixy, Iyy, Iyz],
-                     [Ixz, Iyz, Izz]])
-
-    I = np.block([[ Ibar   , S(mc)       ],   # Spatial inertia of the body in the 
-                  [ S(mc).T, m*np.eye(3) ]])  # end-effector frame
-    
-    theta = np.hstack([m, mc, Ixx, Iyy, Izz, Ixy, Ixz, Iyz])
-    #theta = np.hstack([mc, Ixx, Iyy, Izz, Ixy, Ixz, Iyz])
-
-    # Create symbolic expression for spatial force,
-    #
-    #  f = Ia + v x* Iv
-    #
-    g = np.array([0,0,0,0,0,-9.81])
-    f = I@a + spatial_force_cross_product(v, I@v)# - m*g
-
-    # Write this expression as linear in the parameters,
-    #
-    # f = Y(a,v)*theta + b
-    #
-    Y, b = DecomposeAffineExpressions(f,vars=theta)
-
-    return (Y,b)
-
-def mbp_version(a,v):
-    
-    # Define variables theta
-    m = 1.0                          # assume mass is 1
-    m_com = MakeVectorVariable(3,"m_com")
-    Ixx = Variable("Ixx")            # rotational inerta *about end-effector frame*
-    Iyy = Variable("Iyy")            # (not CoM frame)
-    Izz = Variable("Izz")
-    Ixy = Variable("Ixy")
-    Ixz = Variable("Ixz")
-    Iyz = Variable("Iyz")
-    theta = np.hstack([m_com, Ixx, Iyy, Izz, Ixy, Ixz, Iyz])
-
-    # Spatial inertia of the object
-    I = SpatialInertia_[Expression](
-            m,
-            m_com,
-            UnitInertia_[Expression](Ixx,Iyy,Izz,Ixy,Ixz,Iyz))
-
-    # Create plant which consists of a single rigid body
-    plant = MultibodyPlant(1.0)  # timestep is irrelevant
-    block = plant.AddRigidBody("block", SpatialInertia())
-
-    # gravity off for now
-    #plant.mutable_gravity_field().set_gravity_vector([0,0,0])
-
-    plant.Finalize()
-
-    # Convert the plant to symbolic form 
-    sym_plant = plant.ToSymbolic()
-    sym_context = sym_plant.CreateDefaultContext()
-
-    # Set velocities from input
-    sym_plant.SetVelocities(sym_context,v)   # from v
-
-    # Set the spatial inertia of the symbolic plant to the symbolic version
-    # (based on variables theta)
-    sym_block = sym_plant.GetBodyByName("block")
-    sym_block.SetSpatialInertiaInBodyFrame(sym_context, I)
-
-    # Run inverse dynamics to get applied spatial forces consistent with acceleration a
-    f_ext = MultibodyForces_[Expression](sym_plant)  # zero
-    f = sym_plant.CalcInverseDynamics(sym_context, a, f_ext)
-
-    # Write f as affine in theta: f = Y*theta + b
-    Y, b = DecomposeAffineExpressions(f,theta)
-
-    return (Y,b)
-
-def S(p):
-    """
-    Given a vector p in R^3, return the skew-symmetric cross product matrix
-    S = [ 0  -p2  p1]
-        [ p2  0  -p0]
-        [-p1  p0  0 ]
-    such that S(p)*a = p x a
-    """
-    return np.array([[    0, -p[2], p[1]],
-                     [ p[2],   0  ,-p[0]],
-                     [-p[1],  p[0],  0  ]])
-
-def spatial_force_cross_product(v_sp, f_sp):
-    """
-    Given a spatial velocity
-        v_sp = [w;v]
-    and a spatial force
-
-        f_sp = [n;f],
-    compute the spatial (force) cross product
-        f_sp x* f_sp = [wxn + vxf]
-                       [   wxf   ].
-    """
-    w = v_sp[:3]   # decompose linear and angular ocmponents
-    v = v_sp[3:]
-
-    n = f_sp[:3]
-    f = f_sp[3:]
-
-    return np.hstack([ np.cross(w,n) + np.cross(v,f),
-                            np.cross(w,f)           ])
