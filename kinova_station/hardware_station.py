@@ -92,11 +92,13 @@ class KinovaStationHardwareInterface(LeafSystem):
         self.DeclareVectorOutputPort(
                 "measured_ee_pose",
                 BasicVector(6),
-                self.CalcEndEffectorPose)
+                self.CalcEndEffectorPose,
+                {self.time_ticket()})
         self.DeclareVectorOutputPort(
                 "measured_ee_twist",
                 BasicVector(6),
-                self.CalcEndEffectorTwist)
+                self.CalcEndEffectorTwist,
+                {self.time_ticket()})
         self.DeclareVectorOutputPort(
                 "measured_ee_wrench",
                 BasicVector(6),
@@ -105,11 +107,13 @@ class KinovaStationHardwareInterface(LeafSystem):
         self.DeclareVectorOutputPort(
                 "measured_gripper_position",
                 BasicVector(1),
-                self.CalcGripperPosition)
+                self.CalcGripperPosition,
+                {self.time_ticket()})
         self.DeclareVectorOutputPort(
                 "measured_gripper_velocity",
                 BasicVector(1),
-                self.CalcGripperVelocity)
+                self.CalcGripperVelocity,
+                {self.time_ticket()})
 
         # Create a dummy continuous state so that the simulator
         # knows not to just jump to the last possible timestep

@@ -38,9 +38,11 @@ class CommandSequenceController(BasicController):
         current_pose = self.ee_pose_port.Eval(context)
         current_twist = self.ee_twist_port.Eval(context)
 
+        print(current_pose)
+
         # Set commanded end-effector twist using a PD controller
-        Kp = 10*np.eye(6)
-        Kd = 2*np.sqrt(Kp)
+        Kp = np.diag([100,100,100, 200,200,200])
+        Kd = 2*np.sqrt(0.5*Kp)
         
         cmd_twist = Kp@(target_pose - current_pose) + Kd@(target_twist - current_twist)
 

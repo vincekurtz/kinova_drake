@@ -62,7 +62,7 @@ class BasicController(LeafSystem):
         output.SetFrom(AbstractValue.Make(command_type))
 
     def SetEndEffectorCommandType(self, context, output):
-        command_type = EndEffectorTarget.kTwist
+        command_type = EndEffectorTarget.kWrench  # TEST
         output.SetFrom(AbstractValue.Make(command_type))
 
     def CalcGripperCommand(self, context, output):

@@ -30,6 +30,9 @@ def show_color_image():
             cv2.imshow("color_image", frame)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
+
+            #cv2.imwrite("color_image.png", frame)
+
     else:
         print("Image stream not opened")
 
@@ -49,18 +52,23 @@ def show_depth_image():
         else:
             # 'frame' is a numpy array containing the image 
 
+            #with open("depth_image_saved.npy", 'wb') as f:
+            #    np.save(f, frame)
+
             # To get a good visual of the depth image, we'll rescale so all
             # values are in [0,255]
             max_val = np.max(frame)
             frame = frame*(255/max_val)
+
             # TODO: figure out how this works calibration-wise.
             # So far these depth images don't look particularly convincing...
 
-            print(frame.shape)
 
             cv2.imshow("depth_image", frame)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
+
+            #cv2.imwrite('depth_image.png', frame)
     else:
         print("Image stream not opened")
 

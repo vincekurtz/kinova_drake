@@ -60,7 +60,7 @@ controller.set_name("controller")
 controller.ConnectToStation(builder, station)
 
 # Add bayesian inference system (estimates inertial parameters)
-observer = builder.AddSystem(BayesObserver(time_step=time_step, method="standard"))
+observer = builder.AddSystem(BayesObserver(time_step=time_step, method="energy"))
 observer.set_name("bayesian_observer")
 
 builder.Connect(

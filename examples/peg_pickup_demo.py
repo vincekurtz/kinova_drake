@@ -1,7 +1,7 @@
 ##
 #
 # Simple example of using our kinova manipulation station to pick up a peg
-# at an a-priori known location. 
+# at an a-priori known location. Runs in simulation.
 #
 ##
 
@@ -19,7 +19,7 @@ show_station_diagram = False
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
-show_toplevel_diagram = False
+show_toplevel_diagram = True
 
 # Which gripper to use (hande or 2f_85)
 gripper_type = "hande"
@@ -36,6 +36,7 @@ if show_station_diagram:
     plt.figure()
     plot_system_graphviz(station,max_depth=1)
     plt.show()
+    
 
 # Start assembling the overall system diagram
 builder = DiagramBuilder()
@@ -66,6 +67,7 @@ cs.append(Command(
 
 # Create the controller and connect inputs and outputs appropriately
 controller = builder.AddSystem(CommandSequenceController(cs))
+controller.set_name("controller")
 controller.ConnectToStation(builder, station)
 
 # Build the system diagram
