@@ -46,3 +46,32 @@ class CommandSequenceController(BasicController):
 
         output.SetFromVector(cmd_twist)
 
+    def ConnectToStation(self, builder, station):
+        """
+        Connect inputs and outputs of this controller to the given kinova station (either
+        hardware or simulation). 
+        """
+        builder.Connect(                                  # Send commands to the station
+                self.GetOutputPort("ee_command"),
+                station.GetInputPort("ee_target"))
+        builder.Connect(
+                self.GetOutputPort("ee_command_type"),
+                station.GetInputPort("ee_target_type"))
+        builder.Connect(
+                self.GetOutputPort("gripper_command"),
+                station.GetInputPort("gripper_target"))
+        builder.Connect(
+                self.GetOutputPort("gripper_command_type"),
+                station.GetInputPort("gripper_target_type"))
+
+        builder.Connect(                                     # Send state information
+                station.GetOutputPort("measured_ee_pose"),   # to the controller
+                self.GetInputPort("ee_pose"))
+        builder.Connect(
+                station.GetOutputPort("measured_ee_twist"),
+                self.GetInputPort("ee_twist"))
+
+
+
+
+

@@ -66,7 +66,7 @@ gripper_command_type = GripperTarget.kVelocity  # kPosition or kVelocity
 
 # If we're running a simulation, whether to include a simulated camera
 # and show the associated image
-include_camera = True
+include_camera = False
 show_camera_window = False
 
 # Which gripper to use (hande or 2f_85)

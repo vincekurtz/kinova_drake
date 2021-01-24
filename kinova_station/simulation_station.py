@@ -357,7 +357,7 @@ class KinovaStation(Diagram):
         # Set the frame and position of the camera
         self.camera_parent_frame = self.plant.GetFrameByName("end_effector_link", self.arm)
         self.X_camera = RigidTransform()         # position of camera in parent frame
-        self.X_camera.set_translation([0,-0.1,0.0])
+        self.X_camera.set_translation([0,0.1,0.0])
 
         self.has_camera = True
 

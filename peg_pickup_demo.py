@@ -66,30 +66,9 @@ cs.append(Command(
     duration=2,
     gripper_closed=True))
 
-# Create the controller
+# Create the controller and connect inputs and outputs appropriately
 controller = builder.AddSystem(CommandSequenceController(cs))
-
-# Send state information from the station to the controller
-builder.Connect(
-        station.GetOutputPort("measured_ee_pose"),
-        controller.GetInputPort("ee_pose"))
-builder.Connect(
-        station.GetOutputPort("measured_ee_twist"),
-        controller.GetInputPort("ee_twist"))
-
-# Send commands from the controller to the station
-builder.Connect(
-        controller.GetOutputPort("ee_command"),
-        station.GetInputPort("ee_target"))
-builder.Connect(
-        controller.GetOutputPort("ee_command_type"),
-        station.GetInputPort("ee_target_type"))
-builder.Connect(
-        controller.GetOutputPort("gripper_command"),
-        station.GetInputPort("gripper_target"))
-builder.Connect(
-        controller.GetOutputPort("gripper_command_type"),
-        station.GetInputPort("gripper_target_type"))
+controller.ConnectToStation(builder, station)
 
 # Build the system diagram
 diagram = builder.Build()

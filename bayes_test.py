@@ -37,7 +37,7 @@ station.Finalize()
 
 # Set up the system diagram
 builder = DiagramBuilder()
-builder.AddSystem(station)
+station = builder.AddSystem(station)
 
 # Add controller which moves the peg around
 cs = CommandSequence([
@@ -53,28 +53,11 @@ cs = CommandSequence([
         Command(target_pose = np.array([-np.pi/2,0,0, 0.5,-0.12,0.5]),
                 duration = 2,
                 gripper_closed = False)])
+
 controller = builder.AddSystem(CommandSequenceController(cs))
 controller.set_name("controller")
 
-builder.Connect(                                  # Send commands to the station
-        controller.GetOutputPort("ee_command"),
-        station.GetInputPort("ee_target"))
-builder.Connect(
-        controller.GetOutputPort("ee_command_type"),
-        station.GetInputPort("ee_target_type"))
-builder.Connect(
-        controller.GetOutputPort("gripper_command"),
-        station.GetInputPort("gripper_target"))
-builder.Connect(
-        controller.GetOutputPort("gripper_command_type"),
-        station.GetInputPort("gripper_target_type"))
-
-builder.Connect(                                     # Send state information
-        station.GetOutputPort("measured_ee_pose"),   # to the controller
-        controller.GetInputPort("ee_pose"))
-builder.Connect(
-        station.GetOutputPort("measured_ee_twist"),
-        controller.GetInputPort("ee_twist"))
+controller.ConnectToStation(builder, station)
 
 # Add bayesian inference system (estimates inertial parameters)
 observer = builder.AddSystem(BayesObserver(time_step=time_step, method="standard"))
