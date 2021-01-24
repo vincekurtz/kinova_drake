@@ -88,12 +88,12 @@ with KinovaStationHardwareInterface() as station:
     simulator.set_publish_every_time_step(False)
 
     integration_scheme = "explicit_euler"
-    time_step = 0.02
+    time_step = 0.10
     ResetIntegratorFromFlags(simulator, integration_scheme, time_step)
 
     # Run simulation
     simulator.Initialize()
-    simulator.AdvanceTo(10.0)
+    simulator.AdvanceTo(20.0)
 
     # Print rate data
     print("")
