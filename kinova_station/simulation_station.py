@@ -240,7 +240,7 @@ class KinovaStation(Diagram):
             raise RuntimeError("Invalid gripper type: %s" % gripper_type)
 
         X_peg = RigidTransform()
-        X_peg.set_translation([0.5,0,0.1])
+        X_peg.set_translation([0.8,0,0.1])
         X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,np.pi/2,0])))
         self.AddManipulandFromFile("./models/manipulands/peg.sdf", X_peg)
 
@@ -782,6 +782,7 @@ class CartesianController(LeafSystem):
                                                 self.ee_frame)
 
         ee_pose = np.hstack([RollPitchYaw(X_ee.rotation()).vector(), X_ee.translation()])
+
         output.SetFromVector(ee_pose)
     
     def CalcEndEffectorTwist(self, context, output):

@@ -13,20 +13,24 @@ class Command():
     A simple object describing a single target end-effector pose, 
     gripper state, and duration. 
     """
-    def __init__(self, name, target_pose, gripper_closed, duration):
+    def __init__(self, target_pose, gripper_closed, duration, name=None ):
         """
         Parameters:
 
-            name : a unique string describing this command
-            target_pose : a 6D vector (np array) describing the desired end-effector pose
-            gripper_closed : boolean, true if the gripper is to be closed
-            duration : the number of seconds allocated to achieving this command. 
+            target_pose     : a 6D vector (np array) describing the desired end-effector pose
+            gripper_closed  : boolean, true if the gripper is to be closed
+            duration        : the number of seconds allocated to achieving this command. 
+            name (optional) : a string describing this command
 
         """
-        self.name = name
         self.target_pose = target_pose
         self.gripper_closed = gripper_closed
         self.duration = duration
+       
+        if name is not None:
+            self.name = name
+        else:
+            self.name = "command"
 
     def __str__(self):
         string = "%s: \n" % self.name
@@ -73,4 +77,10 @@ class CommandSequence():
 
         # If t is not in any of those intervals, the last command holds
         return self.commands[-1]
+
+    def target_pose(self, t):
+        return self.current_command(t).target_pose
+
+    def gripper_closed(self, t):
+        return self.current_command(t).gripper_closed
 
