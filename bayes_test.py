@@ -12,8 +12,8 @@ import matplotlib.pyplot as plt
 from pydrake.all import *
 
 from kinova_station import *
-from controllers.peg_pickup_controller import PegPickupController
-from observers.bayes_observer import BayesObserver
+from controllers import Command, CommandSequence, CommandSequenceController
+from observers import BayesObserver
 
 # Set up the station
 time_step = 0.002
@@ -39,8 +39,21 @@ station.Finalize()
 builder = DiagramBuilder()
 builder.AddSystem(station)
 
-# Add peg pickup system (goes to peg, closes gripper, lifts peg up, waves around)
-controller = builder.AddSystem(PegPickupController())
+# Add controller which moves the peg around
+cs = CommandSequence([
+        Command(target_pose = np.array([-np.pi/2,0,0, 0.5,-0.12,0.7]),
+                duration = 2,
+                gripper_closed = False),
+        Command(target_pose =  np.array([-np.pi/2,0,0, 0.5,-0.12,0.5]),
+                duration = 2,
+                gripper_closed = False),
+        Command(target_pose = np.array([-np.pi/2,0,0, 0.5,-0.12,0.7]),
+                duration = 2,
+                gripper_closed = False),
+        Command(target_pose = np.array([-np.pi/2,0,0, 0.5,-0.12,0.5]),
+                duration = 2,
+                gripper_closed = False)])
+controller = builder.AddSystem(CommandSequenceController(cs))
 controller.set_name("controller")
 
 builder.Connect(                                  # Send commands to the station
@@ -62,16 +75,9 @@ builder.Connect(                                     # Send state information
 builder.Connect(
         station.GetOutputPort("measured_ee_twist"),
         controller.GetInputPort("ee_twist"))
-builder.Connect(
-        station.GetOutputPort("measured_gripper_position"),
-        controller.GetInputPort("gripper_position"))
-builder.Connect(
-        station.GetOutputPort("measured_gripper_velocity"),
-        controller.GetInputPort("gripper_velocity"))
 
-
-# Add bayesian inference system (records wrenches, estimates inertial parameters)
-observer = builder.AddSystem(BayesObserver(time_step=time_step))
+# Add bayesian inference system (estimates inertial parameters)
+observer = builder.AddSystem(BayesObserver(time_step=time_step, method="standard"))
 observer.set_name("bayesian_observer")
 
 builder.Connect(
