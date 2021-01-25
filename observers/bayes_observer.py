@@ -150,12 +150,36 @@ class BayesObserver(LeafSystem):
         plant_sym = plant.ToSymbolic()
         context_sym = plant_sym.CreateDefaultContext()
 
-        m = Variable("m")
-        #m = 0.028    # DEBUG: set to true mass
         peg_sym = plant_sym.GetBodyByName("base_link", peg)
-        peg_sym.SetMass(context_sym, m)     # see also: SetSpatialInertiaInBodyFrame
 
-        return plant_sym, context_sym, np.array([m])
+        m = Variable("m")
+
+        c = peg_sym.default_com()
+        #c = MakeVectorVariable(3,"c")
+
+        Ibar = peg_sym.default_unit_inertia()
+        Ibar = UnitInertia_[Expression](1.17e-5,1.9e-5,1.9e-5)
+        #Ixx = Variable("Ixx")
+        #Iyy = Variable("Iyy")
+        #Izz = Variable("Izz")
+        #Ixy = Variable("Ixy")
+        #Ixz = Variable("Ixz")
+        #Iyz = Variable("Iyz")
+        #Ibar = UnitInertia_[Expression](Ixx,Iyy,Izz,Ixy,Ixz,Iyz)
+
+        I = SpatialInertia_[Expression](
+                m, 
+                c,
+                Ibar )
+
+        print(I)
+
+        peg_sym.SetSpatialInertiaInBodyFrame(context_sym, I)
+
+        #theta = np.hstack([m,c,Ixx,Iyy,Izz,Ixy,Ixz,Iyz])
+        theta = np.hstack([m])
+
+        return plant_sym, context_sym, theta
 
     def DoFullBayesianInference(self, X, y, n):
         """
