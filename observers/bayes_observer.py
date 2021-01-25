@@ -171,7 +171,7 @@ class BayesObserver(LeafSystem):
 
         I = SpatialInertia_[Expression](
                 m, 
-                h/m,
+                h,
                 Ibar )
 
         print(I)
