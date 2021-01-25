@@ -60,7 +60,7 @@ simulate = True
 
 # If we're running a simulation, choose which sort of commands are
 # sent to the arm and the gripper
-ee_command_type = EndEffectorTarget.kTwist      # kPose, kTwist, or kWrench
+ee_command_type = EndEffectorTarget.kWrench      # kPose, kTwist, or kWrench
 gripper_command_type = GripperTarget.kPosition  # kPosition or kVelocity
 
 # If we're running a simulation, whether to include a simulated camera
@@ -76,6 +76,7 @@ gripper_type = "hande"
 # Set up the kinova station
 station = KinovaStation(time_step=0.001)
 station.SetupSinglePegScenario(gripper_type=gripper_type)
+station.TestJointDamping()
 if include_camera:
     station.AddCamera(show_window=show_camera_window)
     station.ConnectToMeshcatVisualizer()
@@ -103,8 +104,8 @@ elif ee_command_type == EndEffectorTarget.kTwist:
     target_source = builder.AddSystem(ConstantVectorSource(twist_des))
 
 elif ee_command_type == EndEffectorTarget.kWrench:
-    wrench_des = np.array([0,0,0.0,
-                            0.1,0.0,0.0])
+    wrench_des = np.array([1,0,0.0,
+                            0.0,0.0,1.0])
     target_source = builder.AddSystem(ConstantVectorSource(wrench_des))
 
 else:
@@ -208,7 +209,7 @@ if simulate:
     # Set default arm positions
     #q0 = np.array([0.0, -np.pi/5, np.pi, -0.8*np.pi, np.pi, 0.2*np.pi, 0.5*np.pi])  # to point camera at the peg
     #station.SetArmPositions(diagram, diagram_context, q0)
-    station.go_home(diagram, diagram_context, name="Retract")
+    station.go_home(diagram, diagram_context, name="Home")
 
     # Set starting position for any objects in the scene
     station.SetManipulandStartPositions(diagram, diagram_context)
