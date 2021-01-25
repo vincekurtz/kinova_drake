@@ -10,19 +10,64 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 from pydrake.all import *
+from meshcat.servers.zmqserver import start_zmq_server_as_subprocess
 
 # load saved image
 with open("depth_image_saved.npy", "rb") as f:
     frame = np.load(f)  # I feel like these should not be all ints...
 
-# show in a pretty way with 
-#frame = frame[10:-10, 50:-10]
-#plt.imshow(frame)
-#plt.show()
-
 # Create a drake depth image
-depth_image = Image[PixelType.kDepth16U](width=frame.shape[1],height=frame.shape[0])
+pixel_type = PixelType.kDepth16U
+depth_image = Image[pixel_type](width=frame.shape[1],height=frame.shape[0])
 depth_image.mutable_data[:,:] = frame.T[np.newaxis].T
 
+# Set up a point cloud publisher
+builder = DiagramBuilder()
+plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=0.0)
+
+depth_pub = builder.AddSystem(
+        ConstantValueSource(AbstractValue.Make(depth_image)))
+depth_pub.set_name("depth_publisher")
+
+camera_info = CameraInfo(
+        width=270,
+        height=480,
+        fov_y=np.radians(40))  # from https://www.intel.com/content/dam/support/us/en/documents/emerging-technologies/intel-realsense-technology/Intel-RealSense-D400-Series-Datasheet.pdf
+point_cloud_gen = builder.AddSystem(
+        DepthImageToPointCloud(camera_info, pixel_type))
+point_cloud_gen.set_name("point_cloud_generator")
+
+builder.Connect(
+        depth_pub.get_output_port(),
+        point_cloud_gen.depth_image_input_port())
+
+# Set up meshcat viewer
+proc, zmq_url, web_url = start_zmq_server_as_subprocess()
+
+meshcat = ConnectMeshcatVisualizer(
+        builder=builder, 
+        scene_graph=scene_graph,
+        zmq_url=zmq_url)
+X_Camera = RigidTransform()
+meshcat_pointcloud = builder.AddSystem(MeshcatPointCloudVisualizer(meshcat, X_WP=X_Camera))
+
+builder.Connect(
+        point_cloud_gen.point_cloud_output_port(),
+        meshcat_pointcloud.get_input_port())
+
+diagram = builder.Build()
+
+#plt.figure()
+#plot_system_graphviz(diagram)
+#plt.show()
+
+# Evaluate camera outputs to get the image
+plant.Finalize()
+context = diagram.CreateDefaultContext()
+
+diagram.Publish(context)
+
+# Do something to avoid quitting immediately
 plt.imshow(np.squeeze(depth_image.data))
 plt.show()
+
