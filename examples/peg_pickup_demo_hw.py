@@ -63,7 +63,14 @@ with KinovaStationHardwareInterface() as station:
         gripper_closed=True))
 
     # Create the controller and connect inputs and outputs appropriately
-    controller = builder.AddSystem(CommandSequenceController(cs))
+    Kp = np.diag([100, 100, 100, 200, 200, 200])  # high gains needed to overcome
+    Kd = 2*np.sqrt(0.5*Kp)                        # significant joint friction
+
+    controller = builder.AddSystem(CommandSequenceController(
+        cs,
+        command_type=EndEffectorTarget.kWrench,  # wrench commands work best on hardware
+        Kp=Kp,
+        Kd=Kd))
     controller.set_name("controller")
     controller.ConnectToStation(builder, station)
 

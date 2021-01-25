@@ -75,8 +75,7 @@ gripper_type = "hande"
 
 # Set up the kinova station
 station = KinovaStation(time_step=0.001)
-station.SetupSinglePegScenario(gripper_type=gripper_type)
-station.TestJointDamping()
+station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=True)
 if include_camera:
     station.AddCamera(show_window=show_camera_window)
     station.ConnectToMeshcatVisualizer()
@@ -104,8 +103,8 @@ elif ee_command_type == EndEffectorTarget.kTwist:
     target_source = builder.AddSystem(ConstantVectorSource(twist_des))
 
 elif ee_command_type == EndEffectorTarget.kWrench:
-    wrench_des = np.array([1,0,0.0,
-                            0.0,0.0,1.0])
+    wrench_des = np.array([0,0.0,0.0,
+                            0.0,0.0,0.1])
     target_source = builder.AddSystem(ConstantVectorSource(wrench_des))
 
 else:

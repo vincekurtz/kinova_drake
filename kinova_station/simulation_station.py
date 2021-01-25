@@ -226,16 +226,16 @@ class KinovaStation(Diagram):
         # Build the diagram
         self.builder.BuildInto(self)
 
-    def SetupSinglePegScenario(self, gripper_type="hande"):
+    def SetupSinglePegScenario(self, gripper_type="hande", arm_damping=False):
         """
         Set up a scenario with the robot arm, a gripper, and a single peg. 
         And connect to the Drake visualizer while we're at it.
         """
         self.AddGround()
         if gripper_type == "hande":
-            self.AddArmWithHandeGripper()
+            self.AddArmWithHandeGripper(arm_damping=arm_damping)
         elif gripper_type == "2f_85":
-            self.AddArmWith2f85Gripper()
+            self.AddArmWith2f85Gripper(arm_damping=arm_damping)
         else:
             raise RuntimeError("Invalid gripper type: %s" % gripper_type)
 
@@ -267,11 +267,17 @@ class KinovaStation(Diagram):
                 "ground_visual",
                 np.array([0.5,0.5,0.5,0]))  # transparent
 
-    def AddArm(self):
+    def AddArm(self, include_damping=False):
         """
         Add the 7-dof gen3 arm to the system.
         """
-        arm_urdf = "./models/gen3_7dof/urdf/GEN3_URDF_V12.urdf"
+        if include_damping:
+            # The hardware system has lots of damping so this is more realistic,
+            # but requires a simulation with small timesteps.
+            arm_urdf = "./models/gen3_7dof/urdf/GEN3_URDF_V12_with_damping.urdf"
+        else:
+            arm_urdf = "./models/gen3_7dof/urdf/GEN3_URDF_V12.urdf"
+
         self.arm = Parser(plant=self.plant).AddModelFromFile(arm_urdf, "arm")
         self.controller_arm = Parser(plant=self.controller_plant).AddModelFromFile(arm_urdf, "arm")
 
@@ -362,18 +368,18 @@ class KinovaStation(Diagram):
         self.has_camera = True
 
         
-    def AddArmWithHandeGripper(self):
+    def AddArmWithHandeGripper(self, arm_damping=False):
         """
         Add the 7-dof arm and a model of the hande gripper to the system.
         """
-        self.AddArm()
+        self.AddArm(include_damping=arm_damping)
         self.AddHandeGripper()
     
-    def AddArmWith2f85Gripper(self):
+    def AddArmWith2f85Gripper(self, arm_damping=False):
         """
         Add the 7-dof arm and a model of the 2F-85 gripper to the system.
         """
-        self.AddArm()
+        self.AddArm(include_damping=arm_damping)
         self.Add2f85Gripper()
 
     def AddManipulandFromFile(self, model_file, X_WObject):
@@ -833,7 +839,6 @@ class CartesianController(LeafSystem):
                                                        self.world_frame)
 
             tau = tau_g + J.T@wrench_des
-
 
         elif target_type == EndEffectorTarget.kTwist:
             # Compue joint torques consistent with the desired twist

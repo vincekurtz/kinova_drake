@@ -19,7 +19,7 @@ show_station_diagram = False
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
-show_toplevel_diagram = True
+show_toplevel_diagram = False
 
 # Which gripper to use (hande or 2f_85)
 gripper_type = "hande"
@@ -28,7 +28,7 @@ gripper_type = "hande"
 
 # Set up the kinova station
 station = KinovaStation(time_step=0.001)
-station.SetupSinglePegScenario(gripper_type=gripper_type)
+station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False)
 station.Finalize()
 
 if show_station_diagram:
@@ -36,7 +36,6 @@ if show_station_diagram:
     plt.figure()
     plot_system_graphviz(station,max_depth=1)
     plt.show()
-    
 
 # Start assembling the overall system diagram
 builder = DiagramBuilder()
@@ -66,7 +65,14 @@ cs.append(Command(
     gripper_closed=True))
 
 # Create the controller and connect inputs and outputs appropriately
-controller = builder.AddSystem(CommandSequenceController(cs))
+Kp = 10*np.eye(6)
+Kd = 2*np.sqrt(Kp)
+
+controller = builder.AddSystem(CommandSequenceController(
+    cs,
+    command_type=EndEffectorTarget.kTwist,  # Twist commands seem most reliable in simulation
+    Kp=Kp,
+    Kd=Kd))
 controller.set_name("controller")
 controller.ConnectToStation(builder, station)
 

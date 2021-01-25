@@ -16,7 +16,7 @@ class BasicController(LeafSystem):
                             -------------------------
                             |                       |
                             |                       |
-                            |                       | ---> ee_command (desired twist)
+                            |                       | ---> ee_command (desired wrench)
                             |                       | ---> ee_command_type
     ee_pose --------------> |    BasicController    |
     ee_twist -------------> |                       |
@@ -28,8 +28,12 @@ class BasicController(LeafSystem):
                             -------------------------
 
     """
-    def __init__(self):
+    def __init__(self, command_type=EndEffectorTarget.kTwist):
         LeafSystem.__init__(self)
+
+        # Specify what sort of end-effector target we'll use. Twist tends to
+        # work better in simulation, and Wrench on the hardware. 
+        self.command_type = command_type
 
         # Declare input ports (current robot state)
         self.ee_pose_port = self.DeclareVectorInputPort(
@@ -62,8 +66,7 @@ class BasicController(LeafSystem):
         output.SetFrom(AbstractValue.Make(command_type))
 
     def SetEndEffectorCommandType(self, context, output):
-        command_type = EndEffectorTarget.kWrench  # TEST
-        output.SetFrom(AbstractValue.Make(command_type))
+        output.SetFrom(AbstractValue.Make(self.command_type))
 
     def CalcGripperCommand(self, context, output):
         output.SetFromVector([0])  # open
@@ -74,9 +77,9 @@ class BasicController(LeafSystem):
         target_twist = np.zeros(6)
         current_twist = self.ee_twist_port.Eval(context)
 
-        # Command is simple: just a (P)D controller setting twist to zero
+        # Default command is simple: just a (P)D controller setting twist to zero
         Kd = 2*np.eye(6)
-        cmd_twist = Kd@(target_twist - current_twist)
+        cmd = Kd@(target_twist - current_twist)
 
-        output.SetFromVector(cmd_twist)
+        output.SetFromVector(cmd)
 

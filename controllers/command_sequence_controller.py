@@ -1,4 +1,4 @@
-
+from kinova_station import EndEffectorTarget
 from controllers.basic_controller import *
 from controllers.command_sequence import *
 
@@ -9,9 +9,17 @@ class CommandSequenceController(BasicController):
 
     Sends exclusively gripper position commands and end-effector twist commands.
     """
-    def __init__(self, command_sequence):
-        BasicController.__init__(self)
+    def __init__(self, command_sequence, 
+                       command_type = EndEffectorTarget.kTwist, 
+                       Kp = 10*np.eye(6),
+                       Kd = 2*np.sqrt(10)*np.eye(6)):
+
+        BasicController.__init__(self, command_type=command_type)
+
         self.cs = command_sequence   # a CommandSequence object
+
+        self.Kp = Kp  # PD gains
+        self.Kd = Kd
 
     def CalcGripperCommand(self, context, output):
         t = context.get_time()
@@ -38,13 +46,10 @@ class CommandSequenceController(BasicController):
         current_pose = self.ee_pose_port.Eval(context)
         current_twist = self.ee_twist_port.Eval(context)
 
-        # Set commanded end-effector twist using a PD controller
-        Kp = np.diag([100,100,100, 200,200,200])
-        Kd = 2*np.sqrt(0.5*Kp)
-        
-        cmd_twist = Kp@(target_pose - current_pose) + Kd@(target_twist - current_twist)
+        # Set command (i.e. end-effector twist or wrench) using a PD controller
+        cmd = self.Kp@(target_pose - current_pose) + self.Kd@(target_twist - current_twist)
 
-        output.SetFromVector(cmd_twist)
+        output.SetFromVector(cmd)
 
     def ConnectToStation(self, builder, station):
         """
@@ -70,8 +75,4 @@ class CommandSequenceController(BasicController):
         builder.Connect(
                 station.GetOutputPort("measured_ee_twist"),
                 self.GetInputPort("ee_twist"))
-
-
-
-
 
