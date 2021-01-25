@@ -60,7 +60,7 @@ controller.set_name("controller")
 controller.ConnectToStation(builder, station)
 
 # Add bayesian inference system (estimates inertial parameters)
-observer = builder.AddSystem(BayesObserver(time_step=time_step, method="energy"))
+observer = builder.AddSystem(BayesObserver(time_step=time_step, method="standard", estimator="bayes"))
 observer.set_name("bayesian_observer")
 
 builder.Connect(
@@ -107,16 +107,18 @@ except KeyboardInterrupt:
 
 # Make plot of estimate
 t = estimation_logger.sample_times()
-m_hat = estimation_logger.data().flatten()
-m_var = covariance_logger.data().flatten()
-m_80_CI = 1.281552*np.sqrt(m_var)   # 80% credible interval
+theta_hat = estimation_logger.data()
+theta_var = covariance_logger.data().flatten()
+#m_80_CI = 1.281552*np.sqrt(m_var)   # 80% credible interval
 
-plt.plot(t,m_hat, label="Estimate")
-plt.fill_between(t, m_hat-m_80_CI, m_hat+m_80_CI, label="80% CI", color="green",alpha=0.5)
-plt.gca().axhline(0.028, color="grey", linestyle="--", label="Ground Truth")
+plt.plot(t, theta_hat[0,:], label="Estimate - px ")
+plt.plot(t, theta_hat[1,:], label="Estimate - py ")
+plt.plot(t, theta_hat[2,:], label="Estimate - pz ")
+#plt.fill_between(t, m_hat-m_80_CI, m_hat+m_80_CI, label="80% CI", color="green",alpha=0.5)
+#plt.gca().axhline(0.028, color="grey", linestyle="--", label="Ground Truth")
 
 plt.xlabel("Time (s)")
-plt.ylabel("Estimated Mass (kg)")
+plt.ylabel("Parameter Estimate")
 
 #plt.xlim(left=10)
 #plt.ylim(bottom=0, top=0.1)

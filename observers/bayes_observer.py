@@ -83,7 +83,7 @@ class BayesObserver(LeafSystem):
         # Declare output ports
         self.DeclareVectorOutputPort(
                 "manipuland_parameter_estimate",
-                BasicVector(1),
+                BasicVector(3),
                 self.CalcParameterEstimate)
         self.DeclareVectorOutputPort(
                 "manipuland_parameter_covariance",
@@ -153,9 +153,10 @@ class BayesObserver(LeafSystem):
         peg_sym = plant_sym.GetBodyByName("base_link", peg)
 
         m = Variable("m")
+        m = 1
 
-        c = peg_sym.default_com()
-        #c = MakeVectorVariable(3,"c")
+        #c = peg_sym.default_com()
+        h = MakeVectorVariable(3,"h")
 
         Ibar = peg_sym.default_unit_inertia()
         Ibar = UnitInertia_[Expression](1.17e-5,1.9e-5,1.9e-5)
@@ -169,7 +170,7 @@ class BayesObserver(LeafSystem):
 
         I = SpatialInertia_[Expression](
                 m, 
-                c,
+                h/m,
                 Ibar )
 
         print(I)
@@ -177,7 +178,7 @@ class BayesObserver(LeafSystem):
         peg_sym.SetSpatialInertiaInBodyFrame(context_sym, I)
 
         #theta = np.hstack([m,c,Ixx,Iyy,Izz,Ixy,Ixz,Iyz])
-        theta = np.hstack([m])
+        theta = np.hstack([h])
 
         return plant_sym, context_sym, theta
 
@@ -236,7 +237,7 @@ class BayesObserver(LeafSystem):
 
         # MAP estiamte of overall covariance
         sigma_squared_map = bN / (aN + 1)
-        self.cov = sigma_squared_map*np.linalg.inv(LambdaN)
+        #self.cov = sigma_squared_map*np.linalg.inv(LambdaN)
 
         # Update the priors
         self.Lambda0 = LambdaN
@@ -330,19 +331,19 @@ class BayesObserver(LeafSystem):
 
             # Least-squares estimate
             if self.estimator == "LSE":
-                m_hat = self.DoLeastSquares(np.vstack(self.xs), np.hstack(self.ys))
+                theta_hat = self.DoLeastSquares(np.vstack(self.xs), np.hstack(self.ys))
 
             # Full Bayesian estimate
             elif self.estimator == "full_bayes":
                 n = len(self.xs)  # number of data points
-                m_hat = self.DoFullBayesianInference(np.vstack(self.xs), np.hstack(self.ys), n)
+                theta_hat = self.DoFullBayesianInference(np.vstack(self.xs), np.hstack(self.ys), n)
 
             # Iterative Bayesian estimate
             elif self.estimator == "bayes":
-                m_hat = self.DoIterativeBayesianInference(X, y)
+                theta_hat = self.DoIterativeBayesianInference(X, y)
 
         else:
-            m_hat = 0
+            theta_hat = np.zeros(3)
     
         # Save data for computing derivatives
         self.tau_last = tau
@@ -354,5 +355,5 @@ class BayesObserver(LeafSystem):
             self.ys.pop(0)
         
         # send output
-        output.SetFromVector([m_hat])
+        output.SetFromVector(theta_hat)
 
