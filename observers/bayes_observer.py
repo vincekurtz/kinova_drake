@@ -140,7 +140,7 @@ class BayesObserver(LeafSystem):
         peg = Parser(plant=plant).AddModelFromFile(peg_urdf,"peg")
 
         X_peg = RigidTransform()
-        X_peg.set_translation([0,0,0.13])
+        #X_peg.set_translation([0,0,0.13])
         X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,0,np.pi/2])))
         plant.WeldFrames(plant.GetFrameByName("end_effector_link",arm),
                          plant.GetFrameByName("base_link", peg), X_peg)
@@ -153,7 +153,8 @@ class BayesObserver(LeafSystem):
         peg_sym = plant_sym.GetBodyByName("base_link", peg)
 
         m = Variable("m")
-        m = 1
+        m = peg_sym.default_mass()
+        print(m)
 
         #c = peg_sym.default_com()
         h = MakeVectorVariable(3,"h")
