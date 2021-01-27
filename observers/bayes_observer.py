@@ -87,7 +87,7 @@ class BayesObserver(LeafSystem):
                 self.CalcParameterEstimate)
         self.DeclareVectorOutputPort(
                 "manipuland_parameter_covariance",
-                BasicVector(1),
+                BasicVector(3),
                 self.SendParameterCovariance)
 
         # Store regression coefficients (x_i = y_i*theta + epsilon)
@@ -103,7 +103,7 @@ class BayesObserver(LeafSystem):
 
 
         # Store covariance
-        self.cov = [0.0]
+        self.cov = np.zeros((3,3))
 
         # Store applied joint torques and measured joint velocities from the last timestep
         self.qd_last = np.zeros(7)
@@ -152,12 +152,11 @@ class BayesObserver(LeafSystem):
 
         peg_sym = plant_sym.GetBodyByName("base_link", peg)
 
-        m = Variable("m")
+        #m = Variable("m")
         m = peg_sym.default_mass()
-        print(m)
 
         #c = peg_sym.default_com()
-        h = MakeVectorVariable(3,"h")
+        c = MakeVectorVariable(3,"c")
 
         Ibar = peg_sym.default_unit_inertia()
         Ibar = UnitInertia_[Expression](1.17e-5,1.9e-5,1.9e-5)
@@ -171,15 +170,13 @@ class BayesObserver(LeafSystem):
 
         I = SpatialInertia_[Expression](
                 m, 
-                h,
+                c,
                 Ibar )
-
-        print(I)
 
         peg_sym.SetSpatialInertiaInBodyFrame(context_sym, I)
 
         #theta = np.hstack([m,c,Ixx,Iyy,Izz,Ixy,Ixz,Iyz])
-        theta = np.hstack([h])
+        theta = np.hstack([c])
 
         return plant_sym, context_sym, theta
 
@@ -238,7 +235,8 @@ class BayesObserver(LeafSystem):
 
         # MAP estiamte of overall covariance
         sigma_squared_map = bN / (aN + 1)
-        #self.cov = sigma_squared_map*np.linalg.inv(LambdaN)
+        self.cov = sigma_squared_map*np.linalg.inv(LambdaN)
+        print(self.cov)
 
         # Update the priors
         self.Lambda0 = LambdaN
@@ -263,7 +261,9 @@ class BayesObserver(LeafSystem):
         """
         Send the current covariance of the parameter estimate as output.
         """
-        output.SetFromVector(self.cov)
+        # Just send the marginal variances for each axis
+        print(self.cov)
+        output.SetFromVector([self.cov[0,0], self.cov[1,1], self.cov[2,2]])
 
     def CalcParameterEstimate(self, context, output):
         """
@@ -318,6 +318,13 @@ class BayesObserver(LeafSystem):
 
             # Write this expression for torques as linear in the parameters theta
             # TODO: this is slow. Any way to speed up?
+            #print(tau_sym[0])
+            #print("")
+            #print(tau_sym[0].Expand())
+
+            #for i in range(len(tau_sym)):
+            #    tau_sym[i] = tau_sym[i].Expand()
+
             A, b = DecomposeAffineExpressions(tau_sym, self.theta)
 
             X = A

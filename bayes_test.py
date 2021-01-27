@@ -101,27 +101,39 @@ simulator.set_publish_every_time_step(False)
 # Run simulation
 try:
     simulator.Initialize()
-    simulator.AdvanceTo(10)
+    simulator.AdvanceTo(5)
 except KeyboardInterrupt:
     pass
 
 # Make plot of estimate
 t = estimation_logger.sample_times()
 theta_hat = estimation_logger.data()
-theta_var = covariance_logger.data().flatten()
-#m_80_CI = 1.281552*np.sqrt(m_var)   # 80% credible interval
+theta_var = covariance_logger.data()
+theta_std = np.sqrt(theta_var)
 
-plt.plot(t, theta_hat[0,:], label="Estimate - px ")
-plt.plot(t, theta_hat[1,:], label="Estimate - py ")
-plt.plot(t, theta_hat[2,:], label="Estimate - pz ")
+plt.plot(t, theta_hat[0,:], label="px ")
+plt.plot(t, theta_hat[1,:], label="py ")
+plt.plot(t, theta_hat[2,:], label="pz ")
+
+# Show the ground truth values
+true_com = np.array([0.0, 0.0, 0.13])
+colors = plt.rcParams['axes.prop_cycle'].by_key()['color']      # Use the default color sequence
+plt.gca().axhline(true_com[0], linestyle="--", color=colors[0]) # to match estimates above
+plt.gca().axhline(true_com[1], linestyle="--", color=colors[1])
+plt.gca().axhline(true_com[2], linestyle="--", color=colors[2])
+
+# Show the covariances
+plt.fill_between(t, theta_hat[0,:]-theta_std[0,:], theta_hat[0,:]+theta_std[0,:], color=colors[0], alpha=0.2)
+plt.fill_between(t, theta_hat[1,:]-theta_std[1,:], theta_hat[1,:]+theta_std[1,:], color=colors[1], alpha=0.2)
+plt.fill_between(t, theta_hat[2,:]-theta_std[2,:], theta_hat[2,:]+theta_std[2,:], color=colors[2], alpha=0.2)
+
 #plt.fill_between(t, m_hat-m_80_CI, m_hat+m_80_CI, label="80% CI", color="green",alpha=0.5)
-#plt.gca().axhline(0.028, color="grey", linestyle="--", label="Ground Truth")
 
 plt.xlabel("Time (s)")
 plt.ylabel("Parameter Estimate")
 
 #plt.xlim(left=10)
-#plt.ylim(bottom=0, top=0.1)
+plt.ylim(bottom=-0.5, top=0.5)
 plt.legend()
 
 plt.show()
