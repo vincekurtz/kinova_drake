@@ -101,7 +101,6 @@ class BayesObserver(LeafSystem):
         self.a0 = 1         # shape and scale corresponding to uniform prior over
         self.b0 = 0         # log(measurment noise std deviation) [ log(sigma) ]
 
-
         # Store covariance
         self.cov = np.zeros((3,3))
 
@@ -158,8 +157,9 @@ class BayesObserver(LeafSystem):
         #c = peg_sym.default_com()
         c = MakeVectorVariable(3,"c")
 
-        Ibar = peg_sym.default_unit_inertia()
-        Ibar = UnitInertia_[Expression](1.17e-5,1.9e-5,1.9e-5)
+        #Ibar = peg_sym.default_unit_inertia()
+        Ibar = RotationalInertia_[Expression](1.17e-5,1.9e-5,1.9e-5)
+        Ibar = UnitInertia_[Expression]().SetFromRotationalInertia(Ibar,m)
         #Ixx = Variable("Ixx")
         #Iyy = Variable("Iyy")
         #Izz = Variable("Izz")
