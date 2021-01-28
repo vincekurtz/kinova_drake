@@ -57,27 +57,18 @@ controller = builder.AddSystem(CommandSequenceController(cs))
 controller.set_name("controller")
 controller.ConnectToStation(builder, station)
 
-# Loggers force certain outputs to be computed
-wrench_logger = LogOutput(station.GetOutputPort("measured_ee_wrench"),builder)
-wrench_logger.set_name("wrench_logger")
-
-pose_logger = LogOutput(station.GetOutputPort("measured_ee_pose"), builder)
-pose_logger.set_name("pose_logger")
-
-twist_logger = LogOutput(station.GetOutputPort("measured_ee_twist"), builder)
-twist_logger.set_name("twist_logger")
-
-gripper_logger = LogOutput(station.GetOutputPort("measured_gripper_velocity"), builder)
-gripper_logger.set_name("gripper_logger")
-
 # Convert the depth image to a point cloud
 point_cloud_generator = builder.AddSystem(DepthImageToPointCloud(
                                     CameraInfo(width=640, height=480, fov_y=1.0),
-                                    pixel_type=PixelType.kDepth32F))
+                                    pixel_type=PixelType.kDepth32F,
+                                    fields=BaseField.kXYZs | BaseField.kRGBs))
 point_cloud_generator.set_name("point_cloud_generator")
 builder.Connect(
         station.GetOutputPort("camera_depth_image"),
         point_cloud_generator.depth_image_input_port())
+builder.Connect(
+        station.GetOutputPort("camera_rgb_image"),
+        point_cloud_generator.color_image_input_port())
 
 # Connect camera pose to point cloud generator
 builder.Connect(
