@@ -9,6 +9,7 @@
 
 import cv2
 import numpy as np
+import matplotlib.pyplot as plt
 
 #print(cv2.getBuildInformation())  # check that GStreamer is included
 
@@ -27,9 +28,12 @@ def show_color_image():
             print("empty frame")
         else:
             # 'frame' is a numpy array containing the image 
-            cv2.imshow("color_image", frame)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+
+            plt.imshow(frame)
+            
+            #cv2.imshow("color_image", frame)
+            #cv2.waitKey(0)
+            #cv2.destroyAllWindows()
 
             #cv2.imwrite("color_image.png", frame)
 
@@ -63,10 +67,14 @@ def show_depth_image():
             # TODO: figure out how this works calibration-wise.
             # So far these depth images don't look particularly convincing...
 
+            plt.figure()
+            plt.imshow(frame)
+            plt.show()
 
-            cv2.imshow("depth_image", frame)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+
+            #cv2.imshow("depth_image", frame)
+            #cv2.waitKey(0)
+            #cv2.destroyAllWindows()
 
             #cv2.imwrite('depth_image.png', frame)
     else:
