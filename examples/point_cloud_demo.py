@@ -15,11 +15,11 @@ from controllers import Command, CommandSequence, CommandSequenceController
 ########################### Parameters #################################
 
 # Show the internal workings of the station
-show_station_diagram = True
+show_station_diagram = False
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
-show_toplevel_diagram = True
+show_toplevel_diagram = False
 
 # Which gripper to use (hande or 2f_85)
 gripper_type = "hande"
@@ -27,7 +27,7 @@ gripper_type = "hande"
 ########################################################################
 
 # Set up the kinova station
-station = KinovaStation(time_step=0.001)
+station = KinovaStation(time_step=0.003)
 station.SetupSinglePegScenario(gripper_type=gripper_type)
 station.AddCamera()
 station.ConnectToMeshcatVisualizer()
@@ -69,7 +69,7 @@ controller.ConnectToStation(builder, station)
 # Convert the depth image to a point cloud
 # Note that this system block is slow
 point_cloud_generator = builder.AddSystem(DepthImageToPointCloud(
-                                    CameraInfo(width=640, height=480, fov_y=1.0),
+                                    CameraInfo(width=270, height=480, fov_y=np.radians(40)),
                                     fields=BaseField.kXYZs | BaseField.kRGBs))
 point_cloud_generator.set_name("point_cloud_generator")
 builder.Connect(

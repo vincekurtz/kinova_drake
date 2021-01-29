@@ -174,7 +174,7 @@ if include_camera:
 
     # Convert the depth image to a point cloud
     point_cloud_generator = builder.AddSystem(DepthImageToPointCloud(
-                                        CameraInfo(width=640, height=480, fov_y=1.0),
+                                        CameraInfo(width=270, height=480, fov_y=np.radians(40)),
                                         pixel_type=PixelType.kDepth32F))
     point_cloud_generator.set_name("point_cloud_generator")
     builder.Connect(

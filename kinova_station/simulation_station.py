@@ -346,9 +346,9 @@ class KinovaStation(Diagram):
         self.scene_graph.AddRenderer(renderer_name, 
                                      MakeRenderEngineVtk(RenderEngineVtkParams()))
   
-        # Set camera properites. This are just made-up properties that don't necessarily 
-        # correspond to the camera on the hardware (Intel Realsense D410).
-        intrinsics = CameraInfo(width=640, height=480, fov_y=1.0)  # just a random guess
+        # Set camera properites. These roughly correspond
+        # to the camera on the hardware (Intel Realsense D410).
+        intrinsics = CameraInfo(width=270, height=480, fov_y=np.radians(40))
         clipping = ClippingRange(0.01,3.0)
         X_lens = RigidTransform()
         camera_core = RenderCameraCore(renderer_name, intrinsics, clipping, X_lens)
