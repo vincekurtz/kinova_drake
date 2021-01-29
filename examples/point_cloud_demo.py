@@ -67,17 +67,17 @@ controller.set_name("controller")
 controller.ConnectToStation(builder, station)
 
 # Convert the depth image to a point cloud
+# Note that this system block is slow
 point_cloud_generator = builder.AddSystem(DepthImageToPointCloud(
                                     CameraInfo(width=640, height=480, fov_y=1.0),
-                                    pixel_type=PixelType.kDepth32F))
-                                    #fields=BaseField.kXYZs | BaseField.kRGBs))
+                                    fields=BaseField.kXYZs | BaseField.kRGBs))
 point_cloud_generator.set_name("point_cloud_generator")
 builder.Connect(
         station.GetOutputPort("camera_depth_image"),
         point_cloud_generator.depth_image_input_port())
-#builder.Connect(
-#        station.GetOutputPort("camera_rgb_image"),
-#        point_cloud_generator.color_image_input_port())
+builder.Connect(
+        station.GetOutputPort("camera_rgb_image"),
+        point_cloud_generator.color_image_input_port())
 
 # Connect camera pose to point cloud generator
 builder.Connect(

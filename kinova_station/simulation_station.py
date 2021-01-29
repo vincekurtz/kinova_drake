@@ -203,49 +203,12 @@ class KinovaStation(Diagram):
                     self.scene_graph.get_query_output_port(),
                     camera.query_object_input_port())
 
-            ## Add a camera manager to control how often images are published
-            ## (this helps keep things roughly real-time)
-            #camera_publish_period = 0.1  # how often to publish new camera images
-            #camera_manager = self.builder.AddSystem(CameraManager(camera_publish_period))
-            #camera_manager.set_name("camera_manager")
-
-            #self.builder.Connect(
-            #        camera.color_image_output_port(),
-            #        camera_manager.GetInputPort("color_image"))
-            #self.builder.Connect(
-            #        camera.depth_image_32F_output_port(),
-            #        camera_manager.GetInputPort("depth_image"))
-           
-            ## Send images as output 
-            #self.builder.ExportOutput(
-            #        camera_manager.GetOutputPort("depth_image"),
-            #        "camera_depth_image")
-            
-            # TEST
-            # Add a delay block so camera images are not sent every timestep. 
-            # This allows us to convert depth images to point clouds in real time. 
-            sample_color_image = Image[PixelType.kRgba8U](width=640, height=480)
-            sample_depth_image = Image[PixelType.kDepth32F](width=640, height=480)
-            
-            depth_delay = self.builder.AddSystem(DiscreteTimeDelay(
-                                                    1.0,  # update_sec
-                                                    0,    # delay_timesteps
-                                                    AbstractValue.Make(sample_depth_image)))
-            depth_delay.set_name("depth_delay")
-
-            self.builder.Connect(
-                    camera.depth_image_32F_output_port(),
-                    depth_delay.get_input_port())
             self.builder.ExportOutput(
-                    depth_delay.get_output_port(),
+                    camera.color_image_output_port(),
+                    "camera_rgb_image")
+            self.builder.ExportOutput(
+                    camera.depth_image_32F_output_port(),
                     "camera_depth_image")
-
-            #self.builder.ExportOutput(
-            #        camera.color_image_output_port(),
-            #        "camera_rgb_image")
-            #self.builder.ExportOutput(
-            #        camera.depth_image_32F_output_port(),
-            #        "camera_depth_image")
 
             # Send pose of camera in world frame as output
             camera_transform_pub = self.builder.AddSystem(CameraPosePublisher(self.X_camera))
@@ -257,7 +220,6 @@ class KinovaStation(Diagram):
             self.builder.ExportOutput(
                     camera_transform_pub.GetOutputPort("camera_transform"),
                     "camera_transform")
-
 
         # Build the diagram
         self.builder.BuildInto(self)
@@ -966,56 +928,6 @@ class CartesianController(LeafSystem):
             raise RuntimeError("Invalid target type %s" % target_type)
 
         output.SetFromVector(tau)
-
-class CameraManager(LeafSystem):
-    """
-    A simple system which passes camera data as output directly, but
-    only at the desired (slower) publish rate. 
-    """
-    def __init__(self, publish_period):
-        LeafSystem.__init__(self)
-
-        # Create example images which will be used to define the (abstract) input
-        # port types
-        sample_color_image = Image[PixelType.kRgba8U](width=640, height=480)
-        sample_depth_image = Image[PixelType.kDepth32F](width=640, height=480)
-
-        # Declare input ports
-        self.color_input_port = self.DeclareAbstractInputPort(
-                                            "color_image",
-                                            AbstractValue.Make(sample_color_image))
-
-        self.depth_input_port = self.DeclareAbstractInputPort(
-                                            "depth_image",
-                                            AbstractValue.Make(sample_depth_image))
-
-
-        # Declare output ports as periodic events (?)
-        event = PublishEvent(trigger_type=TriggerType.kPeriodic,
-                             callback=self.publish_callback)
-        self.DeclarePeriodicEvent(publish_period, 0, event)
-
-        # Declare output ports
-        self.DeclareAbstractOutputPort(
-                "depth_image",
-                lambda : AbstractValue.Make(sample_depth_image),
-                self.PublishDepthImage)
-
-    def publish_callback(self, context, event):
-        
-        color_image = self.color_input_port.Eval(context)
-        depth_image = self.depth_input_port.Eval(context)
-
-        #print(event)
-        #print(self.Publish(context))
-
-    def PublishDepthImage(self, context, output):
-        pass
-        #if context.get_time() % 1 == 0:
-        #    print(context.get_time())
-        #    depth_image = self.depth_input_port.Eval(context)
-
-        #    output.set_value(depth_image)
 
 
 def add_2f_85_bushings(plant, gripper):
