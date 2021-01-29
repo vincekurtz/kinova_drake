@@ -28,7 +28,7 @@ gripper_type = "hande"
 
 # Set up the kinova station
 station = KinovaStation(time_step=0.003)
-station.SetupSinglePegScenario(gripper_type=gripper_type)
+station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False)
 station.AddCamera()
 station.ConnectToMeshcatVisualizer()
 station.Finalize()
@@ -46,23 +46,30 @@ builder.AddSystem(station)
 # Define a sequence of end-effector and gripper targets
 cs = CommandSequence([])
 cs.append(Command(
-    name="line_up",
-    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.2]),
-    duration=2,
+    name="front_view",
+    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.1]),
+    duration=3,
     gripper_closed=False))
 cs.append(Command(
-    name="pitch_down",
-    target_pose=np.array([0.6*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.2]),
-    duration=4,
+    name="left_view",
+    target_pose=np.array([0.5*np.pi, 0.0, 0.05*np.pi, 0.5, 0.3, 0.1]),
+    duration=3,
     gripper_closed=False))
 cs.append(Command(
-    name="move_sideways",
-    target_pose=np.array([0.6*np.pi, 0.0, 0.5*np.pi, 0.5, -0.1, 0.2]),
-    duration=1,
+    name="right_view",
+    target_pose=np.array([0.5*np.pi, 0.1, 0.95*np.pi, 0.5, -0.3, 0.1]),
+    duration=6,
+    gripper_closed=False))
+cs.append(Command(
+    name="top",
+    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.3]),
+    duration=3,
     gripper_closed=False))
 
 # Add an associated controller
-controller = builder.AddSystem(CommandSequenceController(cs))
+Kp = np.diag([1,1,1, 10,10,10])
+Kd = np.diag([3,3,3, 5,5,5])
+controller = builder.AddSystem(CommandSequenceController(cs, Kp=Kp, Kd=Kd))
 controller.set_name("controller")
 controller.ConnectToStation(builder, station)
 
@@ -113,4 +120,4 @@ simulator.set_publish_every_time_step(False)
 
 # Run simulation
 simulator.Initialize()
-simulator.AdvanceTo(10.0)
+simulator.AdvanceTo(15.0)
