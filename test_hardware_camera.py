@@ -15,6 +15,8 @@ import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst
 
+import time
+
 #print(cv2.getBuildInformation())  # check that GStreamer is included
 
 def show_color_image():
@@ -124,14 +126,22 @@ def show_depth_image_alt():
 
     def callback(sink):
         print("hello callback")
+        sys.exit()
 
-    video_sink.connect('new-sample', callback)
+    #video_sink.connect('new-sample', callback)  # not sure if this is necessary...
+    st = time.time()
     sample = video_sink.emit("pull-sample")
+    print(time.time()-st)
 
     frame = gst_to_opencv(sample).reshape((270, 480))
     plt.imshow(frame)
+    print(np.min(frame))
+    print(np.max(frame))
+            
+    #with open("depth_image_saved.npy", 'wb') as f:
+    #    np.save(f, frame)
 
-    print("done")
+
 
 
 if __name__=="__main__":
