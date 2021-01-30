@@ -348,7 +348,7 @@ class KinovaStation(Diagram):
   
         # Set camera properites. These roughly correspond
         # to the camera on the hardware (Intel Realsense D410).
-        intrinsics = CameraInfo(width=270, height=480, fov_y=np.radians(40))
+        intrinsics = CameraInfo(width=480, height=270, fov_y=np.radians(40))
         clipping = ClippingRange(0.01,3.0)
         X_lens = RigidTransform()
         camera_core = RenderCameraCore(renderer_name, intrinsics, clipping, X_lens)

@@ -30,9 +30,9 @@ depth_pub = builder.AddSystem(
 depth_pub.set_name("depth_publisher")
 
 camera_info = CameraInfo(
-        width=270,
-        height=480,
-        fov_y=np.radians(80))  # from https://www.intel.com/content/dam/support/us/en/documents/emerging-technologies/intel-realsense-technology/Intel-RealSense-D400-Series-Datasheet.pdf
+        width=480,
+        height=270,
+        fov_y=np.radians(40))  # from https://www.intel.com/content/dam/support/us/en/documents/emerging-technologies/intel-realsense-technology/Intel-RealSense-D400-Series-Datasheet.pdf
 point_cloud_gen = builder.AddSystem(
         DepthImageToPointCloud(camera_info, pixel_type, scale=1./1000))
 point_cloud_gen.set_name("point_cloud_generator")
@@ -49,8 +49,8 @@ meshcat = ConnectMeshcatVisualizer(
         scene_graph=scene_graph,
         zmq_url=zmq_url)
 X_Camera = RigidTransform()
-X_Camera.set_translation([0,0,0.2])
-X_Camera.set_rotation(RotationMatrix(RollPitchYaw([-0.8*np.pi,0,0])))
+X_Camera.set_translation([0,0,0.25])
+X_Camera.set_rotation(RotationMatrix(RollPitchYaw([-0.72*np.pi,0,0])))
 meshcat_pointcloud = builder.AddSystem(MeshcatPointCloudVisualizer(meshcat, X_WP=X_Camera))
 
 builder.Connect(
