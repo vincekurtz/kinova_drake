@@ -13,10 +13,13 @@ from kortex_api.RouterClient import RouterClient, RouterClientSendOptions
 from kortex_api.SessionManager import SessionManager
 
 from kortex_api.autogen.client_stubs.DeviceConfigClientRpc import DeviceConfigClient
+from kortex_api.autogen.client_stubs.DeviceManagerClientRpc import DeviceManagerClient
+from kortex_api.autogen.client_stubs.VisionConfigClientRpc import VisionConfigClient
+
 from kortex_api.autogen.client_stubs.BaseClientRpc import BaseClient
 from kortex_api.autogen.client_stubs.BaseCyclicClientRpc import BaseCyclicClient
 
-from kortex_api.autogen.messages import DeviceConfig_pb2, Session_pb2, Base_pb2
+from kortex_api.autogen.messages import DeviceConfig_pb2, Session_pb2, Base_pb2, VisionConfig_pb2
 
 import gi
 gi.require_version('Gst', '1.0')
@@ -192,8 +195,8 @@ class KinovaStationHardwareInterface(LeafSystem):
             print("and clear any faults before trying again.")
             sys.exit(0)
 
-        # Set up camera pipeline.
-        # We'll use OpenCV for the color image and raw Gstramer for the depth image
+        # Set up depth image pipeline. We use raw Gstramer for the depth image, since 
+        # OpenCV only supports 8bit images and we want 16bit depth images for full resolution.
         Gst.init(None)
         depth_command = 'rtspsrc location=rtsp://192.168.1.10/depth latency=30 ! rtpgstdepay ! videoconvert ! appsink'
 
@@ -203,13 +206,12 @@ class KinovaStationHardwareInterface(LeafSystem):
         self.depth_video_sink.set_property('sync', False)
         self.depth_video_sink.set_property('max-buffers', 2)
         self.depth_video_sink.set_property('drop', True)
-        
+
+        # Set up the color image pipeline using OpenCV
         color_command = 'rtspsrc location=rtsp://192.168.1.10/color latency=30 ! rtph264depay ! avdec_h264 ! videoconvert ! appsink drop=true max-buffers=2'
         self.color_stream = cv2.VideoCapture(color_command)
-        #self.color_stream.set(cv2.CAP_PROP_BUFFERSIZE, 2)
 
         print("Hardware Connection Open.\n")
-
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
@@ -552,27 +554,22 @@ class KinovaStationHardwareInterface(LeafSystem):
         """
         Capture and send as output a color image from the camera.
         """
-        print("capturing color image")
-
+        # Read data vida OpenCV
         ret, frame = self.color_stream.read()
-
         if not ret:
             raise RuntimeError("Unable to pull color image")
 
-        print(frame.shape)
-
-        plt.imshow(frame)
-        plt.show()
-
+        # Resize to match resolution of the depth image, and add an alpha channel
+        frame = cv2.resize(frame, (480, 270))
+        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2RGBA)
 
         color_image = output.get_mutable_value()   # 270 x 480 x 4
+        color_image.mutable_data[:,:,:] = frame
     
     def CaptureDepthImage(self, context, output):
         """
         Capture and send as output a depth image from the camera.
         """
-        print("capturing depth image")
-
         # Get raw byte stream from the camera
         timeout = 1.0  # max seconds to wait for an image
         sample = self.depth_video_sink.emit('try-pull-sample', timeout)
