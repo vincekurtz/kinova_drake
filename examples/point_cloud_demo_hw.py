@@ -83,7 +83,9 @@ with KinovaStationHardwareInterface() as station:
             point_cloud_generator.GetInputPort("camera_pose"))
 
     # Connect meshcat visualizer
-    proc, zmq_url, web_url = start_zmq_server_as_subprocess()  # start meshcat from here
+    #proc, zmq_url, web_url = start_zmq_server_as_subprocess()  # start meshcat from here
+    # Alternative: start meshcat (in drake dir) with bazel run @meshcat_python//:meshcat-server
+    zmq_url = "tcp://127.0.0.1:6000"
 
     meshcat = ConnectMeshcatVisualizer(
             builder=builder, 

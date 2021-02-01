@@ -609,7 +609,7 @@ class KinovaStationHardwareInterface(LeafSystem):
         # TODO: get precise transform data from the datasheet
         X_EC = RigidTransform(
                         RotationMatrix(RollPitchYaw([0,0,np.pi])),  # This seems strange...
-                        [0,0.065,0.14])
+                        [0.0,0.065,0.14])
 
         # Compute pose of camera in the world frame
         X_WC = X_WE.multiply(X_EC)
