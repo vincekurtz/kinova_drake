@@ -22,7 +22,7 @@ show_station_diagram = False
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
-show_toplevel_diagram = True
+show_toplevel_diagram = False
 
 ########################################################################
 
@@ -53,7 +53,7 @@ with KinovaStationHardwareInterface() as station:
     #    gripper_closed=False))
 
     # Create the controller and connect inputs and outputs appropriately
-    Kp = 0*np.diag([100, 100, 100, 200, 200, 200])  # high gains needed to overcome
+    Kp = np.diag([100, 100, 100, 200, 200, 200])  # high gains needed to overcome
     Kd = 2*np.sqrt(0.5*Kp)                        # significant joint friction
 
     controller = builder.AddSystem(CommandSequenceController(
@@ -74,6 +74,9 @@ with KinovaStationHardwareInterface() as station:
     builder.Connect(
             station.GetOutputPort("camera_depth_image"),
             point_cloud_generator.depth_image_input_port())
+    builder.Connect(
+            station.GetOutputPort("camera_transform"),
+            point_cloud_generator.GetInputPort("camera_pose"))
 
     # Connect meshcat visualizer
     proc, zmq_url, web_url = start_zmq_server_as_subprocess()  # start meshcat from here

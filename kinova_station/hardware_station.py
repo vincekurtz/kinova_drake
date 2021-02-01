@@ -145,9 +145,13 @@ class KinovaStationHardwareInterface(LeafSystem):
         self.DeclareContinuousState(1)
 
         # Each call to self.base_cyclic.RefreshFeedback() takes about 0.025s, so we'll
-        # try to minimize redudant calls to the base as much as possible
+        # try to minimize redudant calls to the base as much as possible by storing
+        # feedback from the base at each timestep.
         self.last_feedback_time = -np.inf
         self.feedback = None
+    
+        # Store end-effector pose (for computing camera pose)
+        self.ee_pose = np.zeros(6)
 
     def __enter__(self):
         """
@@ -470,6 +474,9 @@ class KinovaStationHardwareInterface(LeafSystem):
         ee_pose[4] = self.feedback.base.tool_pose_y
         ee_pose[5] = self.feedback.base.tool_pose_z
 
+        # Store the end-effector pose so we can use it to compute the camera pose
+        self.ee_pose = ee_pose
+
         output.SetFromVector(ee_pose)
 
     def CalcEndEffectorTwist(self, context, output):
@@ -569,7 +576,23 @@ class KinovaStationHardwareInterface(LeafSystem):
         """
         Compute and send as output the current pose of the camera in the world.
         """
-        pass
+        ee_rpy = self.ee_pose[:3]
+        ee_xyz = self.ee_pose[3:]
+
+        # pose of end-effector in the world frame
+        X_WE = RigidTransform(
+                        RotationMatrix(RollPitchYaw(ee_rpy)),
+                        ee_xyz)
+
+        # pose of camera in the end-effector frame
+        X_EC = RigidTransform(
+                        RotationMatrix(RollPitchYaw([0,0,np.pi])),  # This seems strange...
+                        [0,0.065,0.14])
+
+        # Compute pose of camera in the world frame
+        X_WC = X_WE.multiply(X_EC)
+
+        output.set_value(X_WC)
     
     def DoCalcTimeDerivatives(self, context, continuous_state):
         """
