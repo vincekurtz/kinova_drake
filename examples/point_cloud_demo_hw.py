@@ -53,7 +53,7 @@ with KinovaStationHardwareInterface() as station:
     #    gripper_closed=False))
 
     # Create the controller and connect inputs and outputs appropriately
-    Kp = np.diag([100, 100, 100, 200, 200, 200])  # high gains needed to overcome
+    Kp = 0*np.diag([100, 100, 100, 200, 200, 200])  # high gains needed to overcome
     Kd = 2*np.sqrt(0.5*Kp)                        # significant joint friction
 
     controller = builder.AddSystem(CommandSequenceController(
@@ -68,12 +68,16 @@ with KinovaStationHardwareInterface() as station:
     point_cloud_generator = builder.AddSystem(DepthImageToPointCloud(
                                     CameraInfo(width=480, height=270, fov_y=np.radians(40)),
                                     pixel_type=PixelType.kDepth16U,
-                                    scale=0.001))
+                                    scale=0.001,
+                                    fields=BaseField.kXYZs | BaseField.kRGBs))
     point_cloud_generator.set_name("point_cloud_generator")
 
     builder.Connect(
             station.GetOutputPort("camera_depth_image"),
             point_cloud_generator.depth_image_input_port())
+    builder.Connect(
+            station.GetOutputPort("camera_rgb_image"),
+            point_cloud_generator.color_image_input_port())
     builder.Connect(
             station.GetOutputPort("camera_transform"),
             point_cloud_generator.GetInputPort("camera_pose"))

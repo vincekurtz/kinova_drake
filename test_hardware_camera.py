@@ -145,7 +145,7 @@ def show_depth_image_alt():
 
 
 if __name__=="__main__":
-    #show_color_image()
+    show_color_image()
     #show_depth_image()
-    show_depth_image_alt()
+    #show_depth_image_alt()
     plt.show()
