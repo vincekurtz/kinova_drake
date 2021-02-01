@@ -193,12 +193,9 @@ class KinovaStationHardwareInterface(LeafSystem):
         video_pipe = Gst.parse_launch(command)
         video_pipe.set_state(Gst.State.PLAYING)
         self.video_sink = video_pipe.get_by_name('appsink0')
-
-        self.video_sink.set_property('emit-signals', True)
         self.video_sink.set_property('sync', False)
         self.video_sink.set_property('max-buffers', 2)
         self.video_sink.set_property('drop', True)
-        #video_sink.connect('new-sample', self.depth_image_callback)  # depth image callback sets self.depth_frame
 
         print("Hardware Connection Open.\n")
 
@@ -219,14 +216,6 @@ class KinovaStationHardwareInterface(LeafSystem):
 
         self.transport.disconnect()
         print("Hardware Connection Closed.")
-
-    def depth_image_callback(self, sink):
-        """
-        Callback for getting new depth images
-        """
-        print("hello callback")
-
-        return Gst.FlowReturn.OK
 
     def check_for_end_or_abort(self, e):
         """
@@ -571,9 +560,6 @@ class KinovaStationHardwareInterface(LeafSystem):
                     1
                 ),
                 buffer=buf.extract_dup(0, buf.get_size()), dtype=np.uint16)
-
-        plt.imshow(frame.reshape(270,480))
-        plt.show()
 
         # Convert to a Drake DepthImage
         depth_image = output.get_mutable_value()
