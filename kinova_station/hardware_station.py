@@ -43,8 +43,9 @@ class KinovaStationHardwareInterface(LeafSystem):
                                |                                  | --> measured_gripper_position
                                |                                  | --> measured_gripper_velocity
                                |                                  |
-                               |                                  | --> camera_rgb_image (TODO)
-                               |                                  | --> camera_depth_image (TODO)
+                               |                                  | --> camera_rgb_image
+                               |                                  | --> camera_depth_image
+                               |                                  | --> camera_transform
                                |                                  |
                                |                                  |
                                -----------------------------------
@@ -113,6 +114,25 @@ class KinovaStationHardwareInterface(LeafSystem):
                 "measured_gripper_velocity",
                 BasicVector(1),
                 self.CalcGripperVelocity,
+                {self.time_ticket()})
+
+        sample_rgb_image = Image[PixelType.kRgba8U](width=480, height=270)
+        sample_depth_image = Image[PixelType.kDepth16U](width=480, height=270)
+
+        self.DeclareAbstractOutputPort(
+                "camera_rgb_image",
+                lambda: AbstractValue.Make(sample_rgb_image),
+                self.CaptureRgbImage,
+                {self.time_ticket()})
+        self.DeclareAbstractOutputPort(
+                "camera_depth_image",
+                lambda: AbstractValue.Make(sample_depth_image),
+                self.CaptureDepthImage,
+                {self.time_ticket()})
+        self.DeclareAbstractOutputPort(
+                "camera_transform",
+                lambda: AbstractValue.Make(RigidTransform()),   # TODO: use CameraPosePublisher?
+                self.CalcCameraTransform,
                 {self.time_ticket()})
 
         # Create a dummy continuous state so that the simulator
@@ -498,6 +518,25 @@ class KinovaStationHardwareInterface(LeafSystem):
         gripper_measure = self.base.GetMeasuredGripperMovement(gripper_request)
 
         output.SetFromVector([gripper_measure.finger[0].value])
+
+    def CaptureRgbImage(self, context, output):
+        """
+        Capture and send as output a color image from the camera.
+        """
+        pass
+    
+    def CaptureDepthImage(self, context, output):
+        """
+        Capture and send as output a depth image from the camera.
+        """
+        print("hello world")
+        pass
+
+    def CalcCameraTransform(self, context, output):
+        """
+        Compute and send as output the current pose of the camera in the world.
+        """
+        pass
     
     def DoCalcTimeDerivatives(self, context, continuous_state):
         """

@@ -46,6 +46,11 @@ class CommandSequenceController(BasicController):
         current_pose = self.ee_pose_port.Eval(context)
         current_twist = self.ee_twist_port.Eval(context)
 
+        # DEBUG: print error
+        # TODO: seems to be some strange coupling between roll & pitch, in both hardware
+        # and sim.
+        #print(target_pose - current_pose)
+
         # Set command (i.e. end-effector twist or wrench) using a PD controller
         cmd = self.Kp@(target_pose - current_pose) + self.Kd@(target_twist - current_twist)
 
