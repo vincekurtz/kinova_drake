@@ -561,7 +561,7 @@ class KinovaStationHardwareInterface(LeafSystem):
 
         # Resize to match resolution of the depth image, and add an alpha channel
         frame = cv2.resize(frame, (480, 270))
-        frame = cv2.cvtColor(frame, cv2.COLOR_RGB2RGBA)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
 
         color_image = output.get_mutable_value()   # 270 x 480 x 4
         color_image.mutable_data[:,:,:] = frame
