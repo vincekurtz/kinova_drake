@@ -18,6 +18,11 @@ from kortex_api.autogen.client_stubs.BaseCyclicClientRpc import BaseCyclicClient
 
 from kortex_api.autogen.messages import DeviceConfig_pb2, Session_pb2, Base_pb2
 
+import gi
+gi.require_version('Gst', '1.0')
+from gi.repository import Gst
+
+import matplotlib.pyplot as plt  # DEBUG
 
 
 class KinovaStationHardwareInterface(LeafSystem):
@@ -181,6 +186,13 @@ class KinovaStationHardwareInterface(LeafSystem):
             print("Make sure there is nothing else currently sending commands (e.g. joystick, web interface), ")
             print("and clear any faults before trying again.")
             sys.exit(0)
+
+        # Set up camera pipeline
+        Gst.init(None)
+        command = 'rtspsrc location=rtsp://192.168.1.10/depth latency=30 ! rtpgstdepay ! videoconvert ! appsink'
+        video_pipe = Gst.parse_launch(command)
+        video_pipe.set_state(Gst.State.PLAYING)
+        self.video_sink = video_pipe.get_by_name('appsink0')
 
         print("Hardware Connection Open.\n")
 
@@ -529,8 +541,28 @@ class KinovaStationHardwareInterface(LeafSystem):
         """
         Capture and send as output a depth image from the camera.
         """
-        print("hello world")
-        pass
+        print("capturing depth image")
+
+        # Get raw byte stream from the camera
+        sample = self.video_sink.emit('pull-sample')
+
+        # Convert to a 16bit image (consistent with OpenCV, for example)
+        buf = sample.get_buffer()
+        caps = sample.get_caps()
+
+        frame = np.ndarray(
+                (
+                    caps.get_structure(0).get_value('height'),
+                    caps.get_structure(0).get_value('width'),
+                    1
+                ),
+                buffer=buf.extract_dup(0, buf.get_size()), dtype=np.uint16)
+
+        # Convert to a Drake DepthImage
+        depth_image = output.get_mutable_value()
+        depth_image.mutable_data[:,:,:] = frame
+
+
 
     def CalcCameraTransform(self, context, output):
         """
