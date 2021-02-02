@@ -20,14 +20,19 @@ with open("color_image_saved.npy", "rb") as f:
     color_frame = np.load(f)
 
 # Do some rescaling
-# TODO
+pts1 = np.float32([[245,182],[367,147],[101,160],[251,234]])   # points on the depth image
+pts2 = np.float32([[232,157],[391,93],[17,124],[230,232]])     # corresponding points on the color image
+
+M = cv2.getPerspectiveTransform(pts1,pts2)
+
+depth_frame = cv2.warpPerspective(depth_frame,M,(480,270))
 
 
 
 # Show the resulting point cloud over meshcat
 pixel_type = PixelType.kDepth16U
 depth_image = Image[pixel_type](width=depth_frame.shape[1],height=depth_frame.shape[0])
-depth_image.mutable_data[:,:,:] = depth_frame
+depth_image.mutable_data[:,:,:] = depth_frame.reshape(270,480,1)
 
 color_image = Image[PixelType.kRgba8U](width=color_frame.shape[1], height=color_frame.shape[0])
 color_image.mutable_data[:,:,:] = color_frame
@@ -80,9 +85,9 @@ builder.Connect(
 
 diagram = builder.Build()
 
-plt.figure()
-plot_system_graphviz(diagram)
-plt.show()
+#plt.figure()
+#plot_system_graphviz(diagram)
+#plt.show()
 
 # Evaluate camera outputs to get the image
 plant.Finalize()
