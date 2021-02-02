@@ -12,14 +12,25 @@ import cv2
 from pydrake.all import *
 from meshcat.servers.zmqserver import start_zmq_server_as_subprocess
 
-# load saved image
+# load saved images
 with open("depth_image_saved.npy", "rb") as f:
-    frame = np.load(f)
+    depth_frame = np.load(f)
 
-# Create a drake depth image
+with open("color_image_saved.npy", "rb") as f:
+    color_frame = np.load(f)
+
+# Do some rescaling
+# TODO
+
+
+
+# Show the resulting point cloud over meshcat
 pixel_type = PixelType.kDepth16U
-depth_image = Image[pixel_type](width=frame.shape[1],height=frame.shape[0])
-depth_image.mutable_data[:,:] = frame.T[np.newaxis].T
+depth_image = Image[pixel_type](width=depth_frame.shape[1],height=depth_frame.shape[0])
+depth_image.mutable_data[:,:,:] = depth_frame
+
+color_image = Image[PixelType.kRgba8U](width=color_frame.shape[1], height=color_frame.shape[0])
+color_image.mutable_data[:,:,:] = color_frame
 
 # Set up a point cloud publisher
 builder = DiagramBuilder()
@@ -29,20 +40,30 @@ depth_pub = builder.AddSystem(
         ConstantValueSource(AbstractValue.Make(depth_image)))
 depth_pub.set_name("depth_publisher")
 
+color_pub = builder.AddSystem(
+        ConstantValueSource(AbstractValue.Make(color_image)))
+
 camera_info = CameraInfo(
         width=480,
         height=270,
         fov_y=np.radians(40))  # from https://www.intel.com/content/dam/support/us/en/documents/emerging-technologies/intel-realsense-technology/Intel-RealSense-D400-Series-Datasheet.pdf
 point_cloud_gen = builder.AddSystem(
-        DepthImageToPointCloud(camera_info, pixel_type, scale=1./1000))
+        DepthImageToPointCloud(camera_info, 
+                               pixel_type, 
+                               scale=1./1000,
+                               fields=BaseField.kXYZs | BaseField.kRGBs))
 point_cloud_gen.set_name("point_cloud_generator")
 
 builder.Connect(
         depth_pub.get_output_port(),
         point_cloud_gen.depth_image_input_port())
+builder.Connect(
+        color_pub.get_output_port(),
+        point_cloud_gen.color_image_input_port())
 
 # Set up meshcat viewer
-proc, zmq_url, web_url = start_zmq_server_as_subprocess()
+#proc, zmq_url, web_url = start_zmq_server_as_subprocess()
+zmq_url = "tcp://127.0.0.1:6000"
 
 meshcat = ConnectMeshcatVisualizer(
         builder=builder, 
@@ -50,7 +71,7 @@ meshcat = ConnectMeshcatVisualizer(
         zmq_url=zmq_url)
 X_Camera = RigidTransform()
 X_Camera.set_translation([0,0,0.25])
-X_Camera.set_rotation(RotationMatrix(RollPitchYaw([-0.72*np.pi,0,0])))
+X_Camera.set_rotation(RotationMatrix(RollPitchYaw([0.5*np.pi,np.pi,0])))
 meshcat_pointcloud = builder.AddSystem(MeshcatPointCloudVisualizer(meshcat, X_WP=X_Camera))
 
 builder.Connect(
@@ -59,9 +80,9 @@ builder.Connect(
 
 diagram = builder.Build()
 
-#plt.figure()
-#plot_system_graphviz(diagram)
-#plt.show()
+plt.figure()
+plot_system_graphviz(diagram)
+plt.show()
 
 # Evaluate camera outputs to get the image
 plant.Finalize()
@@ -69,7 +90,9 @@ context = diagram.CreateDefaultContext()
 
 diagram.Publish(context)
 
-# Do something to avoid quitting immediately
-plt.imshow(np.squeeze(depth_image.data))
+# Plot the images
+plt.subplot(2,1,1)
+plt.imshow(color_frame)
+plt.subplot(2,1,2)
+plt.imshow(depth_frame.squeeze())
 plt.show()
-

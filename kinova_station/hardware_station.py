@@ -211,6 +211,27 @@ class KinovaStationHardwareInterface(LeafSystem):
         color_command = 'rtspsrc location=rtsp://192.168.1.10/color latency=30 ! rtph264depay ! avdec_h264 ! videoconvert ! appsink drop=true max-buffers=2'
         self.color_stream = cv2.VideoCapture(color_command)
 
+        # DEBUG: set color and depth image sizes
+        #device_manager = DeviceManagerClient(self.router)
+        #vision_config = VisionConfigClient(self.router)
+
+        #all_devices_info = device_manager.ReadAllDevices()
+        #
+        #vision_handles = [ hd for hd in all_devices_info.device_handle if hd.device_type == DeviceConfig_pb2.VISION ]
+        #if len(vision_handles) == 0:
+        #    raise RuntimeError("There is no vision device registered in the devices info")
+        #elif len(vision_handles) > 1:
+        #    raise RuntimeError("There is more than one vision device registered in the devices info")
+        #
+        #vision_device_id = vision_handles[0].device_identifier
+
+        #profile_id = VisionConfig_pb2.IntrinsicProfileIdentifier()
+        #profile_id.sensor = VisionConfig_pb2.SENSOR_COLOR
+        #profile_id.resolution = VisionConfig_pb2.RESOLUTION_640x480
+        #
+        #intrinsics = vision_config.GetIntrinsicParametersProfile(profile_id, vision_device_id)
+        #vision_config.SetIntrinsicParameters(intrinsics, vision_device_id)
+
         print("Hardware Connection Open.\n")
         return self
 
@@ -409,25 +430,6 @@ class KinovaStationHardwareInterface(LeafSystem):
 
         self.base.SendWrenchCommand(command)
 
-    def get_camera_rbg_image_example(self):
-        # Note: can fetch camera params, see example 01-vision_intrinsics.py
-        # The way to do this seems to be through GStreamer. 
-        # CLI command:
-        #
-        #   gst-launch-1.0 rtspsrc location=rtsp://192.168.1.10/color latency=30 ! rtph264depay ! avdec_h264 ! autovideosink
-        #
-        # (See Gen3 user manual)
-        pass
-
-    def get_camera_depth_image_example(self):
-        # The way to do this seems to be through GStreamer. 
-        # CLI command:
-        #
-        #   gst-launch-1.0 rtspsrc location=rtsp://192.168.1.10/depth latency=30 ! rtpgstdepay ! videoconvert ! autovideosink
-        #
-        # (See Gen3 user manual)
-        pass
-
     def CalcArmPosition(self, context, output):
         """
         Compute the current joint angles and send as output.
@@ -563,6 +565,18 @@ class KinovaStationHardwareInterface(LeafSystem):
         frame = cv2.resize(frame, (480, 270))
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGBA)
 
+        # Transform to match depth image (roughly)
+        #tx = 0
+        #ty = 0
+        #M = np.array([[1, 0, tx],   # transformation matrix
+        #              [0, 1, ty]])
+
+        #rows, cols, _ = frame.shape
+        #frame = cv2.warpAffine(frame, M, (rows,cols))
+
+        #with open('color_image_saved.npy', 'wb') as f:
+        #    np.save(f, frame)
+
         color_image = output.get_mutable_value()   # 270 x 480 x 4
         color_image.mutable_data[:,:,:] = frame
     
@@ -588,6 +602,9 @@ class KinovaStationHardwareInterface(LeafSystem):
                     1
                 ),
                 buffer=buf.extract_dup(0, buf.get_size()), dtype=np.uint16)
+        
+        #with open('depth_image_saved.npy', 'wb') as f:
+        #    np.save(f, frame)
 
         # Convert to a Drake DepthImage
         depth_image = output.get_mutable_value()
