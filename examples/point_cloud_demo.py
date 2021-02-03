@@ -15,7 +15,7 @@ from controllers import Command, CommandSequence, PointCloudController
 ########################### Parameters #################################
 
 # Show the internal workings of the station
-show_station_diagram = True
+show_station_diagram = False
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
@@ -101,25 +101,4 @@ simulator.set_publish_every_time_step(False)
 
 # Run simulation
 simulator.Initialize()
-simulator.AdvanceTo(16.0)
-
-# DEBUG: show processed point clouds over meshcat
-def draw_open3d_point_cloud(meshcat, pcd, normals_scale=0.0, size=0.001):
-    pts = np.asarray(pcd.points)
-    meshcat.set_object(g.PointCloud(pts.T, np.asarray(pcd.colors).T, size=size))
-    if pcd.has_normals() and normals_scale > 0.0:
-        normals = np.asarray(pcd.normals)
-        vertices = np.hstack(
-            (pts, pts + normals_scale * normals)).reshape(-1, 3).T
-        meshcat["normals"].set_object(
-            g.LineSegments(g.PointsGeometry(vertices),
-                           g.MeshBasicMaterial(color=0x000000)))
-
-pcd = controller.merged_point_cloud
-
-import meshcat
-v = meshcat.Visualizer(zmq_url="tcp://127.0.0.1:6000")
-draw_open3d_point_cloud(v["processed_point_cloud"], pcd, normals_scale=0.01)
-
-
-
+simulator.AdvanceTo(1.0)

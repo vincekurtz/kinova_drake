@@ -1,5 +1,6 @@
 from controllers.command_sequence_controller import *
 import open3d as o3d
+from kinova_station.common import draw_open3d_point_cloud
 
 class PointCloudController(CommandSequenceController):
     """
@@ -70,12 +71,14 @@ class PointCloudController(CommandSequenceController):
         self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf, "gripper")
 
         # DEBUG: show this floating gripper in meshcat
-        self.meshcat = ConnectMeshcatVisualizer(builder=builder, 
-                                           zmq_url="tcp://127.0.0.1:6000",
-                                           scene_graph=self.scene_graph,
-                                           output_port=self.scene_graph.get_query_output_port(),
-                                           prefix="test_prefix")
-        self.meshcat.load()
+        self.show_candidate_grasp = True
+        if self.show_candidate_grasp:
+            self.meshcat = ConnectMeshcatVisualizer(builder=builder, 
+                                               zmq_url="tcp://127.0.0.1:6000",
+                                               scene_graph=self.scene_graph,
+                                               output_port=self.scene_graph.get_query_output_port(),
+                                               prefix="candidate_grasp")
+            self.meshcat.load()
         
         self.plant.Finalize()
         self.diagram = builder.Build()
@@ -133,8 +136,13 @@ class PointCloudController(CommandSequenceController):
         p_GC = X_GW.multiply(pts)
 
         # DEBUG: Visualize the candidate grasp point with meshcat
-        self.diagram.Publish(self.diagram_context)
+        if self.show_candidate_grasp:
+            # Push messages through to the meshcat visualizer
+            self.diagram.Publish(self.diagram_context)
 
+            # Visualize the point cloud 
+            v = self.meshcat.vis["merged_point_cloud"]
+            draw_open3d_point_cloud(v, cloud, normals_scale=0.01)
 
     def CalcEndEffectorCommand(self, context, output):
         """

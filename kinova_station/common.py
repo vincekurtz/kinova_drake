@@ -130,3 +130,18 @@ class CameraPosePublisher(LeafSystem):
 
         output.set_value(X_WC)
 
+def draw_open3d_point_cloud(meshcat, pcd, normals_scale=0.0, size=0.001):
+    """
+    Display the given point cloud over meshcat. 
+    Via https://colab.research.google.com/github/RussTedrake/manipulation/blob/master/clutter.ipynb
+    """
+    pts = np.asarray(pcd.points)
+    meshcat.set_object(g.PointCloud(pts.T, np.asarray(pcd.colors).T, size=size))
+    if pcd.has_normals() and normals_scale > 0.0:
+        normals = np.asarray(pcd.normals)
+        vertices = np.hstack(
+            (pts, pts + normals_scale * normals)).reshape(-1, 3).T
+        meshcat["normals"].set_object(
+            g.LineSegments(g.PointsGeometry(vertices),
+                           g.MeshBasicMaterial(color=0x000000)))
+
