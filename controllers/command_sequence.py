@@ -84,3 +84,6 @@ class CommandSequence():
     def gripper_closed(self, t):
         return self.current_command(t).gripper_closed
 
+    def total_duration(self):
+        return self.start_times[-1]
+

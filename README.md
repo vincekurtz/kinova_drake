@@ -5,9 +5,10 @@ Code for controlling a Kinova Gen3 Manipulator via Drake.
 ## Dependencies
 
 - [Drake](https://drake.mit.edu/)
-- [Meshcat](https://github.com/rdeits/meshcat)
+- [Meshcat](https://github.com/rdeits/meshcat) visualizer
 - GStreamer (for accessing camera streams)
-- OpenCV with GStreamer
+- OpenCV with GStreamer bindings
+- [Open3d](http://www.open3d.org/docs/latest/introduction.html) point cloud library
 
 ## Running examples
 

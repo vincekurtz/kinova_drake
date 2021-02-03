@@ -427,6 +427,12 @@ class KinovaStation(Diagram):
             # but does mean you need to refresh the page each time you re-run something.
             from meshcat.servers.zmqserver import start_zmq_server_as_subprocess
             proc, zmq_url, web_url = start_zmq_server_as_subprocess()
+        else:
+            # Assume you've started a separate meshcat instance with, e.g.,
+            #
+            #   bazel run @meshcat_python//:meshcat-server
+            #
+            zmq_url = "tcp://127.0.0.1:6000"
 
         # Defining self.meshcat in this way allows us to connect to 
         # things like a point-cloud visualizer later

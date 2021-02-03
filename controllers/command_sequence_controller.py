@@ -7,7 +7,7 @@ class CommandSequenceController(BasicController):
     A simple controller which tracks a sequence of target end-effector poses
     and gripper states (open or closed). See BasicController for IO details. 
 
-    Sends exclusively gripper position commands and end-effector twist commands.
+    Sends exclusively gripper position commands and end-effector twist/wrench commands.
     """
     def __init__(self, command_sequence, 
                        command_type = EndEffectorTarget.kTwist, 

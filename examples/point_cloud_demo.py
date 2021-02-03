@@ -10,7 +10,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from kinova_station import KinovaStation
-from controllers import Command, CommandSequence, CommandSequenceController
+from controllers import Command, CommandSequence, PointCloudController
 
 ########################### Parameters #################################
 
@@ -30,7 +30,7 @@ gripper_type = "hande"
 station = KinovaStation(time_step=0.001)
 station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False)
 station.AddCamera()
-station.ConnectToMeshcatVisualizer()
+station.ConnectToMeshcatVisualizer(start_server=False)
 station.Finalize()
 
 if show_station_diagram:
@@ -38,41 +38,12 @@ if show_station_diagram:
     plot_system_graphviz(station,max_depth=1)
     plt.show()
 
-
 # Connect input ports to the kinova station
 builder = DiagramBuilder()
 builder.AddSystem(station)
 
-# Define a sequence of end-effector and gripper targets
-cs = CommandSequence([])
-cs.append(Command(
-    name="front_view",
-    target_pose=np.array([0.7*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.15]),
-    duration=3,
-    gripper_closed=False))
-cs.append(Command(
-    name="left_view",
-    target_pose=np.array([0.7*np.pi, 0.0, 0.2*np.pi, 0.6, 0.3, 0.15]),
-    duration=3,
-    gripper_closed=False))
-cs.append(Command(
-    name="front_view",
-    target_pose=np.array([0.7*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.15]),
-    duration=3,
-    gripper_closed=False))
-cs.append(Command(
-    name="right_view",
-    target_pose=np.array([0.7*np.pi, 0.0, 0.8*np.pi, 0.6, -0.3, 0.15]),
-    duration=3,
-    gripper_closed=False))
-cs.append(Command(
-    name="home",
-    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.2]),
-    duration=3,
-    gripper_closed=False))
-
-# Add an associated controller
-controller = builder.AddSystem(CommandSequenceController(cs))
+# Add the controller
+controller = builder.AddSystem(PointCloudController())
 controller.set_name("controller")
 controller.ConnectToStation(builder, station)
 
@@ -94,10 +65,15 @@ builder.Connect(
         station.GetOutputPort("camera_transform"),
         point_cloud_generator.GetInputPort("camera_pose"))
 
+# Connect generated point cloud to the controller
+builder.Connect(
+        point_cloud_generator.point_cloud_output_port(),
+        controller.GetInputPort("point_cloud"))
+
 # Visualize the point cloud with meshcat
 meshcat_point_cloud = builder.AddSystem(MeshcatPointCloudVisualizer(
                                             station.meshcat,
-                                            draw_period=0.2))
+                                            draw_period=1.0))
 meshcat_point_cloud.set_name("point_cloud_viz")
 builder.Connect(
         point_cloud_generator.point_cloud_output_port(),
@@ -125,4 +101,25 @@ simulator.set_publish_every_time_step(False)
 
 # Run simulation
 simulator.Initialize()
-simulator.AdvanceTo(15.0)
+simulator.AdvanceTo(2.0)
+
+# DEBUG: show processed point clouds over meshcat
+def draw_open3d_point_cloud(meshcat, pcd, normals_scale=0.0, size=0.001):
+    pts = np.asarray(pcd.points)
+    meshcat.set_object(g.PointCloud(pts.T, np.asarray(pcd.colors).T, size=size))
+    if pcd.has_normals() and normals_scale > 0.0:
+        normals = np.asarray(pcd.normals)
+        vertices = np.hstack(
+            (pts, pts + normals_scale * normals)).reshape(-1, 3).T
+        meshcat["normals"].set_object(
+            g.LineSegments(g.PointsGeometry(vertices),
+                           g.MeshBasicMaterial(color=0x000000)))
+
+pcd = controller.stored_point_clouds[-1]
+
+import meshcat
+v = meshcat.Visualizer(zmq_url="tcp://127.0.0.1:6000")
+draw_open3d_point_cloud(v["processed_point_cloud"], pcd)
+
+
+
