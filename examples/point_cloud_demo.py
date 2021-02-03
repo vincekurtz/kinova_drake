@@ -101,7 +101,7 @@ simulator.set_publish_every_time_step(False)
 
 # Run simulation
 simulator.Initialize()
-simulator.AdvanceTo(2.0)
+simulator.AdvanceTo(16.0)
 
 # DEBUG: show processed point clouds over meshcat
 def draw_open3d_point_cloud(meshcat, pcd, normals_scale=0.0, size=0.001):
@@ -115,11 +115,11 @@ def draw_open3d_point_cloud(meshcat, pcd, normals_scale=0.0, size=0.001):
             g.LineSegments(g.PointsGeometry(vertices),
                            g.MeshBasicMaterial(color=0x000000)))
 
-pcd = controller.stored_point_clouds[-1]
+pcd = controller.merged_point_cloud
 
 import meshcat
 v = meshcat.Visualizer(zmq_url="tcp://127.0.0.1:6000")
-draw_open3d_point_cloud(v["processed_point_cloud"], pcd)
+draw_open3d_point_cloud(v["processed_point_cloud"], pcd, normals_scale=0.01)
 
 
 
