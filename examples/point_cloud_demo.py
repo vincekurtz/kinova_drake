@@ -19,7 +19,7 @@ show_station_diagram = False
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
-show_toplevel_diagram = True
+show_toplevel_diagram = False
 
 # Which gripper to use (hande or 2f_85)
 gripper_type = "hande"
@@ -47,29 +47,32 @@ builder.AddSystem(station)
 cs = CommandSequence([])
 cs.append(Command(
     name="front_view",
-    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.1]),
+    target_pose=np.array([0.7*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.15]),
     duration=3,
     gripper_closed=False))
 cs.append(Command(
     name="left_view",
-    target_pose=np.array([0.5*np.pi, 0.0, 0.05*np.pi, 0.5, 0.3, 0.1]),
+    target_pose=np.array([0.7*np.pi, 0.0, 0.2*np.pi, 0.6, 0.3, 0.15]),
+    duration=3,
+    gripper_closed=False))
+cs.append(Command(
+    name="front_view",
+    target_pose=np.array([0.7*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.15]),
     duration=3,
     gripper_closed=False))
 cs.append(Command(
     name="right_view",
-    target_pose=np.array([0.5*np.pi, 0.1, 0.95*np.pi, 0.5, -0.3, 0.1]),
-    duration=6,
+    target_pose=np.array([0.7*np.pi, 0.0, 0.8*np.pi, 0.6, -0.3, 0.15]),
+    duration=3,
     gripper_closed=False))
 cs.append(Command(
-    name="top",
-    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.3]),
+    name="home",
+    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.2]),
     duration=3,
     gripper_closed=False))
 
 # Add an associated controller
-Kp = np.diag([1,1,1, 10,10,10])
-Kd = np.diag([3,3,3, 5,5,5])
-controller = builder.AddSystem(CommandSequenceController(cs, Kp=Kp, Kd=Kd))
+controller = builder.AddSystem(CommandSequenceController(cs))
 controller.set_name("controller")
 controller.ConnectToStation(builder, station)
 

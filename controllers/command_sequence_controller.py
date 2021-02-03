@@ -50,9 +50,13 @@ class CommandSequenceController(BasicController):
         twist_err = target_twist - current_twist
         pose_err = target_pose - current_pose
 
-        # Convert the orientation portion of the pose error to an angular velocity
-        RPY = RollPitchYaw(current_pose[:3])
-        pose_err[:3] = RPY.CalcAngularVelocityInParentFromRpyDt(pose_err[:3])
+        # Use rotation matrices to compute the difference between current and
+        # desired end-effector orientations. This helps avoid gimbal lock as well 
+        # as issues like taking the shortest path from theta=0 to theta=2*pi-0.1
+        R_current = RotationMatrix(RollPitchYaw(current_pose[:3]))
+        R_target = RotationMatrix(RollPitchYaw(target_pose[:3]))
+        R_err = R_target.multiply(R_current.transpose())
+        pose_err[:3] = RollPitchYaw(R_err).vector()
 
         # Set command (i.e. end-effector twist or wrench) using a PD controller
         cmd = self.Kp@pose_err + self.Kd@twist_err
