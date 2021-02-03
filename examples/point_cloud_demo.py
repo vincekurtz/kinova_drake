@@ -15,7 +15,7 @@ from controllers import Command, CommandSequence, PointCloudController
 ########################### Parameters #################################
 
 # Show the internal workings of the station
-show_station_diagram = False
+show_station_diagram = True
 
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
