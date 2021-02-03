@@ -1,6 +1,6 @@
 from controllers.command_sequence_controller import *
 import open3d as o3d
-from kinova_station.common import draw_open3d_point_cloud
+from kinova_station.common import draw_open3d_point_cloud, draw_points
 
 class PointCloudController(CommandSequenceController):
     """
@@ -135,14 +135,31 @@ class PointCloudController(CommandSequenceController):
         pts = np.asarray(cloud.points).T
         p_GC = X_GW.multiply(pts)
 
+        # Select the points that are in between the fingers
+        crop_min = [-0.025, -0.01, 0.12]
+        crop_max = [0.025, 0.01, 0.14]
+        indices = np.all((crop_min[0] <= p_GC[0,:], p_GC[0,:] <= crop_max[0],
+                          crop_min[1] <= p_GC[1,:], p_GC[1,:] <= crop_max[1],
+                          crop_min[2] <= p_GC[2,:], p_GC[2,:] <= crop_max[2]),
+                         axis=0)
+        p_GC_between = p_GC[:,indices]
+
         # DEBUG: Visualize the candidate grasp point with meshcat
         if self.show_candidate_grasp:
+
             # Push messages through to the meshcat visualizer
             self.diagram.Publish(self.diagram_context)
 
             # Visualize the point cloud 
             v = self.meshcat.vis["merged_point_cloud"]
             draw_open3d_point_cloud(v, cloud, normals_scale=0.01)
+
+            # Visualize the points on the point cloud that are between the
+            # grippers
+            v = self.meshcat.vis["grip_location"]
+            p_WC_between = X_WG.multiply(p_GC_between)
+            draw_points(v, p_WC_between, [1.,0.,0.], size=0.01)  # Red points
+
 
     def CalcEndEffectorCommand(self, context, output):
         """
@@ -153,7 +170,7 @@ class PointCloudController(CommandSequenceController):
         # DEBUG: just load the saved point cloud from a file to test grasp scoring
         self.merged_point_cloud = o3d.io.read_point_cloud("merged_point_cloud.pcd")
         
-        grasp = np.array([0.5*np.pi, 0, 0.5*np.pi, 0.68, 0.0, 0.1])
+        grasp = np.array([0.5*np.pi, 0, 0.5*np.pi, 0.67, 0.0, 0.1])
         self.ScoreGraspCandidate(grasp)
 
 
