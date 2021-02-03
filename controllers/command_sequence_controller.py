@@ -46,13 +46,16 @@ class CommandSequenceController(BasicController):
         current_pose = self.ee_pose_port.Eval(context)
         current_twist = self.ee_twist_port.Eval(context)
 
-        # DEBUG: print error
-        # TODO: seems to be some strange coupling between roll & pitch, in both hardware
-        # and sim.
-        #print(target_pose - current_pose)
+        # Compute pose and twist errors
+        twist_err = target_twist - current_twist
+        pose_err = target_pose - current_pose
+
+        # Convert the orientation portion of the pose error to an angular velocity
+        RPY = RollPitchYaw(current_pose[:3])
+        pose_err[:3] = RPY.CalcAngularVelocityInParentFromRpyDt(pose_err[:3])
 
         # Set command (i.e. end-effector twist or wrench) using a PD controller
-        cmd = self.Kp@(target_pose - current_pose) + self.Kd@(target_twist - current_twist)
+        cmd = self.Kp@pose_err + self.Kd@twist_err
 
         output.SetFromVector(cmd)
 

@@ -60,7 +60,7 @@ simulate = True
 
 # If we're running a simulation, choose which sort of commands are
 # sent to the arm and the gripper
-ee_command_type = EndEffectorTarget.kWrench      # kPose, kTwist, or kWrench
+ee_command_type = EndEffectorTarget.kTwist      # kPose, kTwist, or kWrench
 gripper_command_type = GripperTarget.kPosition  # kPosition or kVelocity
 
 # If we're running a simulation, whether to include a simulated camera
@@ -75,7 +75,7 @@ gripper_type = "hande"
 
 # Set up the kinova station
 station = KinovaStation(time_step=0.001)
-station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=True)
+station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False)
 if include_camera:
     station.AddCamera(show_window=show_camera_window)
     station.ConnectToMeshcatVisualizer()
@@ -98,13 +98,13 @@ if ee_command_type == EndEffectorTarget.kPose:
     target_source = builder.AddSystem(ConstantVectorSource(pose_des))
 
 elif ee_command_type == EndEffectorTarget.kTwist:
-    twist_des = np.array([0,0,0.5,
-                          0.1,-0.1,0.01])
+    twist_des = np.array([0.0,0.1,0.0,
+                          0.0,0.0,0.0])
     target_source = builder.AddSystem(ConstantVectorSource(twist_des))
 
 elif ee_command_type == EndEffectorTarget.kWrench:
-    wrench_des = np.array([0,0.0,0.0,
-                            0.0,0.0,0.1])
+    wrench_des = np.array([0.0,0.0,0.0,
+                            0.0,0.0,0.0])
     target_source = builder.AddSystem(ConstantVectorSource(wrench_des))
 
 else:

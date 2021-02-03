@@ -44,25 +44,33 @@ station = builder.AddSystem(station)
 # Create the command sequence
 cs = CommandSequence([])
 cs.append(Command(
-    name="pregrasp",
-    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.68, 0.0, 0.1]),
-    duration=4,
+    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.4]),
+    duration=3,
     gripper_closed=False))
 cs.append(Command(
-    name="grasp",
-    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.68, 0.0, 0.1]),
-    duration=1,
-    gripper_closed=True))
-cs.append(Command(
-    name="lift",
-    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.5]),
-    duration=2,
-    gripper_closed=True))
-cs.append(Command(
-    name="move",
-    target_pose=np.array([0.5*np.pi, 0.0, 0.1*np.pi, 0.5, -0.5, 0.5]),
-    duration=2,
-    gripper_closed=True))
+    target_pose=np.array([0.6*np.pi, 0.0, 0.8*np.pi, 0.5, 0.0, 0.4]),
+    duration=3,
+    gripper_closed=False))
+#cs.append(Command(
+#    name="pregrasp",
+#    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.68, 0.0, 0.1]),
+#    duration=4,
+#    gripper_closed=False))
+#cs.append(Command(
+#    name="grasp",
+#    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.68, 0.0, 0.1]),
+#    duration=1,
+#    gripper_closed=True))
+#cs.append(Command(
+#    name="lift",
+#    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.5, 0.0, 0.5]),
+#    duration=2,
+#    gripper_closed=True))
+#cs.append(Command(
+#    name="move",
+#    target_pose=np.array([0.5*np.pi, 0.0, 0.1*np.pi, 0.5, -0.5, 0.5]),
+#    duration=2,
+#    gripper_closed=True))
 
 # Create the controller and connect inputs and outputs appropriately
 Kp = 10*np.eye(6)
