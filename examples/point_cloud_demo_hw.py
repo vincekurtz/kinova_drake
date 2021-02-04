@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from kinova_station import KinovaStationHardwareInterface, EndEffectorTarget
-from controllers import CommandSequenceController, CommandSequence, Command
+from controllers import CommandSequenceController, CommandSequence, Command, PointCloudController
 
 from meshcat.servers.zmqserver import start_zmq_server_as_subprocess
 
@@ -39,28 +39,16 @@ with KinovaStationHardwareInterface() as station:
     plant, scene_graph = AddMultibodyPlantSceneGraph(builder, time_step=0.0)
     station = builder.AddSystem(station)
 
-    # Create the command sequence
-    cs = CommandSequence([])
-    cs.append(Command(
-        name="line_up",
-        target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.55, 0.0, 0.0]),
-        duration=4,
-        gripper_closed=False))
-    #cs.append(Command(
-    #    name="tilt_down",
-    #    target_pose=np.array([0.6*np.pi, 0.0, 0.5*np.pi, 0.6, 0.0, 0.1]),
-    #    duration=4,
-    #    gripper_closed=False))
-
     # Create the controller and connect inputs and outputs appropriately
-    Kp = 0*np.diag([100, 100, 100, 200, 200, 200])  # high gains needed to overcome
-    Kd = 2*np.sqrt(0.5*Kp)                        # significant joint friction
+    Kp = 1*np.diag([100, 100, 100, 200, 200, 200])  # high gains needed to overcome
+    Kd = 2*np.sqrt(0.5*Kp)                          # significant joint friction
 
-    controller = builder.AddSystem(CommandSequenceController(
-        cs,
+    controller = builder.AddSystem(PointCloudController(
         command_type=EndEffectorTarget.kWrench,  # wrench commands work best on hardware
+        show_candidate_grasp=True,
         Kp=Kp,
         Kd=Kd))
+
     controller.set_name("controller")
     controller.ConnectToStation(builder, station)
 
@@ -69,18 +57,20 @@ with KinovaStationHardwareInterface() as station:
                                     CameraInfo(width=480, height=270, fov_y=np.radians(40)),
                                     pixel_type=PixelType.kDepth16U,
                                     scale=0.001,
-                                    fields=BaseField.kXYZs | BaseField.kRGBs))
+                                    fields=BaseField.kXYZs))
     point_cloud_generator.set_name("point_cloud_generator")
 
     builder.Connect(
             station.GetOutputPort("camera_depth_image"),
             point_cloud_generator.depth_image_input_port())
     builder.Connect(
-            station.GetOutputPort("camera_rgb_image"),
-            point_cloud_generator.color_image_input_port())
-    builder.Connect(
             station.GetOutputPort("camera_transform"),
             point_cloud_generator.GetInputPort("camera_pose"))
+
+    # Send generated point cloud to the controller
+    builder.Connect(
+            point_cloud_generator.point_cloud_output_port(),
+            controller.GetInputPort("point_cloud"))
 
     # Connect meshcat visualizer
     #proc, zmq_url, web_url = start_zmq_server_as_subprocess()  # start meshcat from here

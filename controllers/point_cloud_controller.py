@@ -37,7 +37,7 @@ class PointCloudController(CommandSequenceController):
                 gripper_closed=False))
             start_sequence.append(Command(
                 name="left_view",
-                target_pose=np.array([0.7*np.pi, 0.0, 0.2*np.pi, 0.6, 0.3, 0.15]),
+                target_pose=np.array([0.7*np.pi, 0.0, 0.3*np.pi, 0.6, 0.1, 0.15]),
                 duration=3,
                 gripper_closed=False))
             start_sequence.append(Command(
@@ -113,19 +113,26 @@ class PointCloudController(CommandSequenceController):
             o3d_cloud.colors = o3d.utility.Vector3dVector(point_cloud.rgbs()[:, indices].T / 255.)
 
         # Crop to relevant area
-        x_min = 0.5; x_max = 1.5
-        y_min = -0.3; y_max = 0.3
-        z_min = 0.0; z_max = 0.5
+        x_min = 0.5; x_max = 1.0
+        y_min = -0.2; y_max = 0.2
+        z_min = 0.02; z_max = 0.3
         o3d_cloud = o3d_cloud.crop(o3d.geometry.AxisAlignedBoundingBox(
                                                 min_bound=[x_min, y_min, z_min],
                                                 max_bound=[x_max, y_max, z_max]))
 
-        # Estimate normals
-        o3d_cloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
-        o3d_cloud.orient_normals_towards_camera_location(camera_position)
+        try:
+            # Estimate normals
+            o3d_cloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.2, max_nn=30))
+            o3d_cloud.orient_normals_towards_camera_location(camera_position)
 
-        # Save
-        self.stored_point_clouds.append(o3d_cloud)
+            # Save
+            self.stored_point_clouds.append(o3d_cloud)
+
+        except RuntimeError:
+            # We were unable to compute normals for this frame, so we'll just skip it. 
+            # The most likely reason for this is simply that all the points were outside
+            # the cropped region.
+            pass
 
     def AppendPickupToStoredCommandSequence(self, grasp):
         """
@@ -307,8 +314,8 @@ class PointCloudController(CommandSequenceController):
         t = context.get_time()
 
         if t < self.cs.total_duration():
-            if t % 1 == 0 and t != 0:
-                # Only fetch the point clouds about once per second, since this is slow
+            if t % 5 == 0 and t != 0:
+                # Only fetch the point clouds infrequently, since this is slow
                 point_cloud = self.point_cloud_input_port.Eval(context)
 
                 # Convert to Open3D, crop, compute normals, and save

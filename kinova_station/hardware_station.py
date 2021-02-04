@@ -585,7 +585,7 @@ class KinovaStationHardwareInterface(LeafSystem):
         Capture and send as output a depth image from the camera.
         """
         # Get raw byte stream from the camera
-        timeout = 1.0  # max seconds to wait for an image
+        timeout = 2.0  # max seconds to wait for an image
         sample = self.depth_video_sink.emit('try-pull-sample', timeout)
 
         if sample is None:
@@ -626,7 +626,7 @@ class KinovaStationHardwareInterface(LeafSystem):
         # TODO: get precise transform data from the datasheet
         X_EC = RigidTransform(
                         RotationMatrix(RollPitchYaw([0,0,np.pi])),  # This seems strange...
-                        [0.0,0.065,0.14])
+                        [0.0,0.065,-0.14])
 
         # Compute pose of camera in the world frame
         X_WC = X_WE.multiply(X_EC)
