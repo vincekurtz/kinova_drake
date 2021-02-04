@@ -1,6 +1,8 @@
 from controllers.command_sequence_controller import *
-import open3d as o3d
 from kinova_station.common import draw_open3d_point_cloud, draw_points
+
+import open3d as o3d
+from scipy.optimize import differential_evolution
 
 class PointCloudController(CommandSequenceController):
     """
@@ -115,6 +117,38 @@ class PointCloudController(CommandSequenceController):
         # Save
         self.stored_point_clouds.append(o3d_cloud)
 
+    def GenerateGraspCandidate(self, cloud=None):
+        """
+        Use some simple heuristics to generate a reasonable-ish candidate grasp
+        """
+        if cloud is None:
+            cloud = self.merged_point_cloud
+
+        # Pick a random point on the point cloud
+        index = np.random.randint(0, len(cloud.points))
+
+        p_WS = np.asarray(cloud.points[index])  # position of the [S]ample point in the [W]orld
+        n_WS = np.asarray(cloud.normals[index])
+
+        # Create a gripper pose consistent with this point
+        y = np.array([0., 0., -1.])
+        Gx = n_WS
+        Gy = y - np.dot(y, Gx)*Gx
+        Gz = np.cross(Gx, Gy)
+        R_WG = RotationMatrix(np.vstack([Gx, Gy, Gz]).T)
+
+        p_GS_G = np.array([0.02,0,0.13])   # position of the sample in the gripper frame
+        p_SG_W = -R_WG.multiply(p_GS_G)
+        p_WG = p_WS + p_SG_W
+
+        # DEBUG: show the candidate grip location
+        if self.show_candidate_grasp:
+            v = self.meshcat.vis["sampled_point"]
+            draw_points(v, p_WS, [0.,1.,0.], size=0.01)
+
+        ee_pose = np.hstack([RollPitchYaw(R_WG).vector(), p_WG])
+        return ee_pose
+
     def ScoreGraspCandidate(self, ee_pose, cloud=None):
         """
         For the given point cloud (merged, downsampled, with normals) and
@@ -191,10 +225,28 @@ class PointCloudController(CommandSequenceController):
 
         # DEBUG: just load the saved point cloud from a file to test grasp scoring
         self.merged_point_cloud = o3d.io.read_point_cloud("merged_point_cloud.pcd")
-        
-        grasp = np.array([0.5*np.pi, 0, 0.5*np.pi, 0.67, 0.02, 0.1])
-        cost = self.ScoreGraspCandidate(grasp)
-        print(cost)
+
+        if t == 0:
+            # Generate several semi-random candidate grasps
+            grasps = []
+            for i in range(10):
+                grasps.append(self.GenerateGraspCandidate())
+           
+
+            # Use a genetic algorithm to find a locally optimal grasp
+            bounds = [(-2*np.pi,2*np.pi),
+                      (-2*np.pi,2*np.pi),
+                      (-2*np.pi,2*np.pi),
+                      (-1.0, 1.0),
+                      (-1.0, 1.0),
+                      (0.0, 1.0)]
+            init = np.array(grasps)
+            res = differential_evolution(self.ScoreGraspCandidate, bounds, init=init)
+
+            if res.success:
+                best_grasp = res.x
+            else:
+                print("Failed to converge to an optimal grasp location")
 
 
         output.SetFromVector(np.zeros(6))
