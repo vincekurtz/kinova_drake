@@ -200,6 +200,9 @@ class PointCloudController(CommandSequenceController):
                 # the resulting cost is infinite
                 cost = np.inf
 
+        # TODO: penalize collisions between the gripper and the ground
+
+        # TODO: penalize deviations from a nominal orientation
 
         # DEBUG: Visualize the candidate grasp point with meshcat
         if self.show_candidate_grasp:
@@ -245,9 +248,10 @@ class PointCloudController(CommandSequenceController):
 
             if res.success:
                 best_grasp = res.x
+                cost = res.fun
+                print("Found locally optimal grasp with cost %s" % cost)
             else:
                 print("Failed to converge to an optimal grasp location")
-
 
         output.SetFromVector(np.zeros(6))
 
