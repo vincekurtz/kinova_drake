@@ -46,6 +46,7 @@ with KinovaStationHardwareInterface() as station:
     controller = builder.AddSystem(PointCloudController(
         command_type=EndEffectorTarget.kWrench,  # wrench commands work best on hardware
         show_candidate_grasp=True,
+        hardware=True,
         Kp=Kp,
         Kd=Kd))
 
@@ -116,7 +117,7 @@ with KinovaStationHardwareInterface() as station:
 
     # Run simulation
     simulator.Initialize()
-    simulator.AdvanceTo(20.0)
+    simulator.AdvanceTo(30.0)
 
     # Print rate data
     print("")

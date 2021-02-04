@@ -12,7 +12,8 @@ class PointCloudController(CommandSequenceController):
     def __init__(self, start_sequence=None, 
                        command_type=EndEffectorTarget.kTwist, 
                        Kp=10*np.eye(6), Kd=2*np.sqrt(10)*np.eye(6),
-                       show_candidate_grasp=False):
+                       show_candidate_grasp=False,
+                       hardware=False):
         """
         Parameters:
 
@@ -25,7 +26,11 @@ class PointCloudController(CommandSequenceController):
 
             show_candidate_grasp : whether or not to display candidate grasps over meshcat each
                                    time the grasp cost function is evaluated. 
+
+            hardware             : whether we're applying this on hardware (simulation default)
         """
+        self.hardware = hardware
+
         if start_sequence is None:
             # Create a default starting command sequence for moving around and
             # building up the point cloud
@@ -115,7 +120,7 @@ class PointCloudController(CommandSequenceController):
         # Crop to relevant area
         x_min = 0.5; x_max = 1.0
         y_min = -0.2; y_max = 0.2
-        z_min = 0.02; z_max = 0.3
+        z_min = 0.05; z_max = 0.3
         o3d_cloud = o3d_cloud.crop(o3d.geometry.AxisAlignedBoundingBox(
                                                 min_bound=[x_min, y_min, z_min],
                                                 max_bound=[x_max, y_max, z_max]))
@@ -139,6 +144,19 @@ class PointCloudController(CommandSequenceController):
         Given a viable grasp location, modify the stored command sequence to 
         include going to that grasp location and picking up the object. 
         """
+        if self.hardware:
+            # we need to translate target grasps from the default end-effector frame
+            # (G, wrist) used by drake to the end-effector frame used by the hardware
+            # (E, fingertips)
+            X_WG = RigidTransform(             
+                    RotationMatrix(RollPitchYaw(grasp[:3])),
+                    grasp[3:])
+            X_GE = RigidTransform(
+                    RotationMatrix(np.eye(3)),
+                    np.array([0,0,0.18]))
+            X_WE = X_WG.multiply(X_GE)
+            grasp = np.hstack([RollPitchYaw(X_WE.rotation()).vector(), X_WE.translation()])
+
         # Compute a pregrasp location that is directly behind the grasp location
         X_WG = RigidTransform(             
                 RotationMatrix(RollPitchYaw(grasp[:3])),
@@ -174,6 +192,7 @@ class PointCloudController(CommandSequenceController):
         """
         Use some simple heuristics to generate a reasonable-ish candidate grasp
         """
+        # TODO: fix so reachable position doesn't involve flipping the gripper over
         if cloud is None:
             cloud = self.merged_point_cloud
 
