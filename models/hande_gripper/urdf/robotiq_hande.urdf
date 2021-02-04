@@ -32,9 +32,9 @@
             </geometry>
         </visual>
         <collision>
-            <origin rpy="0 0 0" xyz="0.028 0 0.037"/>
+            <origin rpy="0 0 0" xyz="0.028 0 0.024"/>
             <geometry>
-                <box size="0.007 0.02 0.02"/>
+                <box size="0.007 0.02 0.045"/>
             </geometry>
         </collision>
     </link>
@@ -51,9 +51,9 @@
             </geometry>
         </visual>
         <collision>
-            <origin rpy="0 0 0" xyz="-0.028 0 0.037"/>
+            <origin rpy="0 0 0" xyz="-0.028 0 0.024"/>
             <geometry>
-                <box size="0.007 0.02 0.02"/>
+                <box size="0.007 0.02 0.045"/>
             </geometry>
         </collision>
     </link>

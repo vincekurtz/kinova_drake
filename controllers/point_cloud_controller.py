@@ -84,6 +84,7 @@ class PointCloudController(CommandSequenceController):
         self.diagram = builder.Build()
         self.diagram_context = self.diagram.CreateDefaultContext()
         self.plant_context = self.diagram.GetMutableSubsystemContext(self.plant, self.diagram_context)
+        self.scene_graph_context = self.scene_graph.GetMyContextFromRoot(self.diagram_context)
 
     def StorePointCloud(self, point_cloud, camera_position):
         """
@@ -120,6 +121,8 @@ class PointCloudController(CommandSequenceController):
         end-effector pose corresponding to a candidate grasp, return the
         score associated with this grasp. 
         """
+        cost = 0
+
         if cloud is None:
             cloud = self.merged_point_cloud
 
@@ -144,11 +147,28 @@ class PointCloudController(CommandSequenceController):
                          axis=0)
         p_GC_between = p_GC[:,indices]
 
+        # Compute normals for those points between the fingers
+        n_GC_between = X_GW.rotation().multiply(np.asarray(cloud.normals)[indices,:].T)
+
+        # Reward normals that are alligned with the gripper
+        cost -= np.sum(n_GC_between[0,:]**2)
+
+        # Penalize collisions between the point cloud and the gripper
+        self.diagram.Publish(self.diagram_context)   # updates scene_graph_context
+        query_object = self.scene_graph.get_query_output_port().Eval(self.scene_graph_context)
+
+        for pt in cloud.points:
+            # Compute all distances from the gripper to the point cloud, ignoring any
+            # that are over 0
+            distances = query_object.ComputeSignedDistanceToPoint(pt, threshold=0)
+            if distances:
+                # Any (negative) distance found indicates that we're in collision, so
+                # the resulting cost is infinite
+                cost = np.inf
+
+
         # DEBUG: Visualize the candidate grasp point with meshcat
         if self.show_candidate_grasp:
-
-            # Push messages through to the meshcat visualizer
-            self.diagram.Publish(self.diagram_context)
 
             # Visualize the point cloud 
             v = self.meshcat.vis["merged_point_cloud"]
@@ -159,6 +179,8 @@ class PointCloudController(CommandSequenceController):
             v = self.meshcat.vis["grip_location"]
             p_WC_between = X_WG.multiply(p_GC_between)
             draw_points(v, p_WC_between, [1.,0.,0.], size=0.01)  # Red points
+       
+        return cost
 
 
     def CalcEndEffectorCommand(self, context, output):
@@ -170,8 +192,9 @@ class PointCloudController(CommandSequenceController):
         # DEBUG: just load the saved point cloud from a file to test grasp scoring
         self.merged_point_cloud = o3d.io.read_point_cloud("merged_point_cloud.pcd")
         
-        grasp = np.array([0.5*np.pi, 0, 0.5*np.pi, 0.67, 0.0, 0.1])
-        self.ScoreGraspCandidate(grasp)
+        grasp = np.array([0.5*np.pi, 0, 0.5*np.pi, 0.67, 0.02, 0.1])
+        cost = self.ScoreGraspCandidate(grasp)
+        print(cost)
 
 
         output.SetFromVector(np.zeros(6))
