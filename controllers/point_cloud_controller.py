@@ -11,16 +11,20 @@ class PointCloudController(CommandSequenceController):
     """
     def __init__(self, start_sequence=None, 
                        command_type=EndEffectorTarget.kTwist, 
-                       Kp=10*np.eye(6), Kd=2*np.sqrt(10)*np.eye(6)):
+                       Kp=10*np.eye(6), Kd=2*np.sqrt(10)*np.eye(6),
+                       show_candidate_grasp=True):
         """
         Parameters:
 
-            start_sequence: a CommandSequence object for moving around and building up
-                            a point cloud. 
+            start_sequence       : a CommandSequence object for moving around and building up
+                                   a point cloud. 
 
-            command_type: the type of command that we'll send (kTwist or kWrench)
+            command_type         : the type of command that we'll send (kTwist or kWrench)
 
-            Kp/Kd: PD gains
+            Kp/Kd                : PD gains
+
+            show_candidate_grasp : whether or not to display candidate grasps over meshcat each
+                                   time the grasp cost function is evaluated. 
         """
         if start_sequence is None:
             # Create a default starting command sequence for moving around and
@@ -72,8 +76,14 @@ class PointCloudController(CommandSequenceController):
         gripper_urdf = "./models/hande_gripper/urdf/robotiq_hande_static.urdf"
         self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf, "gripper")
 
-        # DEBUG: show this floating gripper in meshcat
-        self.show_candidate_grasp = True
+        self.plant.RegisterCollisionGeometry(  # add a flat ground that we can collide with
+                self.plant.world_body(),
+                RigidTransform(), HalfSpace(), 
+                "ground_collision",
+                CoulombFriction())
+
+        # Connect to meshcat so we can show this floating gripper
+        self.show_candidate_grasp = show_candidate_grasp
         if self.show_candidate_grasp:
             self.meshcat = ConnectMeshcatVisualizer(builder=builder, 
                                                zmq_url="tcp://127.0.0.1:6000",
@@ -141,11 +151,6 @@ class PointCloudController(CommandSequenceController):
         p_SG_W = -R_WG.multiply(p_GS_G)
         p_WG = p_WS + p_SG_W
 
-        # DEBUG: show the candidate grip location
-        if self.show_candidate_grasp:
-            v = self.meshcat.vis["sampled_point"]
-            draw_points(v, p_WS, [0.,1.,0.], size=0.01)
-
         ee_pose = np.hstack([RollPitchYaw(R_WG).vector(), p_WG])
         return ee_pose
 
@@ -162,8 +167,9 @@ class PointCloudController(CommandSequenceController):
 
         # Set the pose of our internal gripper model
         gripper = self.plant.GetBodyByName("hande_base_link")
+        R_WG = RotationMatrix(RollPitchYaw(ee_pose[:3]))
         X_WG = RigidTransform(
-                RotationMatrix(RollPitchYaw(ee_pose[:3])),
+                R_WG, 
                 ee_pose[3:])
         self.plant.SetFreeBodyPose(self.plant_context, gripper, X_WG)
 
@@ -200,18 +206,26 @@ class PointCloudController(CommandSequenceController):
                 # the resulting cost is infinite
                 cost = np.inf
 
-        # TODO: penalize collisions between the gripper and the ground
+        # Penalize collisions between the gripper and the ground
+        if query_object.HasCollisions():
+            cost = np.inf
 
-        # TODO: penalize deviations from a nominal orientation
+        ## Penalize deviations from a nominal orientation
+        #rpy_nom = np.array([0.75, 0, 0.5])*np.pi
+        #R_nom = RotationMatrix(RollPitchYaw(rpy_nom))
+        #R_diff = R_WG.multiply(R_nom.transpose())
+        #theta = np.arccos( (np.trace(R_diff.matrix()) - 1)/2 )  # angle between current and desired rotation
 
-        # DEBUG: Visualize the candidate grasp point with meshcat
+        #cost += 1*(theta**2)
+
+        # Visualize the candidate grasp point with meshcat
         if self.show_candidate_grasp:
 
-            # Visualize the point cloud 
+            # Draw the point cloud 
             v = self.meshcat.vis["merged_point_cloud"]
             draw_open3d_point_cloud(v, cloud, normals_scale=0.01)
 
-            # Visualize the points on the point cloud that are between the
+            # Highlight the points on the point cloud that are between the
             # grippers
             v = self.meshcat.vis["grip_location"]
             p_WC_between = X_WG.multiply(p_GC_between)
@@ -219,6 +233,35 @@ class PointCloudController(CommandSequenceController):
        
         return cost
 
+    def FindGrasp(self, seed=None):
+        """
+        Use a genetic algorithm to find a suitable grasp.
+        """
+        print("Searching for a suitable grasp...")
+        assert self.merged_point_cloud is not None, "Merged point cloud must be created before finding a grasp"
+
+        # Generate several semi-random candidate grasps
+        np.random.seed(seed)
+        grasps = []
+        for i in range(10):
+            grasps.append(self.GenerateGraspCandidate())
+
+        # Use a genetic algorithm to find a locally optimal grasp
+        bounds = [(-2*np.pi,2*np.pi),
+                  (-2*np.pi,2*np.pi),
+                  (-2*np.pi,2*np.pi),
+                  (-0.7, 0.7),
+                  (-0.7, 0.7),
+                  (0.0, 1.0)]
+        init = np.array(grasps)
+        res = differential_evolution(self.ScoreGraspCandidate, bounds, init=init)
+
+        if res.success and res.fun < 0:
+            print("Found locally optimal grasp with cost %s" % res.fun)
+            return res.x
+        else:
+            print("Failed to converge to an optimal grasp: retrying.")
+            return self.FindGrasp()
 
     def CalcEndEffectorCommand(self, context, output):
         """
@@ -229,29 +272,12 @@ class PointCloudController(CommandSequenceController):
         # DEBUG: just load the saved point cloud from a file to test grasp scoring
         self.merged_point_cloud = o3d.io.read_point_cloud("merged_point_cloud.pcd")
 
+        #grasp = np.array([0.75*np.pi, 0.0, 0.5*np.pi, 0.68, 0, 0.2])
+        #print(self.ScoreGraspCandidate(grasp))
+
         if t == 0:
-            # Generate several semi-random candidate grasps
-            grasps = []
-            for i in range(10):
-                grasps.append(self.GenerateGraspCandidate())
-           
-
-            # Use a genetic algorithm to find a locally optimal grasp
-            bounds = [(-2*np.pi,2*np.pi),
-                      (-2*np.pi,2*np.pi),
-                      (-2*np.pi,2*np.pi),
-                      (-1.0, 1.0),
-                      (-1.0, 1.0),
-                      (0.0, 1.0)]
-            init = np.array(grasps)
-            res = differential_evolution(self.ScoreGraspCandidate, bounds, init=init)
-
-            if res.success:
-                best_grasp = res.x
-                cost = res.fun
-                print("Found locally optimal grasp with cost %s" % cost)
-            else:
-                print("Failed to converge to an optimal grasp location")
+            grasp = self.FindGrasp()
+            print(grasp)
 
         output.SetFromVector(np.zeros(6))
 
