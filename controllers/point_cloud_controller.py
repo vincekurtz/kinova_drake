@@ -12,7 +12,7 @@ class PointCloudController(CommandSequenceController):
     def __init__(self, start_sequence=None, 
                        command_type=EndEffectorTarget.kTwist, 
                        Kp=10*np.eye(6), Kd=2*np.sqrt(10)*np.eye(6),
-                       show_candidate_grasp=True):
+                       show_candidate_grasp=False):
         """
         Parameters:
 
@@ -127,6 +127,42 @@ class PointCloudController(CommandSequenceController):
         # Save
         self.stored_point_clouds.append(o3d_cloud)
 
+    def AppendPickupToStoredCommandSequence(self, grasp):
+        """
+        Given a viable grasp location, modify the stored command sequence to 
+        include going to that grasp location and picking up the object. 
+        """
+        # Compute a pregrasp location that is directly behind the grasp location
+        X_WG = RigidTransform(             
+                RotationMatrix(RollPitchYaw(grasp[:3])),
+                grasp[3:])
+        X_GP = RigidTransform(
+                RotationMatrix(np.eye(3)),
+                np.array([0,0,-0.1]))
+        X_WP = X_WG.multiply(X_GP)
+        pregrasp = np.hstack([RollPitchYaw(X_WP.rotation()).vector(), X_WP.translation()])
+
+        self.cs.append(Command(
+            name="pregrasp",
+            target_pose=pregrasp,
+            duration=4,
+            gripper_closed=False))
+        self.cs.append(Command(
+            name="grasp",
+            target_pose=grasp,
+            duration=3,
+            gripper_closed=False))
+        self.cs.append(Command(
+            name="close_gripper",
+            target_pose=grasp,
+            duration=0.5,
+            gripper_closed=True))
+        self.cs.append(Command(
+            name="lift",
+            target_pose = grasp + np.array([0,0,0,0,0,0.1]),
+            duration=2,
+            gripper_closed=True))
+
     def GenerateGraspCandidate(self, cloud=None):
         """
         Use some simple heuristics to generate a reasonable-ish candidate grasp
@@ -237,7 +273,7 @@ class PointCloudController(CommandSequenceController):
         """
         Use a genetic algorithm to find a suitable grasp.
         """
-        print("Searching for a suitable grasp...")
+        print("===> Searching for a suitable grasp...")
         assert self.merged_point_cloud is not None, "Merged point cloud must be created before finding a grasp"
 
         # Generate several semi-random candidate grasps
@@ -257,10 +293,11 @@ class PointCloudController(CommandSequenceController):
         res = differential_evolution(self.ScoreGraspCandidate, bounds, init=init)
 
         if res.success and res.fun < 0:
-            print("Found locally optimal grasp with cost %s" % res.fun)
+            print(res)
+            print("===> Found locally optimal grasp with cost %s" % res.fun)
             return res.x
         else:
-            print("Failed to converge to an optimal grasp: retrying.")
+            print("===> Failed to converge to an optimal grasp: retrying.")
             return self.FindGrasp()
 
     def CalcEndEffectorCommand(self, context, output):
@@ -269,50 +306,29 @@ class PointCloudController(CommandSequenceController):
         """
         t = context.get_time()
 
-        # DEBUG: just load the saved point cloud from a file to test grasp scoring
-        self.merged_point_cloud = o3d.io.read_point_cloud("merged_point_cloud.pcd")
+        if t < self.cs.total_duration():
+            if t % 1 == 0 and t != 0:
+                # Only fetch the point clouds about once per second, since this is slow
+                point_cloud = self.point_cloud_input_port.Eval(context)
 
-        #grasp = np.array([0.75*np.pi, 0.0, 0.5*np.pi, 0.68, 0, 0.2])
-        #print(self.ScoreGraspCandidate(grasp))
+                # Convert to Open3D, crop, compute normals, and save
+                ee_pose = self.ee_pose_port.Eval(context)  # use end-effector position as a rough
+                                                           # approximation of camera position
+                self.StorePointCloud(point_cloud, ee_pose[3:])
 
-        if t == 0:
+        elif self.merged_point_cloud is None:
+            # Merge stored point clouds and downsample
+            self.merged_point_cloud = self.stored_point_clouds[0]    # Just adding together may not
+            for i in range(1, len(self.stored_point_clouds)):        # work very well on hardware...
+                self.merged_point_cloud += self.stored_point_clouds[i]
+
+            self.merged_point_cloud = self.merged_point_cloud.voxel_down_sample(voxel_size=0.005)
+            
+            # Find a collision-free grasp location using a genetic algorithm
             grasp = self.FindGrasp()
-            print(grasp)
 
-        output.SetFromVector(np.zeros(6))
+            # Modify the stored command sequence to pick up the object from this grasp location 
+            self.AppendPickupToStoredCommandSequence(grasp)
 
-        #if t < self.cs.total_duration():
-        #    # Just follow the default command sequence while we're building up the point cloud
-        #    CommandSequenceController.CalcEndEffectorCommand(self, context, output)
-
-        #    if t % 1 == 0 and t != 0:
-        #        # Only fetch the point clouds about once per second, since this is slow
-        #        point_cloud = self.point_cloud_input_port.Eval(context)
-
-        #        # Convert to Open3D, crop, compute normals, and save
-        #        ee_pose = self.ee_pose_port.Eval(context)  # use end-effector position as a rough
-        #                                                   # approximation of camera position
-        #        self.StorePointCloud(point_cloud, ee_pose[3:])
-
-        #elif self.merged_point_cloud is None:
-        #    # Merge stored point clouds
-        #    self.merged_point_cloud = self.stored_point_clouds[0]    # Just adding together may not
-        #    for i in range(1, len(self.stored_point_clouds)):        # work very well on hardware...
-        #        self.merged_point_cloud += self.stored_point_clouds[i]
-
-        #    # Downsample merged point cloud
-        #    self.merged_point_cloud = self.merged_point_cloud.voxel_down_sample(voxel_size=0.005)
-        #    
-        #    # Find a collision-free grasp location
-        #    grasp_initial_guess = np.array([0.5*np.pi, 0, 0.5*np.pi, 0.68, 0.0, 0.1])  # TODO: use heuristics to get a good guess
-
-        #    #DEBUG: save point cloud
-        #    #o3d.io.write_point_cloud("merged_point_cloud.pcd", self.merged_point_cloud)
-
-        #    score = self.ScoreGraspCandidate(grasp_initial_guess)
-
-
-        #else:
-        #    # Go to the grasp location, close the gripper, and move the object
-        #    # to a target location.
-        #    pass
+        # Follow the command sequence stored in self.cs
+        CommandSequenceController.CalcEndEffectorCommand(self, context, output)

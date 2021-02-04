@@ -224,7 +224,8 @@ class KinovaStation(Diagram):
         # Build the diagram
         self.builder.BuildInto(self)
 
-    def SetupSinglePegScenario(self, gripper_type="hande", arm_damping=False):
+    def SetupSinglePegScenario(self, gripper_type="hande", arm_damping=False,
+                                     peg_position=[0.8,0,0.1], peg_rotation=[0,np.pi/2,0]):
         """
         Set up a scenario with the robot arm, a gripper, and a single peg. 
         And connect to the Drake visualizer while we're at it.
@@ -238,8 +239,8 @@ class KinovaStation(Diagram):
             raise RuntimeError("Invalid gripper type: %s" % gripper_type)
 
         X_peg = RigidTransform()
-        X_peg.set_translation([0.8,0,0.1])
-        X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,np.pi/2,0])))
+        X_peg.set_translation(peg_position)
+        X_peg.set_rotation(RotationMatrix(RollPitchYaw(peg_rotation)))
         self.AddManipulandFromFile("./models/manipulands/peg.sdf", X_peg)
 
         self.ConnectToDrakeVisualizer()

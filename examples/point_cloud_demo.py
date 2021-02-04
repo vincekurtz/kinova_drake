@@ -28,7 +28,7 @@ gripper_type = "hande"
 
 # Set up the kinova station
 station = KinovaStation(time_step=0.001)
-station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False)
+station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False, peg_position=[0.7,0.1,0.1])
 station.AddCamera()
 station.ConnectToMeshcatVisualizer(start_server=False)
 station.Finalize()
@@ -43,7 +43,7 @@ builder = DiagramBuilder()
 builder.AddSystem(station)
 
 # Add the controller
-controller = builder.AddSystem(PointCloudController())
+controller = builder.AddSystem(PointCloudController(show_candidate_grasp=True))
 controller.set_name("controller")
 controller.ConnectToStation(builder, station)
 
@@ -73,7 +73,7 @@ builder.Connect(
 # Visualize the point cloud with meshcat
 meshcat_point_cloud = builder.AddSystem(MeshcatPointCloudVisualizer(
                                             station.meshcat,
-                                            draw_period=1.0))
+                                            draw_period=0.2))
 meshcat_point_cloud.set_name("point_cloud_viz")
 builder.Connect(
         point_cloud_generator.point_cloud_output_port(),
@@ -96,9 +96,9 @@ station.SetManipulandStartPositions(diagram, diagram_context)
 
 # Set up simulation
 simulator = Simulator(diagram, diagram_context)
-simulator.set_target_realtime_rate(10.1)
+simulator.set_target_realtime_rate(10.0)
 simulator.set_publish_every_time_step(False)
 
 # Run simulation
 simulator.Initialize()
-simulator.AdvanceTo(1.0)
+simulator.AdvanceTo(30.0)
