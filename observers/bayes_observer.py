@@ -271,6 +271,66 @@ class BayesObserver(LeafSystem):
         # Just send the marginal variances for each axis
         output.SetFromVector([self.cov[0,0], self.cov[1,1], self.cov[2,2]])
 
+    def ComputeAffineEnergyDecomposition(self, qd, tau):
+        """
+        Write (Hdot = qd'*tau) as an affine expression (X*theta = y), where
+        Hdot is the change in total system energy and theta is a vector of (unknown)
+        lumped inertial parameters. 
+
+        Assumes current positions and velocities are set in self.context. 
+        """
+        # Compute Hamiltonian (overall system energy)
+        U = self.plant.CalcPotentialEnergy(self.context)
+        K = self.plant.CalcKineticEnergy(self.context)
+        H = K + U   
+
+        # Compute time derivative of hamiltonian
+        Hdot = (H - self.H_last)/self.dt
+        self.H_last = H
+
+        # qd'*tau = Hdot  is linear in theta
+        A, b = DecomposeAffineExpressions(np.array([Hdot]), self.theta)
+
+        X = A
+        y = qd.T@tau - b
+        
+        return (X,y)
+
+    def ComputeAffineDynamicsDecomposition(self, qdd, tau):
+        """
+        Write the dynamics (M*qdd + C*qd + tau_g = tau) as an affine expression
+        (X*theta = y), where theta is a vector of (unknown) lumped inertial parameters.
+
+        Assumes current positions and velocities are set in self.context. 
+        """
+        # Compute generalized forces due to gravity
+        tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
+
+        # Get a symbolic expression for torques required to achieve the
+        # current acceleration
+        f_ext = MultibodyForces_[Expression](self.plant)
+        f_ext.SetZero()
+        tau_sym = self.plant.CalcInverseDynamics(self.context, qdd, f_ext) + tau_g
+
+        # DEBUG: perform some simplifications
+        #for i in range(len(tau_sym)):
+        #    tau_sym[i] = tau_sym[i].Expand()
+
+        # Convert to sympy for stronger (but slower) simplification abilities
+        tau_sympy = drake_to_sympy(tau_sym, self.vars_sp)
+
+        # Write as tau = A*theta + b
+        A, b = sp.linear_eq_to_matrix(tau_sympy, self.theta_sp)
+        A = np.asarray(A, dtype=float)
+        b = -np.asarray(b, dtype=float).flatten()
+
+        #A, b = DecomposeAffineExpressions(tau_sym, self.theta)
+
+        X = A
+        y = tau - b
+
+        return (X, y)
+
     def CalcParameterEstimate(self, context, output):
         """
         Compute the latest parameter estimates using Bayesian linear regression and
@@ -287,60 +347,21 @@ class BayesObserver(LeafSystem):
         
         self.plant.SetPositions(self.context, q)
         self.plant.SetVelocities(self.context, qd)
+        
+        # Ingore first timestep since derivative estimates will be way off,
+        # and after that only do an update every so often. 
+        compute_period = 0.1
+        if t > 0 and t % compute_period == 0:
 
-        # Set up the linear regression y = X*theta
-        if self.method == "energy":
+            # Set up the linear regression y = X*theta
+            if self.method == "energy":
+                # Write Hdot = qd'*tau as X*theta = y
+                X, y = self.ComputeAffineEnergyDecomposition(qd, tau)
             
-            # Compute Hamiltonian (overall system energy)
-            U = self.plant.CalcPotentialEnergy(self.context)
-            K = self.plant.CalcKineticEnergy(self.context)
-            H = K + U   
-
-            # Compute time derivative of hamiltonian
-            Hdot = (H - self.H_last)/self.dt
-
-            # qd'*tau = Hdot  is linear in theta
-            A, b = DecomposeAffineExpressions(np.array([Hdot]), self.theta)
-
-            X = A
-            y = qd.T@tau - b
-        
-            # Save Hamiltonian for computing Hdot
-            self.H_last = H
-        
-        else:  # standard method
-
-            # Estimate acceleration numerically
-            qdd = (qd - self.qd_last)/self.dt
-
-            # Compute generalized forces due to gravity
-            tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
-
-            # Get a symbolic expression for torques required to achieve the
-            # current acceleration
-            f_ext = MultibodyForces_[Expression](self.plant)
-            f_ext.SetZero()
-            tau_sym = self.plant.CalcInverseDynamics(self.context, qdd, f_ext) + tau_g
-
-            # DEBUG: perform some simplifications
-            #for i in range(len(tau_sym)):
-            #    tau_sym[i] = tau_sym[i].Expand()
-
-            # Convert to sympy for stronger (but slower) simplification abilities
-            tau_sympy = drake_to_sympy(tau_sym, self.vars_sp)
-
-            # Write as tau = A*theta + b
-            A, b = sp.linear_eq_to_matrix(tau_sympy, self.theta_sp)
-            A = np.asarray(A, dtype=float)
-            b = -np.asarray(b, dtype=float).flatten()
-
-            #A, b = DecomposeAffineExpressions(tau_sym, self.theta)
-
-            X = A
-            y = self.tau_last - b
-
-        # Ingore first timestep since derivative estimates will be way off
-        if context.get_time() > 0:
+            else:  
+                # Write M*qdd + C*qd + tau_g = tau as X*theta = y
+                qdd = (qd - self.qd_last)/self.dt
+                X, y = self.ComputeAffineDynamicsDecomposition(qdd, tau)
 
             # Store linear regression data (not needed for iterative Bayes)
             self.xs.append(X)
@@ -360,7 +381,8 @@ class BayesObserver(LeafSystem):
                 theta_hat = self.DoIterativeBayesianInference(X, y)
 
         else:
-            theta_hat = np.zeros(3)
+            # Use the prior as an estimate
+            theta_hat = self.mu0
     
         # Save data for computing derivatives
         self.tau_last = tau
@@ -372,7 +394,6 @@ class BayesObserver(LeafSystem):
             self.ys.pop(0)
         
         # send output
-        print(theta_hat)
         output.SetFromVector(theta_hat)
 
 def drake_to_sympy(v, sympy_vars):
