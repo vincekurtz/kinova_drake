@@ -350,8 +350,9 @@ class BayesObserver(LeafSystem):
         
         # Ingore first timestep since derivative estimates will be way off,
         # and after that only do an update every so often. 
-        compute_period = 0.1
-        if t > 0 and t % compute_period == 0:
+        compute_hz = 10
+        if t > 0 and (t*compute_hz % 1) == 0:
+            print(t)
 
             # Set up the linear regression y = X*theta
             if self.method == "energy":
@@ -361,7 +362,7 @@ class BayesObserver(LeafSystem):
             else:  
                 # Write M*qdd + C*qd + tau_g = tau as X*theta = y
                 qdd = (qd - self.qd_last)/self.dt
-                X, y = self.ComputeAffineDynamicsDecomposition(qdd, tau)
+                X, y = self.ComputeAffineDynamicsDecomposition(qdd, self.tau_last)
 
             # Store linear regression data (not needed for iterative Bayes)
             self.xs.append(X)
