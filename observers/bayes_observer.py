@@ -5,6 +5,9 @@
 ##
 
 from pydrake.all import *
+import sympy as sp
+import time
+from sympy.parsing.sympy_parser import parse_expr
 
 class BayesObserver(LeafSystem):
     """
@@ -95,14 +98,14 @@ class BayesObserver(LeafSystem):
         self.ys = []
 
         # Prior parameters for iterative Bayes
-        self.mu0 = np.array([0.0])          # mean and precision corresponding to uniform
-        self.Lambda0 = np.array([[0.0]])    # prior over parameters theta
+        self.mu0 = np.zeros(4)          # mean and precision corresponding to uniform
+        self.Lambda0 = np.zeros((4,4))    # prior over parameters theta
 
         self.a0 = 1         # shape and scale corresponding to uniform prior over
         self.b0 = 0         # log(measurment noise std deviation) [ log(sigma) ]
 
         # Store covariance
-        self.cov = np.zeros((3,3))
+        self.cov = np.zeros((4,4))
 
         # Store applied joint torques and measured joint velocities from the last timestep
         self.qd_last = np.zeros(7)
@@ -149,11 +152,11 @@ class BayesObserver(LeafSystem):
 
         peg_sym = plant_sym.GetBodyByName("base_link", peg)
 
-        #m = Variable("m")
-        m = peg_sym.default_mass()
+        m = Variable("m")
+        #m = peg_sym.default_mass()
 
         #c = peg_sym.default_com()
-        c = MakeVectorVariable(3,"c")
+        h = np.array([Variable("hx"),Variable("hy"),Variable("hz")]) # Can't use MakeVectorVariable b/c sympy parsing
 
         #Ibar = peg_sym.default_unit_inertia()
         Ibar = RotationalInertia_[Expression](1.17e-5,1.9e-5,1.9e-5)
@@ -168,13 +171,18 @@ class BayesObserver(LeafSystem):
 
         I = SpatialInertia_[Expression](
                 m, 
-                c,
+                h/m,
                 Ibar )
 
         peg_sym.SetSpatialInertiaInBodyFrame(context_sym, I)
 
+        # Create sympy versions of unknown variables
+        m_sp, hx_sp, hy_sp, hz_sp = sp.symbols("m, hx, hy, hz")
+        self.vars_sp = {"m":m_sp, "hx":hx_sp, "hy":hy_sp, "hz":hz_sp}
+        self.theta_sp = np.hstack([m_sp, hx_sp, hy_sp, hz_sp])
+
         #theta = np.hstack([m,c,Ixx,Iyy,Izz,Ixy,Ixz,Iyz])
-        theta = np.hstack([c])
+        theta = np.hstack([m,h])
 
         return plant_sym, context_sym, theta
 
@@ -234,7 +242,6 @@ class BayesObserver(LeafSystem):
         # MAP estiamte of overall covariance
         sigma_squared_map = bN / (aN + 1)
         self.cov = sigma_squared_map*np.linalg.inv(LambdaN)
-        print(self.cov)
 
         # Update the priors
         self.Lambda0 = LambdaN
@@ -260,8 +267,7 @@ class BayesObserver(LeafSystem):
         Send the current covariance of the parameter estimate as output.
         """
         # Just send the marginal variances for each axis
-        print(self.cov)
-        output.SetFromVector([self.cov[0,0], self.cov[1,1], self.cov[2,2]])
+        output.SetFromVector([self.cov[1,1], self.cov[2,2], self.cov[3,3]])
 
     def CalcParameterEstimate(self, context, output):
         """
@@ -323,7 +329,15 @@ class BayesObserver(LeafSystem):
             #for i in range(len(tau_sym)):
             #    tau_sym[i] = tau_sym[i].Expand()
 
-            A, b = DecomposeAffineExpressions(tau_sym, self.theta)
+            # DEBUG: convert to sympy
+            tau_sympy = drake_to_sympy(tau_sym, self.vars_sp)
+
+            # Write as tau = A*theta + b
+            A, b = sp.linear_eq_to_matrix(tau_sympy, self.theta_sp)
+            A = np.asarray(A, dtype=float)
+            b = np.asarray(b, dtype=float).flatten()
+
+            #A, b = DecomposeAffineExpressions(tau_sym, self.theta)
 
             X = A
             y = self.tau_last - b
@@ -349,7 +363,7 @@ class BayesObserver(LeafSystem):
                 theta_hat = self.DoIterativeBayesianInference(X, y)
 
         else:
-            theta_hat = np.zeros(3)
+            theta_hat = np.zeros(4)
     
         # Save data for computing derivatives
         self.tau_last = tau
@@ -361,5 +375,38 @@ class BayesObserver(LeafSystem):
             self.ys.pop(0)
         
         # send output
-        output.SetFromVector(theta_hat)
+        print(theta_hat)
+        print("")
+        output.SetFromVector(theta_hat[1:])
 
+def drake_to_sympy(v, sympy_vars):
+    """
+    Convert a vector v which contains Drake symbolic expressions to 
+    an equivalent matrix with sympy symbolic expressions. This is a bit hacky,
+    but sympy provides better tools for processing symbolic expressions.
+
+    Note that this won't work if any of the Drake variables are VectorVariables. 
+    E.g. h = [hx, hy, hz] works, but h = [h(0), h(1), h(2)] won't. 
+
+    """
+    assert v.ndim == 1, "the vector v must be a 1d numpy array"
+
+    # DEBUG
+    st = time.time()
+
+    # Sympy allows us to do parsing based on strings, so we'll use
+    # the to_string() method of drake expressions generate such strings.
+    v_sympy = []
+    for row in v:
+        # evaluate=True does some initial simplifications
+        row_sp = parse_expr(str(row), local_dict=sympy_vars, evaluate=True)
+
+        # We need to expand to cancel out seemingly nonlinear terms
+        row_sp = sp.expand(row_sp)
+
+        v_sympy.append(row_sp)
+
+    # DEBUG
+    print(time.time()-st)
+
+    return np.array(v_sympy)
