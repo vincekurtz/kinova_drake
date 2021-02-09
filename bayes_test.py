@@ -118,8 +118,8 @@ plt.plot(t, theta_hat[2,:], label="pz ")
 # Show the ground truth values
 true_com = X_peg.translation()
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']      # Use the default color sequence
-plt.gca().axhline(true_com[1], linestyle="--", color=colors[0]) # to match estimates above
-plt.gca().axhline(true_com[0], linestyle="--", color=colors[1])
+plt.gca().axhline(true_com[0], linestyle="--", color=colors[0]) # to match estimates above
+plt.gca().axhline(true_com[1], linestyle="--", color=colors[1])
 plt.gca().axhline(true_com[2], linestyle="--", color=colors[2])
 
 # Show the covariances
