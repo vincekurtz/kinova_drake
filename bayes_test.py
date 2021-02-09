@@ -26,7 +26,7 @@ peg_urdf = "./models/manipulands/peg.sdf"
 peg = Parser(plant=station.plant).AddModelFromFile(peg_urdf,"peg")
 
 X_peg = RigidTransform()
-X_peg.set_translation([-0.01,0.0,0.13])
+X_peg.set_translation([0.0,0.05,0.13])
 X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,0,np.pi/2])))
 station.plant.WeldFrames(station.plant.GetFrameByName("end_effector_link",station.arm),
                          station.plant.GetFrameByName("base_link", peg), X_peg)
@@ -47,7 +47,7 @@ cs = CommandSequence([
         Command(target_pose =  np.array([-np.pi,0,0, 0.5,-0.12,0.5]),
                 duration = 2,
                 gripper_closed = False),
-        Command(target_pose = np.array([-np.pi/2,0,0, 0.5,-0.12,0.7]),
+        Command(target_pose = np.array([np.pi/2,0,np.pi/2,0.5,0.12,0.7]),
                 duration = 2,
                 gripper_closed = False),
         Command(target_pose = np.array([-np.pi/2,0,0, 0.5,-0.12,0.5]),
@@ -118,8 +118,8 @@ plt.plot(t, theta_hat[2,:], label="pz ")
 # Show the ground truth values
 true_com = X_peg.translation()
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']      # Use the default color sequence
-plt.gca().axhline(true_com[0], linestyle="--", color=colors[0]) # to match estimates above
-plt.gca().axhline(true_com[1], linestyle="--", color=colors[1])
+plt.gca().axhline(true_com[1], linestyle="--", color=colors[0]) # to match estimates above
+plt.gca().axhline(true_com[0], linestyle="--", color=colors[1])
 plt.gca().axhline(true_com[2], linestyle="--", color=colors[2])
 
 # Show the covariances
