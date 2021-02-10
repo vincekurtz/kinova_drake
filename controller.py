@@ -510,6 +510,9 @@ class Gen3Controller(LeafSystem):
         Jbar = Minv@J.T@Lambda
         Q = J@Minv@C - Jd
 
+        if np.linalg.matrix_rank(J, tol=1e-3) < 6:
+            print("Near-singular configuration!")
+
         # Solve QP to find joint torques and input to RoM
         self.mp = MathematicalProgram()
         tau = self.mp.NewContinuousVariables(self.plant.num_actuators(), 1, 'tau')

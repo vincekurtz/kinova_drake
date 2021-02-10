@@ -109,8 +109,8 @@ class GuiPlanner(SimplePlanner):
         self.yaw.set(self.pose_nom[2])
 
         self.x = tk.Scale(self.window, 
-                     from_=-0.5, 
-                     to=0.5,
+                     from_=-1.0, 
+                     to=1.0,
                      resolution=-1,
                      label="X",
                      length=400,
@@ -119,8 +119,8 @@ class GuiPlanner(SimplePlanner):
         self.x.set(self.pose_nom[3])
 
         self.y = tk.Scale(self.window, 
-                     from_=-0.5, 
-                     to=0.5,
+                     from_=-1.0, 
+                     to=1.0,
                      resolution=-1,
                      label="Y",
                      length=400,
@@ -130,7 +130,7 @@ class GuiPlanner(SimplePlanner):
 
         self.z = tk.Scale(self.window, 
                      from_=0.0, 
-                     to=0.7,
+                     to=1.0,
                      resolution=-1,
                      label="Z",
                      length=400,
