@@ -468,10 +468,8 @@ class Gen3Controller(LeafSystem):
         pd = (J@qd)[3:]
 
         R = X.rotation()
-        RPY = RollPitchYaw(R)
-        rpy = RPY.vector()
+        rpy = RollPitchYaw(R).vector()
         w = (J@qd)[:3]
-        rpyd = RPY.CalcRpyDtFromAngularVelocityInParent(w)
 
         x = np.hstack([rpy, p])
         xd = np.hstack([w, pd])
@@ -499,9 +497,10 @@ class Gen3Controller(LeafSystem):
         xdd_target = np.hstack([wd_nom, pdd_nom])
 
         # End-effector errors
-        rpy_tilde = RollPitchYaw(RotationMatrix(RollPitchYaw(rpy-rpy_nom))).vector()  # converting to Rotation matrix and back
-                                                                                      # helps avoid strangeness around pi,-pi.
-        x_tilde = np.hstack([RPY.CalcAngularVelocityInParentFromRpyDt(rpy_tilde),
+        R_err = R_nom.multiply(R.transpose())
+        rpy_tilde = -RollPitchYaw(R_err).vector()
+
+        x_tilde = np.hstack([rpy_tilde,
                              p - p_nom])
         xd_tilde = xd - xd_nom
 
@@ -539,14 +538,14 @@ class Gen3Controller(LeafSystem):
         # s.t. M*qdd + Cqd + tau_g = tau
         self.AddDynamicsConstraint(M, qdd, Cqd, tau_g, S, tau)
       
-        ## s.t. qdd >= -alpha_qd(qd - qd_min)   (joint velocity CBF constraint)
-        ##     -qdd >= -alpha_qd(qd_max - qd)
+        # s.t. qdd >= -alpha_qd(qd - qd_min)   (joint velocity CBF constraint)
+        #     -qdd >= -alpha_qd(qd_max - qd)
         #ah_qd_min = alpha_qd(qd - self.qd_min)
         #ah_qd_max = alpha_qd(self.qd_max - qd)
         #self.AddJointVelCBFConstraint(qdd, ah_qd_min, ah_qd_max)
-        #
-        ## s.t. qdd >= -beta_q( qd + alpha_q(q - q_min) )   (joint angle CBF constraint)
-        ##     -qdd >= -beta_q( alpha_q(q_max - q) - qd )
+        
+        # s.t. qdd >= -beta_q( qd + alpha_q(q - q_min) )   (joint angle CBF constraint)
+        #     -qdd >= -beta_q( alpha_q(q_max - q) - qd )
         #ah_q_min = beta_q( qd + alpha_q(q - self.q_min) )
         #ah_q_max = beta_q( alpha_q(self.q_max - q) - qd )
         #self.AddJointVelCBFConstraint(qdd, ah_q_min, ah_q_max)
