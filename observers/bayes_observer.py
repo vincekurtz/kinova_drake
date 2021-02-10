@@ -271,7 +271,29 @@ class BayesObserver(LeafSystem):
         # Just send the marginal variances for each axis
         output.SetFromVector([self.cov[0,0], self.cov[1,1], self.cov[2,2]])
 
-    def ComputeAffineEnergyDecomposition(self, qd, tau):
+    def DecomposeAffineExpressionsSympy(self, expr):
+        """
+        Perform the same function as Drake's DecomposeAffineExpressions, namely
+        decomposing the given expression as
+
+            expr = A*theta + b,
+
+        but does this by converting everything to sympy first. This is hacky, but 
+        allows us to do some simplifications that aren't done by default in Drake. 
+        """
+        # Convert from drake symbolics to sympy
+        expr_sympy = drake_to_sympy(expr, self.vars_sp)
+
+        # Write as A*theta + b
+        A, b = sp.linear_eq_to_matrix(expr_sympy, self.theta_sp)
+
+        # Convert to numpy arrays with the proper signs
+        A = np.asarray(A, dtype=float)
+        b = -np.asarray(b, dtype=float).flatten()
+
+        return (A, b)
+
+    def ComputeAffineEnergyDecomposition(self, qd, tau, use_sympy=False):
         """
         Write (Hdot = qd'*tau) as an affine expression (X*theta = y), where
         Hdot is the change in total system energy and theta is a vector of (unknown)
@@ -286,17 +308,19 @@ class BayesObserver(LeafSystem):
 
         # Compute time derivative of hamiltonian
         Hdot = (H - self.H_last)/self.dt
-        self.H_last = H
 
         # qd'*tau = Hdot  is linear in theta
-        A, b = DecomposeAffineExpressions(np.array([Hdot]), self.theta)
+        if use_sympy:
+            A, b = self.DecomposeAffineExpressionsSympy(np.array([Hdot]))
+        else:
+            A, b = DecomposeAffineExpressions(np.array([Hdot]), self.theta)
 
         X = A
         y = qd.T@tau - b
         
         return (X,y)
 
-    def ComputeAffineDynamicsDecomposition(self, qdd, tau):
+    def ComputeAffineDynamicsDecomposition(self, qdd, tau, use_sympy=True):
         """
         Write the dynamics (M*qdd + C*qd + tau_g = tau) as an affine expression
         (X*theta = y), where theta is a vector of (unknown) lumped inertial parameters.
@@ -316,15 +340,11 @@ class BayesObserver(LeafSystem):
         #for i in range(len(tau_sym)):
         #    tau_sym[i] = tau_sym[i].Expand()
 
-        # Convert to sympy for stronger (but slower) simplification abilities
-        tau_sympy = drake_to_sympy(tau_sym, self.vars_sp)
-
-        # Write as tau = A*theta + b
-        A, b = sp.linear_eq_to_matrix(tau_sympy, self.theta_sp)
-        A = np.asarray(A, dtype=float)
-        b = -np.asarray(b, dtype=float).flatten()
-
-        #A, b = DecomposeAffineExpressions(tau_sym, self.theta)
+        # Re-write as tau = A*theta + b
+        if use_sympy:
+            A, b = self.DecomposeAffineExpressionsSympy(tau_sym)
+        else:
+            A, b = DecomposeAffineExpressions(tau_sym, self.theta)
 
         X = A
         y = tau - b
@@ -388,7 +408,9 @@ class BayesObserver(LeafSystem):
         # Save data for computing derivatives
         self.tau_last = tau
         self.qd_last = qd
+        self.H_last = self.plant.CalcPotentialEnergy(self.context) + self.plant.CalcKineticEnergy(self.context)
 
+        # Compute time derivative of hamiltonian
         # Get rid of old data
         if len(self.xs) > self.batch_size:
             self.xs.pop(0)
