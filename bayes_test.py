@@ -26,8 +26,8 @@ peg_urdf = "./models/manipulands/peg.sdf"
 peg = Parser(plant=station.plant).AddModelFromFile(peg_urdf,"peg")
 
 X_peg = RigidTransform()
-X_peg.set_translation([0.0,0.05,0.13])
-X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,0,np.pi/2])))
+#X_peg.set_translation([0.0,0.05,0.13])
+#X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,0,np.pi/2])))
 station.plant.WeldFrames(station.plant.GetFrameByName("end_effector_link",station.arm),
                          station.plant.GetFrameByName("base_link", peg), X_peg)
 
@@ -72,6 +72,17 @@ builder.Connect(
 builder.Connect(
         station.GetOutputPort("measured_arm_torque"),
         observer.GetInputPort("joint_torques"))
+
+# DEBUG
+builder.Connect(
+        station.GetOutputPort("measured_ee_pose"),
+        observer.GetInputPort("ee_position"))
+builder.Connect(
+        station.GetOutputPort("measured_ee_twist"),
+        observer.GetInputPort("ee_velocity"))
+builder.Connect(
+        station.GetOutputPort("measured_ee_wrench"),
+        observer.GetInputPort("ee_wrench"))
 
 estimation_logger = LogOutput(observer.GetOutputPort("manipuland_parameter_estimate"), builder)
 estimation_logger.set_name("estimation_logger")

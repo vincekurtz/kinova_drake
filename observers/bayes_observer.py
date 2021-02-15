@@ -84,6 +84,17 @@ class BayesObserver(LeafSystem):
                                     "joint_torques",
                                     BasicVector(7))
 
+        # DEBUG: end-effector data ports
+        self.ee_pos_port = self.DeclareVectorInputPort(
+                                    "ee_position",
+                                    BasicVector(6))
+        self.ee_vel_port = self.DeclareVectorInputPort(
+                                    "ee_velocity",
+                                    BasicVector(6))
+        self.ee_wrench_port = self.DeclareVectorInputPort(
+                                    "ee_wrench",
+                                    BasicVector(6))
+
         # Declare output ports
         self.DeclareVectorOutputPort(
                 "manipuland_parameter_estimate",
@@ -110,6 +121,7 @@ class BayesObserver(LeafSystem):
 
         # Store applied joint torques and measured joint velocities from the last timestep
         self.qd_last = np.zeros(7)
+        self.xd_last = np.zeros(6)
         self.tau_last = np.zeros(7)
 
         self.H_last = 0
@@ -143,8 +155,8 @@ class BayesObserver(LeafSystem):
         peg = Parser(plant=plant).AddModelFromFile(peg_urdf,"peg")
 
         X_peg = RigidTransform()
-        X_peg.set_translation([0.0,0.05,0.13])
-        X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,0,np.pi/2])))
+        #X_peg.set_translation([0.0,0.05,0.13])
+        #X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,0,np.pi/2])))
         plant.WeldFrames(plant.GetFrameByName("end_effector_link",arm),
                          plant.GetFrameByName("base_link", peg), X_peg)
 
@@ -355,6 +367,63 @@ class BayesObserver(LeafSystem):
 
         return (X, y)
 
+    def ComputeAffineEndEffectorDynamicsDecomposition(self, x, xd, xdd, f):
+        """
+        Write the end-effector dynamics
+
+            f = I*xdd + xd [x*] I*xd
+
+        as an affine expression (X*theta = y), where theta is a vector of (unknown) lumped
+        inertial parameters.
+        """
+
+        peg = self.plant.GetBodyByName("base_link", self.plant.GetModelInstanceByName("peg"))
+
+
+        # Compute manipuland dynamics by hand
+        m = self.theta[0]
+        c = 0*np.array([0.0,0.05,0.13])            # position of CoM in end-effector frame
+        Ibar_com = peg.default_rotational_inertia().CopyToFullMatrix3()  # inertia about CoM
+        Ibar = Ibar_com + m* S(c) @ S(c).T       # rotational inertia about end-effector frame
+
+        I = np.block([[ Ibar,      S(m*c)     ],     # spatial inertia
+                      [ S(m*c).T,  m*np.eye(3)]])
+
+        f_sym = I@xdd + spatial_force_cross_product(xd, I@xd)
+
+        A, b = DecomposeAffineExpressions(f_sym, vars=self.theta)
+
+        print(A@np.array([0.028]) + b)
+        #print(f)
+        #print("")
+
+        # Compute manipuland dynamics with drake
+        m = peg.default_mass()
+        c = np.zeros(3)
+        Ibar_com = peg.default_unit_inertia()  # inertia about CoM
+
+        I = SpatialInertia(
+                m,
+                c,
+                Ibar_com)
+
+        plant = MultibodyPlant(1.0)  # timestep is irrelevant
+        block = plant.AddRigidBody("block", I)
+
+        plant.Finalize()
+        context = plant.CreateDefaultContext()
+
+        plant.SetVelocities(context, xd)
+        quat = RollPitchYaw(x[:3]).ToQuaternion().wxyz()
+        plant.SetPositions(context, np.hstack([quat, x[3:]]))
+
+        f_ext = MultibodyForces(plant)
+        f_sym = plant.CalcInverseDynamics(context, xdd, f_ext)  # should match f
+
+        print(f_sym)
+        print(f)
+        print("")
+
     def CalcParameterEstimate(self, context, output):
         """
         Compute the latest parameter estimates using Bayesian linear regression and
@@ -368,6 +437,11 @@ class BayesObserver(LeafSystem):
         q = self.q_port.Eval(context)
         qd = self.qd_port.Eval(context)
         tau = self.tau_port.Eval(context)
+
+        # DEBUG
+        x = self.ee_pos_port.Eval(context)
+        xd = self.ee_vel_port.Eval(context)
+        f = self.ee_wrench_port.Eval(context)
         
         self.plant.SetPositions(self.context, q)
         self.plant.SetVelocities(self.context, qd)
@@ -387,6 +461,10 @@ class BayesObserver(LeafSystem):
                 # Write M*qdd + C*qd + tau_g = tau as X*theta = y
                 qdd = (qd - self.qd_last)/self.dt
                 X, y = self.ComputeAffineDynamicsDecomposition(qdd, self.tau_last, use_sympy=False)
+
+                # DEBUG
+                xdd = (xd - self.xd_last)/self.dt
+                self.ComputeAffineEndEffectorDynamicsDecomposition(x, xd, xdd, f)
 
             # Store linear regression data (not needed for iterative Bayes)
             self.xs.append(X)
@@ -412,6 +490,7 @@ class BayesObserver(LeafSystem):
         # Save data for computing derivatives
         self.tau_last = tau
         self.qd_last = qd
+        self.xd_last = xd
         self.H_last = self.plant.CalcPotentialEnergy(self.context) + self.plant.CalcKineticEnergy(self.context)
 
         # Compute time derivative of hamiltonian
@@ -453,3 +532,34 @@ def drake_to_sympy(v, sympy_vars):
     # DEBUG
     print(time.time()-st) 
     return np.array(v_sympy)
+
+def S(p):
+    """
+    Given a vector p in R^3, return the skew-symmetric cross product matrix
+    S = [ 0  -p2  p1]
+        [ p2  0  -p0]
+        [-p1  p0  0 ]
+    such that S(p)*a = p x a
+    """
+    return np.array([[    0, -p[2], p[1]],
+                     [ p[2],   0  ,-p[0]],
+                     [-p[1],  p[0],  0  ]])
+
+def spatial_force_cross_product(v_sp, f_sp):
+    """
+    Given a spatial velocity
+        v_sp = [w;v]
+    and a spatial force
+        f_sp = [n;f],
+    compute the spatial (force) cross product
+        f_sp x* f_sp = [wxn + vxf]
+                       [   wxf   ].
+    """
+    w = v_sp[:3]   # decompose linear and angular ocmponents
+    v = v_sp[3:]
+
+    n = f_sp[:3]
+    f = f_sp[3:]
+
+    return np.hstack([ np.cross(w,n) + np.cross(v,f),
+                            np.cross(w,f)           ])
