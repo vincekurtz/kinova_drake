@@ -389,40 +389,46 @@ class BayesObserver(LeafSystem):
         I = np.block([[ Ibar,      S(m*c)     ],     # spatial inertia
                       [ S(m*c).T,  m*np.eye(3)]])
 
-        f_sym = I@xdd + spatial_force_cross_product(xd, I@xd)
+        g = np.array([0,0,0,0,0,9.81])
+        f_sym = I@xdd + spatial_force_cross_product(xd, I@xd) - m*g
 
-        A, b = DecomposeAffineExpressions(f_sym, vars=self.theta)
+        A, b = DecomposeAffineExpressions(-f_sym, vars=self.theta)
 
-        print(A@np.array([0.028]) + b)
+        X = A
+        y = f - b
+
+        return (X,y)
+
+        #print(A@np.array([0.028]) + b)
         #print(f)
         #print("")
 
-        # Compute manipuland dynamics with drake
-        m = peg.default_mass()
-        c = np.zeros(3)
-        Ibar_com = peg.default_unit_inertia()  # inertia about CoM
+        ## Compute manipuland dynamics with drake
+        #m = peg.default_mass()
+        #c = np.zeros(3)
+        #Ibar_com = peg.default_unit_inertia()  # inertia about CoM
 
-        I = SpatialInertia(
-                m,
-                c,
-                Ibar_com)
+        #I = SpatialInertia(
+        #        m,
+        #        c,
+        #        Ibar_com)
 
-        plant = MultibodyPlant(1.0)  # timestep is irrelevant
-        block = plant.AddRigidBody("block", I)
+        #plant = MultibodyPlant(1.0)  # timestep is irrelevant
+        #block = plant.AddRigidBody("block", I)
 
-        plant.Finalize()
-        context = plant.CreateDefaultContext()
+        #plant.Finalize()
+        #context = plant.CreateDefaultContext()
 
-        plant.SetVelocities(context, xd)
-        quat = RollPitchYaw(x[:3]).ToQuaternion().wxyz()
-        plant.SetPositions(context, np.hstack([quat, x[3:]]))
+        #plant.SetVelocities(context, xd)
+        #quat = RollPitchYaw(x[:3]).ToQuaternion().wxyz()
+        #plant.SetPositions(context, np.hstack([quat, x[3:]]))
 
-        f_ext = MultibodyForces(plant)
-        f_sym = plant.CalcInverseDynamics(context, xdd, f_ext)  # should match f
+        #f_ext = MultibodyForces(plant)
+        #f_sym = plant.CalcInverseDynamics(context, xdd, f_ext)  # should match f
 
-        print(f_sym)
-        print(f)
-        print("")
+        #print(f_sym)
+        #print(f)
+        #print("")
 
     def CalcParameterEstimate(self, context, output):
         """
@@ -464,7 +470,7 @@ class BayesObserver(LeafSystem):
 
                 # DEBUG
                 xdd = (xd - self.xd_last)/self.dt
-                self.ComputeAffineEndEffectorDynamicsDecomposition(x, xd, xdd, f)
+                X, y = self.ComputeAffineEndEffectorDynamicsDecomposition(x, xd, xdd, f)
 
             # Store linear regression data (not needed for iterative Bayes)
             self.xs.append(X)

@@ -96,9 +96,7 @@ diagram_context = diagram.CreateDefaultContext()
 
 # DEBUG: show system diagram
 #plt.figure()
-#plot_system_graphviz(diagram, max_depth=1)
-#plt.show()
-
+#plot_system_graphviz(diagram, max_depth=1) #plt.show() 
 # Set initial positions
 q0 = np.array([0.0, -0.2, 1, -0.8, 1, -0.1, 0.5])*np.pi
 station.SetArmPositions(diagram, diagram_context, q0)
