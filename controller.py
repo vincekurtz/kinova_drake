@@ -510,8 +510,13 @@ class Gen3Controller(LeafSystem):
         Jbar = Minv@J.T@Lambda
         Q = J@Minv@C - Jd
 
-        if np.linalg.matrix_rank(J, tol=1e-3) < 6:
-            print("Near-singular configuration!")
+        print("J rank:      %s" % np.linalg.matrix_rank(J, tol=1e-3))
+        print("Jbar rank:   %s" % np.linalg.matrix_rank(Jbar, tol=1e-2))
+        print("Lambda rank: %s" % np.linalg.matrix_rank(Lambda, tol=1e-2))
+        print("")
+
+        #if np.linalg.matrix_rank(J, tol=1e-3) < 6:
+        #    print("Near-singular configuration!")
 
         # Solve QP to find joint torques and input to RoM
         self.mp = MathematicalProgram()
@@ -535,9 +540,6 @@ class Gen3Controller(LeafSystem):
         #                              x_desired=np.zeros(self.plant.num_actuators()),
         #                              vars=tau)
 
-        # min w_f*|| Jbar'*tau - f_des ||
-        #self.AddEndEffectorForceCost(Jbar, tau, f_des, weight=w_f)
-
         # s.t. M*qdd + Cqd + tau_g = tau
         self.AddDynamicsConstraint(M, qdd, Cqd, tau_g, S, tau)
       
@@ -558,11 +560,6 @@ class Gen3Controller(LeafSystem):
         #                                                   - Kp*x_tilde - Kd*xd_tilde
         self.AddTaskForceConstraint(Jbar, tau, Lambda, xdd_nom, Q, qd, 
                                        xd_tilde, tau_g, Kp, x_tilde, Kd)
-
-        # s.t. Jbar'*tau = f_des
-        #self.mp.AddLinearEqualityConstraint(Aeq=Jbar.T,
-        #                                    beq=f_des,
-        #                                    vars=tau)
 
         # s.t. tau_min <= tau <= tau_max
         #tau_min = -50
