@@ -71,7 +71,8 @@ class BayesObserver(LeafSystem):
         # Create an internal model of the plant (arm + gripper + object)
         # with symbolic values for unknown parameters
         self.plant, self.context, self.theta = self.CreateSymbolicPlant(gripper)
-        n = len(self.theta)
+        #n = len(self.theta)
+        n = 4
 
         # Declare input ports
         self.q_port = self.DeclareVectorInputPort(
@@ -121,8 +122,9 @@ class BayesObserver(LeafSystem):
 
         # Store applied joint torques and measured joint velocities from the last timestep
         self.qd_last = np.zeros(7)
-        self.xd_last = np.zeros(6)
         self.tau_last = np.zeros(7)
+        self.xd_last = np.zeros(6)
+        self.f_last = np.zeros(6)
 
         self.H_last = 0
 
@@ -155,7 +157,7 @@ class BayesObserver(LeafSystem):
         peg = Parser(plant=plant).AddModelFromFile(peg_urdf,"peg")
 
         X_peg = RigidTransform()
-        #X_peg.set_translation([0.0,0.05,0.13])
+        X_peg.set_translation([0.0,0.05,0.13])
         #X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,0,np.pi/2])))
         plant.WeldFrames(plant.GetFrameByName("end_effector_link",arm),
                          plant.GetFrameByName("base_link", peg), X_peg)
@@ -171,8 +173,7 @@ class BayesObserver(LeafSystem):
         #m = peg_sym.default_mass()
 
         c = peg_sym.default_com()
-        h = c
-        #h = np.array([Variable("hx"),Variable("hy"),Variable("hz")]) # Can't use MakeVectorVariable b/c sympy parsing
+        h = np.array([Variable("hx"),Variable("hy"),Variable("hz")]) # Can't use MakeVectorVariable b/c sympy parsing
 
         #Ibar = peg_sym.default_unit_inertia()
         Ibar = RotationalInertia_[Expression](1.17e-5,1.9e-5,1.9e-5)
@@ -200,7 +201,7 @@ class BayesObserver(LeafSystem):
         self.theta_sp = np.hstack([m_sp])
 
         #theta = np.hstack([m,c,Ixx,Iyy,Izz,Ixy,Ixz,Iyz])
-        theta = np.hstack([m])
+        theta = np.hstack([m, h])
 
         return plant_sym, context_sym, theta
 
@@ -376,18 +377,17 @@ class BayesObserver(LeafSystem):
         as an affine expression (X*theta = y), where theta is a vector of (unknown) lumped
         inertial parameters.
         """
-
         peg = self.plant.GetBodyByName("base_link", self.plant.GetModelInstanceByName("peg"))
-
 
         # Compute manipuland dynamics by hand
         m = self.theta[0]
-        c = 0*np.array([0.0,0.05,0.13])            # position of CoM in end-effector frame
+        c = np.array([0.0,0.05,0.13])            # position of CoM in end-effector frame
+        h = self.theta[1:4]                      # mass times position of CoM
         Ibar_com = peg.default_rotational_inertia().CopyToFullMatrix3()  # inertia about CoM
-        Ibar = Ibar_com + m* S(c) @ S(c).T       # rotational inertia about end-effector frame
+        Ibar = Ibar_com + m*S(c) @ S(c).T       # rotational inertia about end-effector frame
 
-        I = np.block([[ Ibar,      S(m*c)     ],     # spatial inertia
-                      [ S(m*c).T,  m*np.eye(3)]])
+        I = np.block([[ Ibar,      S(h)     ],     # spatial inertia
+                      [ S(h).T,  m*np.eye(3)]])
 
         g = np.array([0,0,0,0,0,9.81])
         f_sym = I@xdd + spatial_force_cross_product(xd, I@xd) - m*g
@@ -459,18 +459,18 @@ class BayesObserver(LeafSystem):
             print(t)
 
             # Set up the linear regression y = X*theta
-            if self.method == "energy":
-                # Write Hdot = qd'*tau as X*theta = y
-                X, y = self.ComputeAffineEnergyDecomposition(qd, tau)
-            
-            else:  
-                # Write M*qdd + C*qd + tau_g = tau as X*theta = y
-                qdd = (qd - self.qd_last)/self.dt
-                X, y = self.ComputeAffineDynamicsDecomposition(qdd, self.tau_last, use_sympy=False)
+            #if self.method == "energy":
+            #    # Write Hdot = qd'*tau as X*theta = y
+            #    X, y = self.ComputeAffineEnergyDecomposition(qd, tau)
+            #
+            #else:  
+            #    # Write M*qdd + C*qd + tau_g = tau as X*theta = y
+            #    qdd = (qd - self.qd_last)/self.dt
+            #    X, y = self.ComputeAffineDynamicsDecomposition(qdd, self.tau_last, use_sympy=False)
 
-                # DEBUG
-                xdd = (xd - self.xd_last)/self.dt
-                X, y = self.ComputeAffineEndEffectorDynamicsDecomposition(x, xd, xdd, f)
+            # DEBUG
+            xdd = (xd - self.xd_last)/self.dt
+            X, y = self.ComputeAffineEndEffectorDynamicsDecomposition(x, xd, xdd, self.f_last)
 
             # Store linear regression data (not needed for iterative Bayes)
             self.xs.append(X)
@@ -497,6 +497,7 @@ class BayesObserver(LeafSystem):
         self.tau_last = tau
         self.qd_last = qd
         self.xd_last = xd
+        self.f_last = f
         self.H_last = self.plant.CalcPotentialEnergy(self.context) + self.plant.CalcKineticEnergy(self.context)
 
         # Compute time derivative of hamiltonian
