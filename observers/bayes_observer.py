@@ -71,6 +71,7 @@ class BayesObserver(LeafSystem):
         # Create an internal model of the plant (arm + gripper + object)
         # with symbolic values for unknown parameters
         self.plant, self.context, self.theta = self.CreateSymbolicPlant(gripper)
+        n = len(self.theta)
 
         # Declare input ports
         self.q_port = self.DeclareVectorInputPort(
@@ -86,11 +87,11 @@ class BayesObserver(LeafSystem):
         # Declare output ports
         self.DeclareVectorOutputPort(
                 "manipuland_parameter_estimate",
-                BasicVector(3),
+                BasicVector(n),
                 self.CalcParameterEstimate)
         self.DeclareVectorOutputPort(
                 "manipuland_parameter_covariance",
-                BasicVector(3),
+                BasicVector(n),
                 self.SendParameterCovariance)
 
         # Store regression coefficients (x_i = y_i*theta + epsilon)
@@ -98,14 +99,14 @@ class BayesObserver(LeafSystem):
         self.ys = []
 
         # Prior parameters for iterative Bayes
-        self.mu0 = np.zeros(4)          # mean and precision corresponding to uniform
-        self.Lambda0 = np.zeros((4,4))    # prior over parameters theta
+        self.mu0 = np.zeros(n)          # mean and precision corresponding to uniform
+        self.Lambda0 = np.zeros((n,n))    # prior over parameters theta
 
         self.a0 = 1         # shape and scale corresponding to uniform prior over
         self.b0 = 0         # log(measurment noise std deviation) [ log(sigma) ]
 
         # Store covariance
-        self.cov = np.zeros((4,4))
+        self.cov = np.zeros((n,n))
 
         # Store applied joint torques and measured joint velocities from the last timestep
         self.qd_last = np.zeros(7)
@@ -142,6 +143,8 @@ class BayesObserver(LeafSystem):
         peg = Parser(plant=plant).AddModelFromFile(peg_urdf,"peg")
 
         X_peg = RigidTransform()
+        X_peg.set_translation([0.0,0.05,0.13])
+        X_peg.set_rotation(RotationMatrix(RollPitchYaw([0,0,np.pi/2])))
         plant.WeldFrames(plant.GetFrameByName("end_effector_link",arm),
                          plant.GetFrameByName("base_link", peg), X_peg)
 
@@ -155,8 +158,9 @@ class BayesObserver(LeafSystem):
         m = Variable("m")
         #m = peg_sym.default_mass()
 
-        #c = peg_sym.default_com()
-        h = np.array([Variable("hx"),Variable("hy"),Variable("hz")]) # Can't use MakeVectorVariable b/c sympy parsing
+        c = peg_sym.default_com()
+        h = c
+        #h = np.array([Variable("hx"),Variable("hy"),Variable("hz")]) # Can't use MakeVectorVariable b/c sympy parsing
 
         #Ibar = peg_sym.default_unit_inertia()
         Ibar = RotationalInertia_[Expression](1.17e-5,1.9e-5,1.9e-5)
@@ -169,20 +173,22 @@ class BayesObserver(LeafSystem):
         #Iyz = Variable("Iyz")
         #Ibar = UnitInertia_[Expression](Ixx,Iyy,Izz,Ixy,Ixz,Iyz)
 
-        I = SpatialInertia_[Expression](
-                m, 
-                h/m,
-                Ibar )
+        #I = SpatialInertia_[Expression](
+        #        m, 
+        #        h,
+        #        Ibar )
 
-        peg_sym.SetSpatialInertiaInBodyFrame(context_sym, I)
+        #peg_sym.SetSpatialInertiaInBodyFrame(context_sym, I)
+        peg_sym.SetMass(context_sym, m)
 
         # Create sympy versions of unknown variables
         m_sp, hx_sp, hy_sp, hz_sp = sp.symbols("m, hx, hy, hz")
         self.vars_sp = {"m":m_sp, "hx":hx_sp, "hy":hy_sp, "hz":hz_sp}
-        self.theta_sp = np.hstack([m_sp, hx_sp, hy_sp, hz_sp])
+        #self.theta_sp = np.hstack([m_sp, hx_sp, hy_sp, hz_sp])
+        self.theta_sp = np.hstack([m_sp])
 
         #theta = np.hstack([m,c,Ixx,Iyy,Izz,Ixy,Ixz,Iyz])
-        theta = np.hstack([m,h])
+        theta = np.hstack([m])
 
         return plant_sym, context_sym, theta
 
@@ -267,7 +273,7 @@ class BayesObserver(LeafSystem):
         Send the current covariance of the parameter estimate as output.
         """
         # Just send the marginal variances for each axis
-        output.SetFromVector([self.cov[1,1], self.cov[2,2], self.cov[3,3]])
+        output.SetFromVector(np.diag(self.cov))
 
     def DecomposeAffineExpressionsSympy(self, expr):
         """
@@ -369,7 +375,7 @@ class BayesObserver(LeafSystem):
         # Ingore first timestep since derivative estimates will be way off,
         # and after that only do an update every so often. 
         compute_hz = 10
-        if t > 0 and (t*compute_hz % 1) == 0:
+        if t > 0:# and (t*compute_hz % 1) == 0:
             print(t)
 
             # Set up the linear regression y = X*theta
@@ -380,7 +386,7 @@ class BayesObserver(LeafSystem):
             else:  
                 # Write M*qdd + C*qd + tau_g = tau as X*theta = y
                 qdd = (qd - self.qd_last)/self.dt
-                X, y = self.ComputeAffineDynamicsDecomposition(qdd, self.tau_last)
+                X, y = self.ComputeAffineDynamicsDecomposition(qdd, self.tau_last, use_sympy=False)
 
             # Store linear regression data (not needed for iterative Bayes)
             self.xs.append(X)
@@ -415,7 +421,7 @@ class BayesObserver(LeafSystem):
             self.ys.pop(0)
         
         # send output
-        output.SetFromVector(theta_hat[1:])
+        output.SetFromVector(theta_hat)
 
 def drake_to_sympy(v, sympy_vars):
     """

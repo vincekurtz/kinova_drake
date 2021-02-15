@@ -111,29 +111,30 @@ theta_hat = estimation_logger.data()
 theta_var = covariance_logger.data()
 theta_std = np.sqrt(theta_var)
 
-plt.plot(t, theta_hat[0,:], label="px ")
-plt.plot(t, theta_hat[1,:], label="py ")
-plt.plot(t, theta_hat[2,:], label="pz ")
+#plt.plot(t, theta_hat[0,:], label="px ")
+#plt.plot(t, theta_hat[1,:], label="py ")
+#plt.plot(t, theta_hat[2,:], label="pz ")
+plt.plot(t, theta_hat[0,:], label="m")
 
 # Show the ground truth values
 true_com = X_peg.translation()
+true_m = station.plant.GetBodyByName("base_link", peg).default_mass()
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']      # Use the default color sequence
-plt.gca().axhline(true_com[0], linestyle="--", color=colors[0]) # to match estimates above
-plt.gca().axhline(true_com[1], linestyle="--", color=colors[1])
-plt.gca().axhline(true_com[2], linestyle="--", color=colors[2])
+#plt.gca().axhline(true_com[0], linestyle="--", color=colors[0]) # to match estimates above
+#plt.gca().axhline(true_com[1], linestyle="--", color=colors[1])
+#plt.gca().axhline(true_com[2], linestyle="--", color=colors[2])
+plt.gca().axhline(true_m, linestyle="--", color=colors[0])
 
 # Show the covariances
 plt.fill_between(t, theta_hat[0,:]-theta_std[0,:], theta_hat[0,:]+theta_std[0,:], color=colors[0], alpha=0.2)
-plt.fill_between(t, theta_hat[1,:]-theta_std[1,:], theta_hat[1,:]+theta_std[1,:], color=colors[1], alpha=0.2)
-plt.fill_between(t, theta_hat[2,:]-theta_std[2,:], theta_hat[2,:]+theta_std[2,:], color=colors[2], alpha=0.2)
-
-#plt.fill_between(t, m_hat-m_80_CI, m_hat+m_80_CI, label="80% CI", color="green",alpha=0.5)
+#plt.fill_between(t, theta_hat[1,:]-theta_std[1,:], theta_hat[1,:]+theta_std[1,:], color=colors[1], alpha=0.2)
+#plt.fill_between(t, theta_hat[2,:]-theta_std[2,:], theta_hat[2,:]+theta_std[2,:], color=colors[2], alpha=0.2)
 
 plt.xlabel("Time (s)")
 plt.ylabel("Parameter Estimate")
 
 #plt.xlim(left=10)
-plt.ylim(bottom=-0.5, top=0.5)
+plt.ylim(bottom=-0, top=0.05)
 plt.legend()
 
 plt.show()
