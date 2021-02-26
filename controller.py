@@ -199,6 +199,29 @@ class Gen3Controller(LeafSystem):
         b = Lambda@Q@(qd-Jbar@xd_tilde) + Jbar.T@tau_g - Kp@x_tilde - Kd@xd_tilde
 
         return self.mp.AddLinearEqualityConstraint(A,b,x)
+    
+    def AddVdotConstraint(self, Jbar, tau, Lambda, xdd_nom, Q, qd, 
+                                            xd_tilde, tau_g, Kp, x_tilde):
+        """
+        Add a linear constraint
+
+            Vdot <= 0
+
+        to the whole-body QP, where Vdot is the time-derivative of the storage
+        function 
+
+            V = 1/2 xd_tilde'*Lambda*xd_tilde + 1/2 x_tilde'*Kp*x_tilde.
+
+        """
+        # We'll write as A*x <= b
+        A = xd_tilde.T@np.hstack([Jbar.T, -Lambda])[np.newaxis]
+        b = -xd_tilde.T@(-Jbar.T@tau_g + Lambda@Q@(Jbar@xd_tilde-qd) + Kp@x_tilde)
+        x = np.vstack([tau, xdd_nom])
+
+        lb = np.asarray([-np.inf]).reshape(1,1)
+        ub = np.asarray([b]).reshape(1,1)
+
+        return self.mp.AddLinearConstraint(A=A, lb=lb, ub=ub, vars=x)
 
     def AddDynamicsConstraint(self, M, qdd, Cqd, tau_g, S, tau):
         """
@@ -213,6 +236,7 @@ class Gen3Controller(LeafSystem):
         x = np.vstack([qdd, tau])
 
         return self.mp.AddLinearEqualityConstraint(Aeq, beq, x)
+
         
     def AddEndEffectorForceCost(self, Jbar, tau, f_des, weight=1.0):
         """
@@ -541,8 +565,8 @@ class Gen3Controller(LeafSystem):
         #print("Jbar rank:   %s" % np.linalg.matrix_rank(Jbar, tol=1e-2))
         #print("Lambda rank: %s" % np.linalg.matrix_rank(Lambda, tol=1e-2))
         #print("")
-        if np.linalg.matrix_rank(J, tol=1e-3) < 6:
-            print("Near-singular configuration!")
+        #if np.linalg.matrix_rank(J, tol=1e-3) < 6:
+        #    print("Near-singular configuration!")
 
         # Solve QP to find joint torques and input to RoM
         self.mp = MathematicalProgram()
@@ -572,18 +596,22 @@ class Gen3Controller(LeafSystem):
 
         # s.t. M*qdd + Cqd + tau_g = tau
         self.AddDynamicsConstraint(M, qdd, Cqd, tau_g, S, tau)
+
+        # s.t. Vdot <= 0
+        self.AddVdotConstraint(Jbar, tau, Lambda, xdd_nom, Q, qd, 
+                                        xd_tilde, tau_g, Kp, x_tilde)
       
         # s.t. qdd >= -alpha_qd(qd - qd_min)   (joint velocity CBF constraint)
         #     -qdd >= -alpha_qd(qd_max - qd)
-        ah_qd_min = alpha_qd(qd - self.qd_min)
-        ah_qd_max = alpha_qd(self.qd_max - qd)
-        self.AddJointVelCBFConstraint(qdd, ah_qd_min, ah_qd_max)
+        #ah_qd_min = alpha_qd(qd - self.qd_min)
+        #ah_qd_max = alpha_qd(self.qd_max - qd)
+        #self.AddJointVelCBFConstraint(qdd, ah_qd_min, ah_qd_max)
         
         # s.t. qdd >= -beta_q( qd + alpha_q(q - q_min) )   (joint angle CBF constraint)
         #     -qdd >= -beta_q( alpha_q(q_max - q) - qd )
-        ah_q_min = beta_q( qd + alpha_q(q - self.q_min) )
-        ah_q_max = beta_q( alpha_q(self.q_max - q) - qd )
-        self.AddJointVelCBFConstraint(qdd, ah_q_min, ah_q_max)
+        #ah_q_min = beta_q( qd + alpha_q(q - self.q_min) )
+        #ah_q_max = beta_q( alpha_q(self.q_max - q) - qd )
+        #self.AddJointVelCBFConstraint(qdd, ah_q_min, ah_q_max)
         
         # s.t. Jbar'*tau = f_des, where
         # f_des = Lambda*xdd_nom + Lambda*Q*(qd - Jbar*xd_tilde) + Jbar.T*tau_g 
@@ -612,6 +640,10 @@ class Gen3Controller(LeafSystem):
         pdd_nom = xdd_nom[3:]
         rpydd_nom = RPY_nom.CalcRpyDtFromAngularVelocityInParent(wd_nom)
         self.xdd_nom = np.hstack([rpydd_nom,pdd_nom])
+       
+        # DEBUG
+        #Vdot = xd_tilde.T@(Jbar.T@tau - Jbar.T@tau_g + Lambda@Q@(Jbar@xd_tilde - qd) - Lambda@xdd_nom + Kp@x_tilde)
+        #print(Vdot <= 0)
 
         # Set arm torque outputs
         tau = tau[:-2]   # the last two elements have to do with the gripper. We'll ignore those here
@@ -624,6 +656,4 @@ class Gen3Controller(LeafSystem):
         self.xd = xd
         self.err = x_tilde.T@x_tilde
 
-        #Vdot = xd_tilde.T@(Jbar.T@tau - Jbar.T@tau_g + Lambda@Q@(Jbar@xd_tilde - qd) - Lambda@xdd_nom + Kp@x_tilde)
-        #print(Vdot <= 0)
 
