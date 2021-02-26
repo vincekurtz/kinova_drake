@@ -212,11 +212,36 @@ class Gen3Controller(LeafSystem):
 
             V = 1/2 xd_tilde'*Lambda*xd_tilde + 1/2 x_tilde'*Kp*x_tilde.
 
+        Written in terms of decision variables xdd_nom and tau.
         """
         # We'll write as A*x <= b
         A = xd_tilde.T@np.hstack([Jbar.T, -Lambda])[np.newaxis]
         b = -xd_tilde.T@(-Jbar.T@tau_g + Lambda@Q@(Jbar@xd_tilde-qd) + Kp@x_tilde)
         x = np.vstack([tau, xdd_nom])
+
+        lb = np.asarray([-np.inf]).reshape(1,1)
+        ub = np.asarray([b]).reshape(1,1)
+
+        return self.mp.AddLinearConstraint(A=A, lb=lb, ub=ub, vars=x)
+    
+    def AddVdotConstraint2(self, xd_tilde, Lambda, Q, Jbar, xdd_nom, 
+                                                J, qdd, Jdqd, Kp, x_tilde):
+        """
+        Add a linear constraint
+
+            Vdot <= 0
+
+        to the whole-body QP, where Vdot is the time-derivative of the storage
+        function 
+
+            V = 1/2 xd_tilde'*Lambda*xd_tilde + 1/2 x_tilde'*Kp*x_tilde.
+
+        Written in terms of decision variables xdd_nom and qdd.
+        """
+        # We'll write as A*x <= b
+        A = np.hstack([xd_tilde.T@Lambda@J, -xd_tilde.T@Lambda])[np.newaxis]
+        b = -xd_tilde.T@(Lambda@Q@Jbar@xd_tilde + Lambda@Jdqd + Kp@x_tilde)
+        x = np.vstack([qdd,xdd_nom])
 
         lb = np.asarray([-np.inf]).reshape(1,1)
         ub = np.asarray([b]).reshape(1,1)
@@ -598,8 +623,10 @@ class Gen3Controller(LeafSystem):
         self.AddDynamicsConstraint(M, qdd, Cqd, tau_g, S, tau)
 
         # s.t. Vdot <= 0
-        self.AddVdotConstraint(Jbar, tau, Lambda, xdd_nom, Q, qd, 
-                                        xd_tilde, tau_g, Kp, x_tilde)
+        #self.AddVdotConstraint(Jbar, tau, Lambda, xdd_nom, Q, qd, 
+        #                                xd_tilde, tau_g, Kp, x_tilde)
+        self.AddVdotConstraint2(xd_tilde, Lambda, Q, Jbar, xdd_nom, 
+                                            J, qdd, Jdqd, Kp, x_tilde)
       
         # s.t. qdd >= -alpha_qd(qd - qd_min)   (joint velocity CBF constraint)
         #     -qdd >= -alpha_qd(qd_max - qd)
@@ -633,6 +660,7 @@ class Gen3Controller(LeafSystem):
         assert result.is_success()
         tau = result.GetSolution(tau)
         xdd_nom = result.GetSolution(xdd_nom)
+        qdd = result.GetSolution(qdd)
 
         # Convert RoM rotational input from angular acceleration to RPYddt
         # for sending to the RoM
@@ -642,7 +670,11 @@ class Gen3Controller(LeafSystem):
         self.xdd_nom = np.hstack([rpydd_nom,pdd_nom])
        
         # DEBUG
-        #Vdot = xd_tilde.T@(Jbar.T@tau - Jbar.T@tau_g + Lambda@Q@(Jbar@xd_tilde - qd) - Lambda@xdd_nom + Kp@x_tilde)
+        Vdot = xd_tilde.T@(Jbar.T@tau - Jbar.T@tau_g + Lambda@Q@(Jbar@xd_tilde - qd) - Lambda@xdd_nom + Kp@x_tilde)
+        print(Vdot)
+        Vdot = xd_tilde.T@(Lambda@Q@Jbar@xd_tilde - Lambda@xdd_nom + Lambda@(J@qdd + Jdqd) + Kp@x_tilde)
+        print(Vdot)
+        print("")
         #print(Vdot <= 0)
 
         # Set arm torque outputs
