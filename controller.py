@@ -26,8 +26,8 @@ class Gen3Controller(LeafSystem):
         self.plant = plant
         self.context = self.plant.CreateDefaultContext()  # stores q, qd
 
-        #self.solver = OsqpSolver()
-        self.solver = GurobiSolver()
+        self.solver = OsqpSolver()
+        #self.solver = GurobiSolver()
 
         # AutoDiff plant and context for values that require automatic differentiation
         self.plant_autodiff = plant.ToAutoDiffXd()
@@ -153,6 +153,31 @@ class Gen3Controller(LeafSystem):
         self.q_max = np.array(q_max)
         self.qd_min = np.array(qd_min)
         self.qd_max = np.array(qd_max)
+
+    def AddTaskForceCost(self, w, Jbar, tau, Lambda, xdd_nom, Q, qd,
+                                    xd_tilde, tau_g, Kp, x_tilde, Kd):
+        """
+        Add a quadratic cost term
+
+            w*||Jbar'*tau - f_des||^2
+
+        to the whole-body QP, where
+
+            f_des = Lambda*xdd_nom + Lambda*Q*(qd - Jbar*xd_tilde) + Jbar.T*tau_g 
+                                                            - Kp*x_tilde - Kd*xd_tilde
+
+        are desired task-space forces and both tau and xdd_nom are optimization variables
+        """
+        # First write as Jbar'*tau - f_des = A*x + b
+        A = np.hstack([Jbar.T, -Lambda])
+        x = np.vstack([tau,xdd_nom])
+        b = Lambda@Q@(qd-Jbar@xd_tilde) + Jbar.T@tau_g - Kp@x_tilde - Kd@xd_tilde
+
+        # Now define the associated cost as 1/2x'Qx + c'x
+        Q = w*A.T@A
+        c = -w*A.T@b
+
+        return self.mp.AddQuadraticCost(Q,c,x)
         
     def AddTaskForceConstraint(self, Jbar, tau, Lambda, xdd_nom, Q, qd, 
                                             xd_tilde, tau_g, Kp, x_tilde, Kd):
@@ -195,7 +220,7 @@ class Gen3Controller(LeafSystem):
 
             w*|| Jbar'*tau - f_des ||^2
 
-        to the whole-body QP
+        to the whole-body QP, where tau is the only decision variable
         """
         # We'll write as 1/2 x'*Q*x + c'*x
         Q = Jbar@Jbar.T
@@ -439,6 +464,7 @@ class Gen3Controller(LeafSystem):
 
         w_qd = 1e-3    # joint velocity damping weight
         w_xdd = 10     # desired RoM input tracking weight
+        w_fdes = 10    # desired task-space force tracking weight
 
         alpha_qd = lambda h : 1*h  # CBF class-K functions
         alpha_q = lambda h : 1*h
@@ -510,30 +536,34 @@ class Gen3Controller(LeafSystem):
         Jbar = Minv@J.T@Lambda
         Q = J@Minv@C - Jd
 
-        print("J rank:      %s" % np.linalg.matrix_rank(J, tol=1e-3))
-        print("Jbar rank:   %s" % np.linalg.matrix_rank(Jbar, tol=1e-2))
-        print("Lambda rank: %s" % np.linalg.matrix_rank(Lambda, tol=1e-2))
-        print("")
-
-        #if np.linalg.matrix_rank(J, tol=1e-3) < 6:
-        #    print("Near-singular configuration!")
+        # DEBUG
+        #print("J rank:      %s" % np.linalg.matrix_rank(J, tol=1e-3))
+        #print("Jbar rank:   %s" % np.linalg.matrix_rank(Jbar, tol=1e-2))
+        #print("Lambda rank: %s" % np.linalg.matrix_rank(Lambda, tol=1e-2))
+        #print("")
+        if np.linalg.matrix_rank(J, tol=1e-3) < 6:
+            print("Near-singular configuration!")
 
         # Solve QP to find joint torques and input to RoM
         self.mp = MathematicalProgram()
         tau = self.mp.NewContinuousVariables(self.plant.num_actuators(), 1, 'tau')
         qdd = self.mp.NewContinuousVariables(self.plant.num_velocities(), 1, 'qdd')
         xdd_nom = self.mp.NewContinuousVariables(6,1,'xdd_nom')
+
+        # min w_xdd*|| xdd_nom - xdd_target ||^2
+        self.mp.AddQuadraticErrorCost(Q=w_xdd*np.eye(6),
+                                      x_desired=xdd_target,
+                                      vars=xdd_nom)
+
+        # min w_fdes*|| Jbar'*tau - f_des ||^2
+        self.AddTaskForceCost(w_fdes, Jbar, tau, Lambda, xdd_nom, Q, qd,
+                                xd_tilde, tau_g, Kp, x_tilde, Kd)
        
         # min w_qd*|| qdd - qdd_nom ||^2
         qdd_nom = -Kd_qd*qd
         self.mp.AddQuadraticErrorCost(Q=w_qd*np.eye(self.plant.num_velocities()),
                                       x_desired=qdd_nom,
                                       vars=qdd)
-
-        # min w_xdd*|| xdd_nom - xdd_target ||^2
-        self.mp.AddQuadraticErrorCost(Q=w_xdd*np.eye(6),
-                                      x_desired=xdd_target,
-                                      vars=xdd_nom)
         
         # min || tau ||^2
         #self.mp.AddQuadraticErrorCost(Q=1e-2*np.eye(self.plant.num_actuators()),
@@ -545,21 +575,21 @@ class Gen3Controller(LeafSystem):
       
         # s.t. qdd >= -alpha_qd(qd - qd_min)   (joint velocity CBF constraint)
         #     -qdd >= -alpha_qd(qd_max - qd)
-        #ah_qd_min = alpha_qd(qd - self.qd_min)
-        #ah_qd_max = alpha_qd(self.qd_max - qd)
-        #self.AddJointVelCBFConstraint(qdd, ah_qd_min, ah_qd_max)
+        ah_qd_min = alpha_qd(qd - self.qd_min)
+        ah_qd_max = alpha_qd(self.qd_max - qd)
+        self.AddJointVelCBFConstraint(qdd, ah_qd_min, ah_qd_max)
         
         # s.t. qdd >= -beta_q( qd + alpha_q(q - q_min) )   (joint angle CBF constraint)
         #     -qdd >= -beta_q( alpha_q(q_max - q) - qd )
-        #ah_q_min = beta_q( qd + alpha_q(q - self.q_min) )
-        #ah_q_max = beta_q( alpha_q(self.q_max - q) - qd )
-        #self.AddJointVelCBFConstraint(qdd, ah_q_min, ah_q_max)
+        ah_q_min = beta_q( qd + alpha_q(q - self.q_min) )
+        ah_q_max = beta_q( alpha_q(self.q_max - q) - qd )
+        self.AddJointVelCBFConstraint(qdd, ah_q_min, ah_q_max)
         
         # s.t. Jbar'*tau = f_des, where
         # f_des = Lambda*xdd_nom + Lambda*Q*(qd - Jbar*xd_tilde) + Jbar.T*tau_g 
         #                                                   - Kp*x_tilde - Kd*xd_tilde
-        self.AddTaskForceConstraint(Jbar, tau, Lambda, xdd_nom, Q, qd, 
-                                       xd_tilde, tau_g, Kp, x_tilde, Kd)
+        #self.AddTaskForceConstraint(Jbar, tau, Lambda, xdd_nom, Q, qd, 
+        #                               xd_tilde, tau_g, Kp, x_tilde, Kd)
 
         # s.t. tau_min <= tau <= tau_max
         #tau_min = -50
