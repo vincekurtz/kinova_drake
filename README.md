@@ -2,9 +2,11 @@
 
 Code for controlling a Kinova Gen3 Manipulator via Drake.
 
-## Dependencies
+| ![](simulation.gif)  | ![](hardware.gif)  |
+|:--------------------:|:------------------:|
+| Simulation           | Hardware           |
 
-Simulation and hardware:
+## Dependencies
 
 - OpenCV
 - [Drake](https://drake.mit.edu/)
@@ -23,16 +25,17 @@ Hardware only:
 
 ## Overview
 
-The goal of this repository is to provide a unified high-level interface with the Kinova Gen3 robot arm
-in real life and in simulation. This is inspired by the 
-"[manipulation_station](https://github.com/RobotLocomotion/drake/tree/master/examples/manipulation_station)"
-provided with Drake for interfacing witha Kuka iiwa robot arm. 
+The goal of this repository is to provide a unified high-level interface with the Kinova 
+Gen3 robot arm that is as consistent as possible between real life and simulation.
+This is inspired by the 
+"[manipulation station](https://github.com/RobotLocomotion/drake/tree/master/examples/manipulation_station)"
+provided with Drake, which uses a Kuka iiwa. 
 
 Specifically, we provide a Drake system diagram as follows:
 
 ![station_diagram.png](station_diagram.png)
 
-where the same input and output ports are provided for the simulation and on the hardware. 
+where the same input and output ports are provided in simulation and on the hardware.
 
 ## Examples
 
@@ -70,5 +73,4 @@ can be found in `examples/point_cloud_demo.py` (simulation) and `examples/point_
 
 We use a genetic algorithm and a simple geometric heuristic (described [here](http://manipulation.csail.mit.edu/clutter.html))
 to select a grasp location. 
-
 
