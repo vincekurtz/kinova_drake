@@ -202,7 +202,6 @@ class PointCloudController(CommandSequenceController):
         """
         Use some simple heuristics to generate a reasonable-ish candidate grasp
         """
-        # TODO: fix so reachable position doesn't involve flipping the gripper over
         if cloud is None:
             cloud = self.merged_point_cloud
 
@@ -219,11 +218,16 @@ class PointCloudController(CommandSequenceController):
         Gz = np.cross(Gx, Gy)
         R_WG = RotationMatrix(np.vstack([Gx, Gy, Gz]).T)
 
+        # Rotate the grasp angle 180 degrees. This seems to lead to upside-down grasps
+        # less often. Note that this could be randomized as well.
+        R_WG = R_WG.multiply(RotationMatrix(RollPitchYaw([-np.pi,0,0])))
+
         p_GS_G = np.array([0.02,0,0.13])   # position of the sample in the gripper frame
         p_SG_W = -R_WG.multiply(p_GS_G)
         p_WG = p_WS + p_SG_W
 
         ee_pose = np.hstack([RollPitchYaw(R_WG).vector(), p_WG])
+
         return ee_pose
 
     def ScoreGraspCandidate(self, ee_pose, cloud=None):
