@@ -19,14 +19,27 @@ Hardware only:
 
 - GStreamer (for accessing camera streams)
 - OpenCV with GStreamer bindings
-- [Kinova kortex API](https://github.com/Kinovarobotics/kortex)
+- [Kinova Kortex API](https://github.com/Kinovarobotics/kortex)
 
-## Running examples
+## Overview
+
+The goal of this repository is to provide a unified high-level interface with the Kinova Gen3 robot arm
+in real life and in simulation. This is inspired by the 
+"[manipulation_station](https://github.com/RobotLocomotion/drake/tree/master/examples/manipulation_station)"
+provided with Drake for interfacing witha Kuka iiwa robot arm. 
+
+Specifically, we provide a Drake system diagram as follows:
+
+![station_diagram.png](station_diagram.png)
+
+where the same input and output ports are provided for the simulation and on the hardware. 
+
+## Examples
 
 There are basic examples of various things (both simulation and hardware) in the `examples` directory. These must be run
 from this directory with, e.g., `python3 -m examples.peg_pickup_demo`.
 
-### Simple Example
+### Sending Setpoints
 
 The simplest examples can be run with
 ```
@@ -38,9 +51,8 @@ python3 -m examples.hardware_demo
 ```
 (on the hardware).
 
-These examples demonstrate how to send a simple end-effector position, velocity, or wrench
-references. Various parameters can be set in the respective files (`examples/simulation_demo.py`
-or `examples/hardware_demo.py`) such as gripper type, reference type, whether to make system
+These examples demonstrate how to send end-effector position, velocity, or wrench
+references. Various parameters can be set such as gripper type, reference type, whether to make system
 diagram plots, etc. 
 
 ### Peg Pickup Example
