@@ -70,6 +70,11 @@ class PointCloudController(CommandSequenceController):
                 "point_cloud",
                 AbstractValue.Make(PointCloud()))
 
+        # Create an additional input port for the camera pose
+        self.camera_transform_port = self.DeclareAbstractInputPort(
+                "camera_transform",
+                AbstractValue.Make(RigidTransform()))
+
         # Recorded point clouds from multiple different views
         self.stored_point_clouds = []
         self.merged_point_cloud = None
@@ -144,18 +149,23 @@ class PointCloudController(CommandSequenceController):
         Given a viable grasp location, modify the stored command sequence to 
         include going to that grasp location and picking up the object. 
         """
+        # we need to translate target grasps from the end_effector_link frame (G, at the wrist)
+        # used to specify grasp poses and the end_effector frame (E, at fingertips)
+        # associated with end-effector commands. This is slightly different on the hardware
+        # and in simulation. 
+        X_WG = RigidTransform(             
+                RotationMatrix(RollPitchYaw(grasp[:3])),
+                grasp[3:])
         if self.hardware:
-            # we need to translate target grasps from the default end-effector frame
-            # (G, wrist) used by drake to the end-effector frame used by the hardware
-            # (E, fingertips)
-            X_WG = RigidTransform(             
-                    RotationMatrix(RollPitchYaw(grasp[:3])),
-                    grasp[3:])
             X_GE = RigidTransform(
                     RotationMatrix(np.eye(3)),
                     np.array([0,0,0.18]))
-            X_WE = X_WG.multiply(X_GE)
-            grasp = np.hstack([RollPitchYaw(X_WE.rotation()).vector(), X_WE.translation()])
+        else:
+            X_GE = RigidTransform(
+                    RotationMatrix(np.eye(3)),
+                    np.array([0,0,0.13]))
+        X_WE = X_WG.multiply(X_GE)
+        grasp = np.hstack([RollPitchYaw(X_WE.rotation()).vector(), X_WE.translation()])
 
         # Compute a pregrasp location that is directly behind the grasp location
         X_WG = RigidTransform(             
@@ -338,9 +348,8 @@ class PointCloudController(CommandSequenceController):
                 point_cloud = self.point_cloud_input_port.Eval(context)
 
                 # Convert to Open3D, crop, compute normals, and save
-                ee_pose = self.ee_pose_port.Eval(context)  # use end-effector position as a rough
-                                                           # approximation of camera position
-                self.StorePointCloud(point_cloud, ee_pose[3:])
+                X_camera = self.camera_transform_port.Eval(context)
+                self.StorePointCloud(point_cloud, X_camera.translation())
 
         elif self.merged_point_cloud is None:
             # Merge stored point clouds and downsample

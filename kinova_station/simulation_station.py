@@ -170,7 +170,7 @@ class KinovaStation(Diagram):
         # Compute and output end-effector wrenches based on measured joint torques
         wrench_calculator = self.builder.AddSystem(EndEffectorWrenchCalculator(
                 self.controller_plant,
-                self.controller_plant.GetFrameByName("end_effector_link")))
+                self.controller_plant.GetFrameByName("end_effector")))
         wrench_calculator.set_name("wrench_calculator")
 
         self.builder.Connect(
@@ -211,7 +211,8 @@ class KinovaStation(Diagram):
                     "camera_depth_image")
 
             # Send pose of camera in world frame as output
-            camera_transform_pub = self.builder.AddSystem(CameraPosePublisher(self.X_camera))
+            X_ee_camera = self.X_ee.inverse().multiply(self.X_camera)
+            camera_transform_pub = self.builder.AddSystem(CameraPosePublisher(X_ee_camera))
             camera_transform_pub.set_name("camera_transform_publisher")
 
             self.builder.Connect(
@@ -286,6 +287,18 @@ class KinovaStation(Diagram):
 
         self.controller_plant.WeldFrames(self.controller_plant.world_frame(),
                                          self.controller_plant.GetFrameByName("base_link", self.controller_arm))
+
+        # Create a new frame with the actual end-effector position.
+        self.X_ee = RigidTransform()
+        self.X_ee.set_translation([0,0,0.13])
+        self.plant.AddFrame(FixedOffsetFrame(
+                        "end_effector",
+                        self.plant.GetFrameByName("end_effector_link"),
+                        self.X_ee, self.arm))
+        self.controller_plant.AddFrame(FixedOffsetFrame(
+                        "end_effector",
+                        self.controller_plant.GetFrameByName("end_effector_link"),
+                        self.X_ee, self.controller_arm))
 
     def AddHandeGripper(self):
         """
@@ -734,7 +747,7 @@ class CartesianController(LeafSystem):
 
         # Define some relevant frames
         self.world_frame = self.plant.world_frame()
-        self.ee_frame = self.plant.GetFrameByName("end_effector_link")
+        self.ee_frame = self.plant.GetFrameByName("end_effector")
 
         # Set joint limits (set self.{q,qd}_{min,max})
         self.GetJointLimits()

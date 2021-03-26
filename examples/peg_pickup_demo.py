@@ -45,12 +45,12 @@ station = builder.AddSystem(station)
 cs = CommandSequence([])
 cs.append(Command(
     name="pregrasp",
-    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.68, 0.0, 0.1]),
+    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.8, 0.0, 0.1]),
     duration=4,
     gripper_closed=False))
 cs.append(Command(
     name="grasp",
-    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.68, 0.0, 0.1]),
+    target_pose=np.array([0.5*np.pi, 0.0, 0.5*np.pi, 0.8, 0.0, 0.1]),
     duration=1,
     gripper_closed=True))
 cs.append(Command(

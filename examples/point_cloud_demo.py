@@ -28,7 +28,7 @@ gripper_type = "hande"
 
 # Set up the kinova station
 station = KinovaStation(time_step=0.001)
-station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False, peg_position=[0.7,0.1,0.1])
+station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False, peg_position=[0.7,-0.05,0.1])
 station.AddCamera()
 station.ConnectToMeshcatVisualizer(start_server=False)
 station.Finalize()
@@ -60,10 +60,13 @@ builder.Connect(
         station.GetOutputPort("camera_rgb_image"),
         point_cloud_generator.color_image_input_port())
 
-# Connect camera pose to point cloud generator
+# Connect camera pose to point cloud generator and controller
 builder.Connect(
         station.GetOutputPort("camera_transform"),
         point_cloud_generator.GetInputPort("camera_pose"))
+builder.Connect(
+        station.GetOutputPort("camera_transform"),
+        controller.GetInputPort("camera_transform"))
 
 # Connect generated point cloud to the controller
 builder.Connect(
