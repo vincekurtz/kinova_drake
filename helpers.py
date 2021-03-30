@@ -152,6 +152,16 @@ def spatial_force_cross_product(v_sp, f_sp):
     return np.hstack([ np.cross(w,n) + np.cross(v,f),
                             np.cross(w,f)           ])
 
+def x_star(v):
+    """
+    Return the matrix [v x*] associated with the spatial force cross product.
+    """
+    w = v[:3]   # angular velocity
+    vO = v[3:]  # linear velocity
+
+    return np.block([[ S(w)           ,  S(vO) ],
+                     [ np.zeros((3,3)),  S(w)  ]])
+
 def jacobian2(function, x):
     """
     This is a rewritting of the jacobian function from drake which addresses

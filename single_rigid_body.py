@@ -9,7 +9,7 @@ from helpers import *
 # Parameters
 sim_time = 5
 dt = 5e-3
-realtime_rate = 1
+realtime_rate = 10
 
 q0 = np.zeros(7)
 q0[3] = 1
@@ -145,13 +145,35 @@ err = []
 for i in range(N):
     # Double check our spatial dynamics computations with ground-truth values
     f_i = f[:,i]
+    q_i = q[:,i]
     a_i = vd[:,i]
     v_i = v[:,i]
 
-    rhs = I@a_i + spatial_force_cross_product(v_i, I@v_i)  # should equal f_i
-    RHS.append(rhs)
+    # Transformation from world frame to B (body frame)
+    quat = q_i[:4] / np.linalg.norm(q_i[:4])   # normalize quaternion
+    r = -q_i[4:]
+    R = RotationMatrix(Quaternion(quat)).inverse().matrix()
+    X_BW = np.block([[R,                -R@S(r)],
+                     [np.zeros((3,3)),    R    ]])
 
+    # Transformation from B (body frame) to Bq (force applied frame)
+    X_BqB = np.block([[ np.eye(3),        -S(-p_com)],
+                      [ np.zeros((3,3,)), np.eye(3)]])
+
+
+    # Applied spatial force expressed in Bq
+    f_Bq = X_BW@f_i
+
+    rhs1 = I@a_i + spatial_force_cross_product(v_i, I@v_i)  # should equal f_i
+    rhs = I@a_i + x_star(v_i)@I@v_i
+    RHS.append(rhs)
+   
     err.append(np.linalg.norm(f_i - rhs))
+
+    print(f_i)
+    print(rhs)
+    print(rhs1)
+    print("")
 
     #Y, b = single_body_regression_matrix(vd[:,i],v[:,i])
     #Ys.append(Y)
