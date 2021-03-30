@@ -49,23 +49,19 @@ class SpatialForceCtrl(LeafSystem):
                         0.0])
         f = np.array([0.0,
                       0.0,
-                      0.982])
+                      0.02])
 
         # Get current state of the object
         x = self.input_port.Eval(context)
         q = x[:7]
         v = x[7:]
         
-        #f[2] += 0.1*np.cos(10*t)
-        #tau[0] += 0.001*np.sin(11*t)
-        #tau[1] += 0.001*np.sin(12*t)
-        #tau[2] += 0.001*np.sin(13*t)
-
         self.f = np.hstack([tau,f])
 
         spatial_force = ExternallyAppliedSpatialForce()
         spatial_force.body_index = self.body_index
         spatial_force.F_Bq_W = SpatialForce(tau=self.f[0:3],f=self.f[3:])
+        spatial_force.p_BoBq_B = np.array([0.02,0.0,0.0])
         output.set_value([spatial_force])
 
 # Plant setup
@@ -74,6 +70,7 @@ scene_graph = builder.AddSystem(SceneGraph())
 plant = builder.AddSystem(MultibodyPlant(time_step=dt))
 plant.RegisterAsSourceForSceneGraph(scene_graph)
 peg = Parser(plant=plant).AddModelFromFile("./models/manipulands/peg.sdf","peg")
+plant.mutable_gravity_field().set_gravity_vector([0,0,0])
 plant.Finalize()
 
 # Diagram setup
