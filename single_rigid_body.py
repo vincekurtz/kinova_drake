@@ -50,9 +50,14 @@ class SpatialForceCtrl(LeafSystem):
         f = np.array([0.0,
                       0.0,
                       0.982])
+
+        # Get current state of the object
+        x = self.input_port.Eval(context)
+        q = x[:7]
+        v = x[7:]
         
         #f[2] += 0.1*np.cos(10*t)
-        tau[0] += 0.001*np.sin(11*t)
+        #tau[0] += 0.001*np.sin(11*t)
         #tau[1] += 0.001*np.sin(12*t)
         #tau[2] += 0.001*np.sin(13*t)
 

@@ -3,7 +3,7 @@
 <model name="peg">
   <link name="base_link">
     <inertial>
-      <pose frame=''>0.01 0 0 0 0 0 </pose>
+      <pose frame=''>0 0 0 0 0 0 </pose>
       <mass>0.100</mass> <!-- 0.028 -->
         <inertia>
           <ixx>2.667e-5</ixx>  <!-- e-5 -->
