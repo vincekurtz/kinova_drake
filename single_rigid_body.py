@@ -119,6 +119,7 @@ diagram_context = diagram.CreateDefaultContext()
 # Simulator setup
 simulator = Simulator(diagram, diagram_context)
 simulator.set_target_realtime_rate(realtime_rate)
+simulator.set_publish_every_time_step(True)
 
 plant_context = diagram.GetMutableSubsystemContext(plant, diagram_context)
 plant.SetPositions(plant_context, peg, q0)
@@ -136,15 +137,33 @@ vd = (v[:,1:] - v[:,:-1])/dt
 f = ctrl_logger.data()
 
 N = vd.shape[1]
-Ys = []
-Fs = []
+#Ys = []
+#Fs = []
+
+RHS = []
+err = []
 for i in range(N):
     # Double check our spatial dynamics computations with ground-truth values
-    print(f[:,i])
+    f_i = f[:,i]
+    a_i = vd[:,i]
+    v_i = v[:,i]
+
+    rhs = I@a_i + spatial_force_cross_product(v_i, I@v_i)  # should equal f_i
+    RHS.append(rhs)
+
+    err.append(np.linalg.norm(f_i - rhs))
 
     #Y, b = single_body_regression_matrix(vd[:,i],v[:,i])
     #Ys.append(Y)
     #Fs.append(f[:,i] - b)
+
+rhs = np.asarray(RHS)
+
+#plt.plot(f.T)
+#plt.plot(v.T)
+#plt.plot(RHS)
+plt.plot(err)
+plt.show()
 
 #Y = np.vstack(Ys)
 #F = np.hstack(Fs)
