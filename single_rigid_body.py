@@ -9,7 +9,7 @@ from helpers import *
 # Parameters
 sim_time = 5
 dt = 5e-3
-realtime_rate = 10
+realtime_rate = 1
 
 q0 = np.zeros(7)
 q0[3] = 1
@@ -55,7 +55,7 @@ class SpatialForceCtrl(LeafSystem):
     def CalcOutput(self, context, output):
         t = context.get_time()
         tau = np.array([0.0,
-                        0.0,
+                        0.002,
                         0.0])
         f = np.array([0.0,
                       0.0,
@@ -88,9 +88,11 @@ plant.Finalize()
 body = plant.GetBodyByName("base_link")
 m = body.default_mass()
 Ibar_com = body.default_rotational_inertia().CopyToFullMatrix3()
-p_com = np.array([-0.02, 0.0, 0.0])
+p_com = np.array([0.0, 0.0, 0.0])
 I = np.block([[Ibar_com + m*S(p_com)@S(p_com).T, m*S(p_com) ],
               [ m*S(p_com).T                   , m*np.eye(3)]])
+I_B = np.block([[ Ibar_com       , np.zeros((3,3)) ],
+                [ np.zeros((3,3)), m*np.eye(3)     ]])
 
 # Diagram setup
 builder.Connect(
@@ -151,28 +153,26 @@ for i in range(N):
 
     # Transformation from world frame to B (body frame)
     quat = q_i[:4] / np.linalg.norm(q_i[:4])   # normalize quaternion
-    r = -q_i[4:]
-    R = RotationMatrix(Quaternion(quat)).inverse().matrix()
+    r = q_i[4:]
+    R = RotationMatrix(Quaternion(quat)).matrix()
     X_BW = np.block([[R,                -R@S(r)],
                      [np.zeros((3,3)),    R    ]])
 
     # Transformation from B (body frame) to Bq (force applied frame)
-    X_BqB = np.block([[ np.eye(3),        -S(-p_com)],
+    X_BqB = np.block([[ np.eye(3),        -S(p_com)],
                       [ np.zeros((3,3,)), np.eye(3)]])
 
 
     # Applied spatial force expressed in Bq
-    f_Bq = X_BW@f_i
+    f_B = np.linalg.inv(X_BW)@f_i
 
-    rhs1 = I@a_i + spatial_force_cross_product(v_i, I@v_i)  # should equal f_i
-    rhs = I@a_i + x_star(v_i)@I@v_i
+    rhs = I_B@a_i# + spatial_force_cross_product(v_i, I_B@v_i)
     RHS.append(rhs)
    
     err.append(np.linalg.norm(f_i - rhs))
 
     print(f_i)
     print(rhs)
-    print(rhs1)
     print("")
 
     #Y, b = single_body_regression_matrix(vd[:,i],v[:,i])
