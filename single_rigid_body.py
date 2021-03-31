@@ -9,7 +9,7 @@ from helpers import *
 # Parameters
 sim_time = 5
 dt = 5e-3
-realtime_rate = 1
+realtime_rate = 10
 
 q0 = np.zeros(7)
 q0[3] = 1
@@ -55,11 +55,11 @@ class SpatialForceCtrl(LeafSystem):
     def CalcOutput(self, context, output):
         t = context.get_time()
         tau = np.array([0.0,
-                        0.002,
+                        0.0,
                         0.0])
         f = np.array([0.0,
                       0.0,
-                      0.02])
+                      0.1])
 
         # Get current state of the object
         x = self.input_port.Eval(context)
@@ -71,7 +71,7 @@ class SpatialForceCtrl(LeafSystem):
         # Send as output
         spatial_force = ExternallyAppliedSpatialForce()
         spatial_force.body_index = self.body_index
-        spatial_force.p_BoBq_B = self.p_BBq
+        spatial_force.p_BoBq_B = np.zeros(3)  # DEBUG
         spatial_force.F_Bq_W = SpatialForce(tau=self.f[0:3],f=self.f[3:])
         output.set_value([spatial_force])
 
@@ -88,11 +88,11 @@ plant.Finalize()
 body = plant.GetBodyByName("base_link")
 m = body.default_mass()
 Ibar_com = body.default_rotational_inertia().CopyToFullMatrix3()
-p_com = np.array([0.0, 0.0, 0.0])
-I = np.block([[Ibar_com + m*S(p_com)@S(p_com).T, m*S(p_com) ],
-              [ m*S(p_com).T                   , m*np.eye(3)]])
-I_B = np.block([[ Ibar_com       , np.zeros((3,3)) ],
-                [ np.zeros((3,3)), m*np.eye(3)     ]])
+p_com = body.default_com()
+I_B = np.block([[Ibar_com + m*S(p_com)@S(p_com).T, m*S(p_com) ],
+                [ m*S(p_com).T                   , m*np.eye(3)]])
+I_CoM = np.block([[ Ibar_com       , np.zeros((3,3)) ],
+                  [ np.zeros((3,3)), m*np.eye(3)     ]])
 
 # Diagram setup
 builder.Connect(
@@ -151,6 +151,10 @@ for i in range(N):
     a_i = vd[:,i]
     v_i = v[:,i]
 
+    # Get rid of weird numerics in accleration computations
+    if np.all(a_i == np.zeros(6)):
+        a_i = vd[:,i-1]
+
     # Transformation from world frame to B (body frame)
     quat = q_i[:4] / np.linalg.norm(q_i[:4])   # normalize quaternion
     r = q_i[4:]
@@ -158,34 +162,36 @@ for i in range(N):
     X_BW = np.block([[R,                -R@S(r)],
                      [np.zeros((3,3)),    R    ]])
 
-    # Transformation from B (body frame) to Bq (force applied frame)
-    X_BqB = np.block([[ np.eye(3),        -S(p_com)],
-                      [ np.zeros((3,3,)), np.eye(3)]])
+    # Transformation from B (body frame) to CoM (center-of-mass frame)
+    p_CoMB_B = p_com  # vector from B frame to CoM frame, in B frame
+    X_CoMB = np.block([[ np.eye(3)        , -S(p_CoMB_B)],
+                       [ np.zeros((3,3,)) ,   np.eye(3) ]])
 
 
-    # Applied spatial force expressed in Bq
-    f_B = np.linalg.inv(X_BW)@f_i
+    # Inertia matrix in world frame
+    p_CoMW = q_i[4:]
+    print(p_CoMW)
 
-    rhs = I_B@a_i# + spatial_force_cross_product(v_i, I_B@v_i)
-    RHS.append(rhs)
-   
-    err.append(np.linalg.norm(f_i - rhs))
 
     print(f_i)
-    print(rhs)
+    print(a_i)
+    print(I_B@a_i)
+    print(I_CoM@a_i)
+    print(spatial_force_cross_product(v_i, I_B@v_i))
+    print(spatial_force_cross_product(v_i, I_CoM@v_i))
     print("")
 
     #Y, b = single_body_regression_matrix(vd[:,i],v[:,i])
     #Ys.append(Y)
     #Fs.append(f[:,i] - b)
 
-rhs = np.asarray(RHS)
+#rhs = np.asarray(RHS)
 
 #plt.plot(f.T)
 #plt.plot(v.T)
 #plt.plot(RHS)
-plt.plot(err)
-plt.show()
+#plt.plot(err)
+#plt.show()
 
 #Y = np.vstack(Ys)
 #F = np.hstack(Fs)
