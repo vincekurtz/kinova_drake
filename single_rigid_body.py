@@ -154,8 +154,9 @@ Izz = Variable("Izz")
 Ixy = Variable("Ixy")
 Ixz = Variable("Ixz")
 Iyz = Variable("Iyz")
-Ibar = UnitInertia_[Expression](Ixx, Iyy, Izz, Ixy, Ixz, Iyz)  # note: see ReExpress for changing frames
-I = SpatialInertia_[Expression](m, h/m, Ibar)
+Ibar = RotationalInertia_[Expression](Ixx, Iyy, Izz, Ixy, Ixz, Iyz)  # note: see ReExpress for changing frames
+Ibar_unit = UnitInertia_[Expression]().SetFromRotationalInertia(Ibar,m)
+I = SpatialInertia_[Expression](m, h/m, Ibar_unit)
 sym_peg.SetSpatialInertiaInBodyFrame(sym_context, I)
 
 # Sympy versions of dynamics parameters
