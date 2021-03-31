@@ -159,6 +159,11 @@ Ibar_unit = UnitInertia_[Expression]().SetFromRotationalInertia(Ibar,m)
 I = SpatialInertia_[Expression](m, h/m, Ibar_unit)
 sym_peg.SetSpatialInertiaInBodyFrame(sym_context, I)
 
+# Drake expression version of q, v, vd
+q_sym = np.array([Variable("q%s" % i) for i in range(7)])
+v_sym = np.array([Variable("v%s" % i) for i in range(6)])
+vd_sym = np.array([Variable("vd%s" % i) for i in range(6)])
+
 # Sympy versions of dynamics parameters
 m_sp, hx_sp, hy_sp, hz_sp = sp.symbols("m, hx, hy, hz")
 Ixx_sp, Iyy_sp, Izz_sp, Ixy_sp, Ixz_sp, Iyz_sp = \
@@ -168,30 +173,58 @@ sp_vars = {"m":m_sp, "hx":hx_sp, "hy":hy_sp, "hz":hz_sp,
         "Ixy":Ixy_sp, "Ixz":Ixz_sp, "Iyz":Iyz_sp}
 theta = np.asarray([*sp_vars.values()])
 
-err = []
-for i in range(1,N):
-    # Double check our spatial dynamics computations with ground-truth values
-    f_i = f[:,i]
-    q_i = q[:,i]
-    vd_i = vd[:,i]
-    v_i = v[:,i]
+# Sympy versions of q, qd, v
+q_sp = np.array([sp.symbols("q%s" % i) for i in range(7)])
+v_sp = np.array([sp.symbols("v%s" % i) for i in range(6)])
+vd_sp = np.array([sp.symbols("vd%s" % i) for i in range(6)])
 
-    # fix acceleration computation
-    if np.all(vd_i == np.zeros(6)):
-        vd_i = vd[:,i+1]
+for i in range(7):
+    sp_vars["q%s" % i] = q_sp[i]
+for i in range(6):
+    sp_vars["v%s" % i] = v_sp[i]
+    sp_vars["vd%s" % i] = vd_sp[i]
 
-    # Compute inverse dynamics (i.e. estimated applied spatial forces)
-    sym_plant.SetPositions(sym_context, q_i)
-    sym_plant.SetVelocities(sym_context, v_i)
-    f_ext = MultibodyForces_[Expression](sym_plant)
-    f_sym = sym_plant.CalcInverseDynamics(sym_context, vd_i, f_ext)
+# Drake symbolic expression for applied forces f
+sym_plant.SetPositions(sym_context, q_sym)
+sym_plant.SetVelocities(sym_context, v_sym)
+f_ext = MultibodyForces_[Expression](sym_plant)
+f_sym = sym_plant.CalcInverseDynamics(sym_context, vd_sym, f_ext)
 
-    f_sp = drake_to_sympy(f_sym, sp_vars)
-    print(f_sp)
-    A, b = sp.linear_eq_to_matrix(f_sp, theta)
+f_sp = drake_to_sympy(f_sym, sp_vars)
+
+expr = f_sp
+A, b = sp.linear_eq_to_matrix(expr, theta)
+
+print(A[0,1])
+
+A_fcn = sp.lambdify([q_sp,v_sp,vd_sp],A[0,1])
+print(A_fcn(q_sp,v_sp,vd_sp))
 
 
-    #print(f_sym)
-    #print(f_sp)
 
-
+#err = []
+#for i in range(1,N):
+#    # Double check our spatial dynamics computations with ground-truth values
+#    f_i = f[:,i]
+#    q_i = q[:,i]
+#    vd_i = vd[:,i]
+#    v_i = v[:,i]
+#
+#    # fix acceleration computation
+#    if np.all(vd_i == np.zeros(6)):
+#        vd_i = vd[:,i+1]
+#
+#    # Compute inverse dynamics (i.e. estimated applied spatial forces)
+#    sym_plant.SetPositions(sym_context, q_i)
+#    sym_plant.SetVelocities(sym_context, v_i)
+#    f_ext = MultibodyForces_[Expression](sym_plant)
+#    f_sym = sym_plant.CalcInverseDynamics(sym_context, vd_i, f_ext)
+#
+#    f_sp = drake_to_sympy(f_sym, sp_vars)
+#    A, b = sp.linear_eq_to_matrix(f_sp, theta)
+#
+#    A = np.asarray(A, dtype=float)  # convert to numpy
+#    b = -np.asarray(b, dtype=float).flatten()
+#    print(A)
+#    print(b)
+#

@@ -204,6 +204,11 @@ def drake_to_sympy(v, sympy_vars):
     """
     assert v.ndim == 1, "the vector v must be a 1d numpy array"
 
+    # Handle pow(a,b), which is defined in drake for operating on symbolic variables.
+    a, b = sp.symbols('a, b')
+    pow = sp.Lambda((a,b),a**b)
+    sympy_vars["pow"] = pow
+
     # Sympy allows us to do parsing based on strings, so we'll use
     # the to_string() method of drake expressions generate such strings.
     v_sympy = []
