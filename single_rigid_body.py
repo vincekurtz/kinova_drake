@@ -5,7 +5,7 @@
 
 from pydrake.all import *
 from helpers import *
-import sympy as sp
+import sys
 import cloudpickle
 
 # Parameters
@@ -89,12 +89,12 @@ plant.Finalize()
 # Ground truth inertial parameters
 body = plant.GetBodyByName("base_link")
 m = body.default_mass()
-Ibar_com = body.default_rotational_inertia().CopyToFullMatrix3()
+Ibar = body.default_rotational_inertia().CopyToFullMatrix3()
 p_com = body.default_com()
-I_B = np.block([[Ibar_com + m*S(p_com)@S(p_com).T, m*S(p_com) ],
-                [ m*S(p_com).T                   , m*np.eye(3)]])
-I_CoM = np.block([[ Ibar_com       , np.zeros((3,3)) ],
-                  [ np.zeros((3,3)), m*np.eye(3)     ]])
+h_com = m*p_com
+
+theta_gt = np.hstack([m, h_com, Ibar[0,0], Ibar[1,1], Ibar[2,2], 
+                        Ibar[0,1], Ibar[0,2], Ibar[1,2]])
 
 # Diagram setup
 builder.Connect(
@@ -141,73 +141,14 @@ vd = (v[:,1:] - v[:,:-1])/dt
 f = ctrl_logger.data()
 N = vd.shape[1]
 
-# Create a symbolic plant
-sym_plant = plant.ToSymbolic()
-sym_context = sym_plant.CreateDefaultContext()
-sym_peg = sym_plant.GetBodyByName("base_link")
-
-# Set dynamics parameters as unknowns
-m = Variable("m")
-h = np.array([Variable("hx"), Variable("hy"), Variable("hz")])
-Ixx = Variable("Ixx")
-Iyy = Variable("Iyy")
-Izz = Variable("Izz")
-Ixy = Variable("Ixy")
-Ixz = Variable("Ixz")
-Iyz = Variable("Iyz")
-Ibar = RotationalInertia_[Expression](Ixx, Iyy, Izz, Ixy, Ixz, Iyz)  # note: see ReExpress for changing frames
-Ibar_unit = UnitInertia_[Expression]().SetFromRotationalInertia(Ibar,m)
-I = SpatialInertia_[Expression](m, h/m, Ibar_unit)
-sym_peg.SetSpatialInertiaInBodyFrame(sym_context, I)
-
-# Drake expression version of q, v, vd
-q_sym = np.array([Variable("q%s" % i) for i in range(7)])
-v_sym = np.array([Variable("v%s" % i) for i in range(6)])
-vd_sym = np.array([Variable("vd%s" % i) for i in range(6)])
-
-# Sympy versions of dynamics parameters
-m_sp, hx_sp, hy_sp, hz_sp = sp.symbols("m, hx, hy, hz")
-Ixx_sp, Iyy_sp, Izz_sp, Ixy_sp, Ixz_sp, Iyz_sp = \
-        sp.symbols("Ixx, Iyy, Izz, Ixy, Ixz, Iyz")
-sp_vars = {"m":m_sp, "hx":hx_sp, "hy":hy_sp, "hz":hz_sp,
-        "Ixx":Ixx_sp, "Iyy":Iyy_sp, "Izz":Izz_sp, 
-        "Ixy":Ixy_sp, "Ixz":Ixz_sp, "Iyz":Iyz_sp}
-theta = np.asarray([*sp_vars.values()])
-
-# Sympy versions of q, qd, v
-q_sp = np.array([sp.symbols("q%s" % i) for i in range(7)])
-v_sp = np.array([sp.symbols("v%s" % i) for i in range(6)])
-vd_sp = np.array([sp.symbols("vd%s" % i) for i in range(6)])
-
-for i in range(7):
-    sp_vars["q%s" % i] = q_sp[i]
-for i in range(6):
-    sp_vars["v%s" % i] = v_sp[i]
-    sp_vars["vd%s" % i] = vd_sp[i]
-
-# Drake symbolic expression for applied forces f
-sym_plant.SetPositions(sym_context, q_sym)
-sym_plant.SetVelocities(sym_context, v_sym)
-f_ext = MultibodyForces_[Expression](sym_plant)
-f_sym = sym_plant.CalcInverseDynamics(sym_context, vd_sym, f_ext)
-
-f_sp = drake_to_sympy(f_sym, sp_vars)
-
-# Decompose applied forces into linear expression
-#   f = A*theta + b, 
-# and save lambda functions for A(q,v,vd) and b(q,v,vd).
-A, b = sp.linear_eq_to_matrix(f_sp, theta)
-A = sp.simplify(A)
-
-A_fcn = sp.lambdify([q_sp,v_sp,vd_sp],A)
-b_fcn = sp.lambdify([q_sp,v_sp,vd_sp],b)  # don't really need this: b is zero
-
-print("lambda function generation complete")
-
 # Load regression matrix from file
 # generate_regression_matrix.py must be run first
-with open("single_body_regression_matrix.pkl","rb") as in_file:
-    Y_fcn = cloudpickle.load(in_file)
+try:
+    with open("single_body_regression_matrix.pkl","rb") as in_file:
+        Y_fcn = cloudpickle.load(in_file)
+except FileNotFoundError:
+    print("Error: Need to run `generate_regression_matrix.py` first")
+    sys.exit(1)
 
 err = []
 for i in range(1,N):
@@ -221,19 +162,7 @@ for i in range(1,N):
     if np.all(vd_i == np.zeros(6)):
         vd_i = vd[:,i+1]
 
-    # Compute inverse dynamics (i.e. estimated applied spatial forces)
-    sym_plant.SetPositions(sym_context, q_i)
-    sym_plant.SetVelocities(sym_context, v_i)
-    f_ext = MultibodyForces_[Expression](sym_plant)
-    f_sym = sym_plant.CalcInverseDynamics(sym_context, vd_i, f_ext)
+    Y = Y_fcn(q_i, v_i, vd_i)
 
-    f_sp = drake_to_sympy(f_sym, sp_vars)
-    A, b = sp.linear_eq_to_matrix(f_sp, theta)
-
-    A = np.asarray(A, dtype=float)  # convert to numpy
-    b = -np.asarray(b, dtype=float).flatten()
-
-    print(A - A_fcn(q_i, v_i, vd_i))
-    print(A - Y_fcn(q_i, v_i, vd_i))
-    print("")
+    print(Y@theta_gt - f_i)
 
