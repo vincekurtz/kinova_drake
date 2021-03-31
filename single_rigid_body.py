@@ -192,39 +192,42 @@ f_sym = sym_plant.CalcInverseDynamics(sym_context, vd_sym, f_ext)
 
 f_sp = drake_to_sympy(f_sym, sp_vars)
 
-expr = f_sp
-A, b = sp.linear_eq_to_matrix(expr, theta)
+# Decompose applied forces into linear expression
+#   f = A*theta + b, 
+# and save lambda functions for A(q,v,vd) and b(q,v,vd).
+A, b = sp.linear_eq_to_matrix(f_sp, theta)
 
-print(A[0,1])
+A_fcn = sp.lambdify([q_sp,v_sp,vd_sp],A)
+b_fcn = sp.lambdify([q_sp,v_sp,vd_sp],b)
 
-A_fcn = sp.lambdify([q_sp,v_sp,vd_sp],A[0,1])
-print(A_fcn(q_sp,v_sp,vd_sp))
+print("lambda function generation complete")
 
 
+err = []
+for i in range(1,N):
+    # Double check our spatial dynamics computations with ground-truth values
+    f_i = f[:,i]
+    q_i = q[:,i]
+    vd_i = vd[:,i]
+    v_i = v[:,i]
 
-#err = []
-#for i in range(1,N):
-#    # Double check our spatial dynamics computations with ground-truth values
-#    f_i = f[:,i]
-#    q_i = q[:,i]
-#    vd_i = vd[:,i]
-#    v_i = v[:,i]
-#
-#    # fix acceleration computation
-#    if np.all(vd_i == np.zeros(6)):
-#        vd_i = vd[:,i+1]
-#
-#    # Compute inverse dynamics (i.e. estimated applied spatial forces)
-#    sym_plant.SetPositions(sym_context, q_i)
-#    sym_plant.SetVelocities(sym_context, v_i)
-#    f_ext = MultibodyForces_[Expression](sym_plant)
-#    f_sym = sym_plant.CalcInverseDynamics(sym_context, vd_i, f_ext)
-#
-#    f_sp = drake_to_sympy(f_sym, sp_vars)
-#    A, b = sp.linear_eq_to_matrix(f_sp, theta)
-#
-#    A = np.asarray(A, dtype=float)  # convert to numpy
-#    b = -np.asarray(b, dtype=float).flatten()
-#    print(A)
-#    print(b)
-#
+    # fix acceleration computation
+    if np.all(vd_i == np.zeros(6)):
+        vd_i = vd[:,i+1]
+
+    # Compute inverse dynamics (i.e. estimated applied spatial forces)
+    sym_plant.SetPositions(sym_context, q_i)
+    sym_plant.SetVelocities(sym_context, v_i)
+    f_ext = MultibodyForces_[Expression](sym_plant)
+    f_sym = sym_plant.CalcInverseDynamics(sym_context, vd_i, f_ext)
+
+    f_sp = drake_to_sympy(f_sym, sp_vars)
+    A, b = sp.linear_eq_to_matrix(f_sp, theta)
+
+    A = np.asarray(A, dtype=float)  # convert to numpy
+    b = -np.asarray(b, dtype=float).flatten()
+
+    print(A - A_fcn(q_i, v_i, vd_i))
+    print(b - b_fcn(q_i, v_i, vd_i))
+    print("")
+
