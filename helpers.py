@@ -1,6 +1,8 @@
 # Miscellaneous helper functions
 from pydrake.all import *
 import numpy as np
+from sympy.parsing.sympy_parser import parse_expr
+import sympy as sp
 
 def single_body_regression_matrix(a,v):
     """
@@ -192,6 +194,30 @@ def jacobian2(function, x):
 
     return np.vstack(yds).reshape(y_ad.shape + (-1,))
 
+def drake_to_sympy(v, sympy_vars):
+    """
+    Convert a vector v which contains Drake symbolic expressions to
+    an equivalent matrix with sympy symbolic expressions. This is a bit hacky,
+    but sympy provides better tools for processing symbolic expressions.
+    Note that this won't work if any of the Drake variables are VectorVariables.
+    E.g. h = [hx, hy, hz] works, but h = [h(0), h(1), h(2)] won't.
+    """
+    assert v.ndim == 1, "the vector v must be a 1d numpy array"
+
+    # Sympy allows us to do parsing based on strings, so we'll use
+    # the to_string() method of drake expressions generate such strings.
+    v_sympy = []
+    for row in v:
+        # evaluate=True does some initial simplifications
+        row_sp = parse_expr(str(row), local_dict=sympy_vars, evaluate=True)
+
+        # We need to expand to cancel out seemingly nonlinear terms
+        row_sp = sp.expand(row_sp)
+
+        v_sympy.append(row_sp)
+
+    return np.array(v_sympy)
+
 if __name__=="__main__":
     a = np.zeros(6)
     a[5] = 9.81
@@ -199,3 +225,4 @@ if __name__=="__main__":
 
     print(mbp_version(a,v))
     print(single_body_regression_matrix(a,v))
+

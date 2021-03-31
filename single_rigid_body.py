@@ -5,6 +5,7 @@
 
 from pydrake.all import *
 from helpers import *
+import sympy as sp
 
 # Parameters
 sim_time = 5
@@ -131,14 +132,40 @@ plant.SetVelocities(plant_context, peg, v0)
 simulator.Initialize()
 simulator.AdvanceTo(sim_time)
 
-# Process logged data
+# Extract logged data
 x = state_logger.data()
 q = x[:plant.num_positions(),:]
 v = x[plant.num_positions():,:]
 vd = (v[:,1:] - v[:,:-1])/dt
 f = ctrl_logger.data()
-
 N = vd.shape[1]
+
+# Create a symbolic plant
+sym_plant = plant.ToSymbolic()
+sym_context = sym_plant.CreateDefaultContext()
+sym_peg = sym_plant.GetBodyByName("base_link")
+
+# Set dynamics parameters as unknowns
+m = Variable("m")
+h = np.array([Variable("hx"), Variable("hy"), Variable("hz")])
+Ixx = Variable("Ixx")
+Iyy = Variable("Iyy")
+Izz = Variable("Izz")
+Ixy = Variable("Ixy")
+Ixz = Variable("Ixz")
+Iyz = Variable("Iyz")
+Ibar = UnitInertia_[Expression](Ixx, Iyy, Izz, Ixy, Ixz, Iyz)  # note: see ReExpress for changing frames
+I = SpatialInertia_[Expression](m, h/m, Ibar)
+sym_peg.SetSpatialInertiaInBodyFrame(sym_context, I)
+
+# Sympy versions of dynamics parameters
+m_sp, hx_sp, hy_sp, hz_sp = sp.symbols("m, hx, hy, hz")
+Ixx_sp, Iyy_sp, Izz_sp, Ixy_sp, Ixz_sp, Iyz_sp = \
+        sp.symbols("Ixx, Iyy, Izz, Ixy, Ixz, Iyz")
+sp_vars = {"m":m_sp, "hx":hx_sp, "hy":hy_sp, "hz":hz_sp,
+        "Ixx":Ixx_sp, "Iyy":Iyy_sp, "Izz":Izz_sp, 
+        "Ixy":Ixy_sp, "Ixz":Ixz_sp, "Iyz":Iyz_sp}
+theta = np.asarray([*sp_vars.values()])
 
 err = []
 for i in range(1,N):
@@ -153,13 +180,17 @@ for i in range(1,N):
         vd_i = vd[:,i+1]
 
     # Compute inverse dynamics (i.e. estimated applied spatial forces)
-    plant.SetPositions(plant_context, q_i)    # TODO: use symbolic plant
-    plant.SetVelocities(plant_context, v_i)
-    f_est = plant.CalcInverseDynamics(plant_context, vd_i, MultibodyForces(plant))
+    sym_plant.SetPositions(sym_context, q_i)
+    sym_plant.SetVelocities(sym_context, v_i)
+    f_ext = MultibodyForces_[Expression](sym_plant)
+    f_sym = sym_plant.CalcInverseDynamics(sym_context, vd_i, f_ext)
 
-    # Record error for plot
-    err.append( np.linalg.norm(f_i - f_est) )
+    f_sp = drake_to_sympy(f_sym, sp_vars)
+    print(f_sp)
+    A, b = sp.linear_eq_to_matrix(f_sp, theta)
 
-plt.plot(np.asarray(err))
-plt.show()
+
+    #print(f_sym)
+    #print(f_sp)
+
 
