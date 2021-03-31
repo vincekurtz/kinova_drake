@@ -54,12 +54,12 @@ class SpatialForceCtrl(LeafSystem):
 
     def CalcOutput(self, context, output):
         t = context.get_time()
-        tau = np.array([0.0,
+        tau = np.array([0.1,
                         0.0,
-                        0.0])
+                        0.2])
         f = np.array([0.0,
                       0.0,
-                      0.1])
+                      0.02])
 
         # Get current state of the object
         x = self.input_port.Eval(context)
@@ -139,104 +139,29 @@ vd = (v[:,1:] - v[:,:-1])/dt
 f = ctrl_logger.data()
 
 N = vd.shape[1]
-#Ys = []
-#Fs = []
 
-RHS = []
 err = []
-for i in range(N):
+for i in range(1,N):
     # Double check our spatial dynamics computations with ground-truth values
     f_i = f[:,i]
     q_i = q[:,i]
-    a_i = vd[:,i]
+    vd_i = vd[:,i]
     v_i = v[:,i]
 
-    # Get rid of weird numerics in accleration computations
-    if np.all(a_i == np.zeros(6)):
-        a_i = vd[:,i-1]
+    # fix acceleration computation
+    if np.all(vd_i == np.zeros(6)):
+        vd_i = vd[:,i+1]
 
-    # Transformation from world frame to B (body frame)
-    quat = q_i[:4] / np.linalg.norm(q_i[:4])   # normalize quaternion
-    r = q_i[4:]
-    R = RotationMatrix(Quaternion(quat)).matrix()
-    X_BW = np.block([[R,                -R@S(r)],
-                     [np.zeros((3,3)),    R    ]])
+    # Compute inverse dynamics (i.e. estimated applied spatial forces)
+    plant.SetPositions(plant_context, q_i)    # TODO: use symbolic plant
+    plant.SetVelocities(plant_context, v_i)
+    M = plant.CalcMassMatrixViaInverseDynamics(plant_context)
+    C = plant.CalcBiasTerm(plant_context)
+    f_est = M@vd_i + C
 
-    # Transformation from B (body frame) to CoM (center-of-mass frame)
-    p_CoMB_B = p_com  # vector from B frame to CoM frame, in B frame
-    X_CoMB = np.block([[ np.eye(3)        , -S(p_CoMB_B)],
-                       [ np.zeros((3,3,)) ,   np.eye(3) ]])
+    # Record error for plot
+    err.append( np.linalg.norm(f_i - f_est) )
 
+plt.plot(np.asarray(err))
+plt.show()
 
-    # Inertia matrix in world frame
-    p_CoMW = q_i[4:]
-    print(p_CoMW)
-
-
-    print(f_i)
-    print(a_i)
-    print(I_B@a_i)
-    print(I_CoM@a_i)
-    print(spatial_force_cross_product(v_i, I_B@v_i))
-    print(spatial_force_cross_product(v_i, I_CoM@v_i))
-    print("")
-
-    #Y, b = single_body_regression_matrix(vd[:,i],v[:,i])
-    #Ys.append(Y)
-    #Fs.append(f[:,i] - b)
-
-#rhs = np.asarray(RHS)
-
-#plt.plot(f.T)
-#plt.plot(v.T)
-#plt.plot(RHS)
-#plt.plot(err)
-#plt.show()
-
-#Y = np.vstack(Ys)
-#F = np.hstack(Fs)
-#
-#prog = MathematicalProgram()
-#theta = prog.NewContinuousVariables(10,1,"theta")
-#
-#m = theta[0]
-#h = theta[1:4]
-#I = np.array([[theta[4,0], theta[7,0], theta[8,0]],
-#              [theta[7,0], theta[5,0], theta[9,0]],
-#              [theta[8,0], theta[9,0], theta[6,0]]])
-#
-## min \| Y*theta - F\|^2
-#Q = Y.T@Y
-#b = -F.T@Y
-#prog.AddQuadraticCost(Q=Q,b=b,vars=theta)
-#
-## s.t. I > 0
-##prog.AddPositiveSemidefiniteConstraint(I)
-#
-## s.t. Pat's LMI realizability conditions
-#Sigma = 0.5*np.trace(I)*np.eye(3) - I
-#J = np.block([[ Sigma, h],
-#              [ h.T,   m]])
-#prog.AddPositiveSemidefiniteConstraint(J)
-#
-## s.t. Cheater constraints related to true values
-##prog.AddConstraint(m[0] == 0.1)
-##prog.AddConstraint(I[1,0] == 0)
-##prog.AddConstraint(I[2,0] == 0)
-##prog.AddConstraint(I[2,1] == 0)
-##prog.AddConstraint(I[0,0] <= 5e-4)
-##prog.AddConstraint(I[1,1] <= 5e-4)
-##prog.AddConstraint(I[2,2] <= 5e-4)
-#
-#res = Solve(prog)
-#theta_hat = res.GetSolution(theta)
-#
-#m_hat = theta_hat[0]     # mass
-#h_hat = theta_hat[1:4]  # mass*(position of CoM in end-effector frame)
-#I_hat = np.array([[theta_hat[4], theta_hat[7], theta_hat[8]],
-#                  [theta_hat[7], theta_hat[5], theta_hat[9]],
-#                  [theta_hat[8], theta_hat[9], theta_hat[6]]])
-#
-#print(m_hat)
-#print(h_hat)
-#print(I_hat)
