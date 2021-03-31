@@ -6,6 +6,7 @@
 from pydrake.all import *
 from helpers import *
 import sympy as sp
+import cloudpickle
 
 # Parameters
 sim_time = 5
@@ -196,12 +197,17 @@ f_sp = drake_to_sympy(f_sym, sp_vars)
 #   f = A*theta + b, 
 # and save lambda functions for A(q,v,vd) and b(q,v,vd).
 A, b = sp.linear_eq_to_matrix(f_sp, theta)
+A = sp.simplify(A)
 
 A_fcn = sp.lambdify([q_sp,v_sp,vd_sp],A)
-b_fcn = sp.lambdify([q_sp,v_sp,vd_sp],b)
+b_fcn = sp.lambdify([q_sp,v_sp,vd_sp],b)  # don't really need this: b is zero
 
 print("lambda function generation complete")
 
+# Load regression matrix from file
+# generate_regression_matrix.py must be run first
+with open("single_body_regression_matrix.pkl","rb") as in_file:
+    Y_fcn = cloudpickle.load(in_file)
 
 err = []
 for i in range(1,N):
@@ -228,6 +234,6 @@ for i in range(1,N):
     b = -np.asarray(b, dtype=float).flatten()
 
     print(A - A_fcn(q_i, v_i, vd_i))
-    print(b - b_fcn(q_i, v_i, vd_i))
+    print(A - Y_fcn(q_i, v_i, vd_i))
     print("")
 
