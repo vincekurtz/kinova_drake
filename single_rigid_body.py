@@ -155,9 +155,7 @@ for i in range(1,N):
     # Compute inverse dynamics (i.e. estimated applied spatial forces)
     plant.SetPositions(plant_context, q_i)    # TODO: use symbolic plant
     plant.SetVelocities(plant_context, v_i)
-    M = plant.CalcMassMatrixViaInverseDynamics(plant_context)
-    C = plant.CalcBiasTerm(plant_context)
-    f_est = M@vd_i + C
+    f_est = plant.CalcInverseDynamics(plant_context, vd_i, MultibodyForces(plant))
 
     # Record error for plot
     err.append( np.linalg.norm(f_i - f_est) )
