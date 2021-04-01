@@ -68,10 +68,13 @@ with KinovaStationHardwareInterface() as station:
             station.GetOutputPort("camera_transform"),
             point_cloud_generator.GetInputPort("camera_pose"))
 
-    # Send generated point cloud to the controller
+    # Send generated point cloud and camera transform to the controller
     builder.Connect(
             point_cloud_generator.point_cloud_output_port(),
             controller.GetInputPort("point_cloud"))
+    builder.Connect(
+            station.GetOutputPort("camera_transform"),
+            controller.GetInputPort("camera_transform"))
 
     # Connect meshcat visualizer
     #proc, zmq_url, web_url = start_zmq_server_as_subprocess()  # start meshcat from here
