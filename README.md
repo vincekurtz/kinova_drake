@@ -74,3 +74,8 @@ can be found in `examples/point_cloud_demo.py` (simulation) and `examples/point_
 We use a genetic algorithm and a simple geometric heuristic (described [here](http://manipulation.csail.mit.edu/clutter.html))
 to select a grasp location. 
 
+Note that you may need to start a meshcat server with, e.g., 
+
+```
+bazel run @meshcat_python//:meshcat-server
+```
