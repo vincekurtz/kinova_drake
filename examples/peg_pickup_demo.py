@@ -27,7 +27,7 @@ gripper_type = "hande"
 ########################################################################
 
 # Set up the kinova station
-station = KinovaStation(time_step=0.001)
+station = KinovaStation(time_step=0.002)
 station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False)
 station.Finalize()
 
@@ -95,7 +95,7 @@ station.SetManipulandStartPositions(diagram, diagram_context)
 
 # Set up simulation
 simulator = Simulator(diagram, diagram_context)
-simulator.set_target_realtime_rate(10.0)
+simulator.set_target_realtime_rate(1.0)
 simulator.set_publish_every_time_step(False)
 
 # Run simulation
