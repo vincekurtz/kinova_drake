@@ -245,7 +245,7 @@ class KinovaStation(Diagram):
         X_peg = RigidTransform()
         X_peg.set_translation(peg_position)
         X_peg.set_rotation(RotationMatrix(RollPitchYaw(peg_rotation)))
-        self.AddManipulandFromFile("./models/manipulands/peg.sdf", X_peg)
+        self.AddManipulandFromFile(package_dir + "/../models/manipulands/peg.sdf", X_peg)
 
         self.ConnectToDrakeVisualizer()
 
