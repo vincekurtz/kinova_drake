@@ -438,18 +438,12 @@ class KinovaStation(Diagram):
                                        scene_graph=self.scene_graph,
                                        params=visualizer_params)
 
-    def ConnectToMeshcatVisualizer(self, start_server=True):
-        if start_server:
+    def ConnectToMeshcatVisualizer(self, zmq_url=None):
+        if zmq_url is None:
             # Start meshcat server. This saves the step of opening meshcat separately,
             # but does mean you need to refresh the page each time you re-run something.
             from meshcat.servers.zmqserver import start_zmq_server_as_subprocess
             proc, zmq_url, web_url = start_zmq_server_as_subprocess()
-        else:
-            # Assume you've started a separate meshcat instance with, e.g.,
-            #
-            #   bazel run @meshcat_python//:meshcat-server
-            #
-            zmq_url = "tcp://127.0.0.1:6000"
 
         # Defining self.meshcat in this way allows us to connect to 
         # things like a point-cloud visualizer later
