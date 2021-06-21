@@ -3,6 +3,9 @@ from kinova_station.common import (EndEffectorTarget,
                                    GripperTarget, 
                                    EndEffectorWrenchCalculator,
                                    CameraPosePublisher)
+import os
+package_dir = os.path.dirname(os.path.abspath(__file__))
+
 class KinovaStation(Diagram):
     """
     A template system diagram for controlling a 7 DoF Kinova Gen3 robot, modeled 
@@ -274,9 +277,9 @@ class KinovaStation(Diagram):
         if include_damping:
             # The hardware system has lots of damping so this is more realistic,
             # but requires a simulation with small timesteps.
-            arm_urdf = "./models/gen3_7dof/urdf/GEN3_URDF_V12_with_damping.urdf"
+            arm_urdf = package_dir + "/../models/gen3_7dof/urdf/GEN3_URDF_V12_with_damping.urdf"
         else:
-            arm_urdf = "./models/gen3_7dof/urdf/GEN3_URDF_V12.urdf"
+            arm_urdf = package_dir + "/../models/gen3_7dof/urdf/GEN3_URDF_V12.urdf"
 
         self.arm = Parser(plant=self.plant).AddModelFromFile(arm_urdf, "arm")
         self.controller_arm = Parser(plant=self.controller_plant).AddModelFromFile(arm_urdf, "arm")
@@ -307,14 +310,14 @@ class KinovaStation(Diagram):
         self.gripper_type = "hande"
 
         # Add a gripper with actuation to the full simulated plant
-        gripper_urdf = "./models/hande_gripper/urdf/robotiq_hande.urdf"
+        gripper_urdf = package_dir + "/../models/hande_gripper/urdf/robotiq_hande.urdf"
         self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf,"gripper")
 
         self.plant.WeldFrames(self.plant.GetFrameByName("end_effector_link",self.arm),
                               self.plant.GetFrameByName("hande_base_link", self.gripper))
 
         # Add a gripper without actuation to the controller plant
-        gripper_static_urdf = "./models/hande_gripper/urdf/robotiq_hande_static.urdf"
+        gripper_static_urdf = package_dir + "/../models/hande_gripper/urdf/robotiq_hande_static.urdf"
         static_gripper = Parser(plant=self.controller_plant).AddModelFromFile(
                                                                 gripper_static_urdf,
                                                                 "gripper")
@@ -330,7 +333,7 @@ class KinovaStation(Diagram):
         self.gripper_type = "2f_85"
 
         # Add a gripper with actuation to the full simulated plant
-        gripper_urdf = "./models/2f_85_gripper/urdf/robotiq_2f_85.urdf"
+        gripper_urdf = package_dir + "/../models/2f_85_gripper/urdf/robotiq_2f_85.urdf"
         self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf,"gripper")
 
         X_grip = RigidTransform()
@@ -340,7 +343,7 @@ class KinovaStation(Diagram):
                               X_grip)
 
         # Add a gripper without actuation to the controller plant
-        gripper_static_urdf = "./models/2f_85_gripper/urdf/robotiq_2f_85_static.urdf"
+        gripper_static_urdf = package_dir + "/../models/2f_85_gripper/urdf/robotiq_2f_85_static.urdf"
         static_gripper = Parser(plant=self.controller_plant).AddModelFromFile(
                                                                 gripper_static_urdf,
                                                                 "gripper")
@@ -505,7 +508,7 @@ class GripperController(LeafSystem):
             # We'll create a simple model of the gripper which is welded to the floor. 
             # This will allow us to compute the distance between fingers.
             self.plant = MultibodyPlant(1.0)  # timestep doesn't matter
-            gripper_urdf = "./models/2f_85_gripper/urdf/robotiq_2f_85.urdf"
+            gripper_urdf = package_dir + "/../models/2f_85_gripper/urdf/robotiq_2f_85.urdf"
             self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf, "gripper")
             self.plant.WeldFrames(self.plant.world_frame(),
                                   self.plant.GetFrameByName("robotiq_arg2f_base_link",self.gripper))
