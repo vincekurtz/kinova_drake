@@ -255,10 +255,4 @@
         <joint name="Actuator6" />
         <actuator name="motor_6" />
     </transmission>
-    <transmission name="Actuator7_transmission" >
-        <type>transmission_interface/SimpleTransmission</type>
-        <joint name="Actuator7" />
-        <actuator name="motor_7" />
-    </transmission>
-
 </robot>
