@@ -100,6 +100,7 @@ class PointCloudController(CommandSequenceController):
                                                scene_graph=self.scene_graph,
                                                output_port=self.scene_graph.get_query_output_port(),
                                                prefix="candidate_grasp")
+            self.meshcat.vis.delete()  # clear the meshcat display
             self.meshcat.load()
         
         self.plant.Finalize()
