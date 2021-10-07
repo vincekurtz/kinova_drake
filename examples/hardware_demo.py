@@ -112,23 +112,23 @@ with KinovaStationHardwareInterface() as station:
             station.GetInputPort("gripper_target_type"))
 
     # Connect loggers to outputs
-    q_logger = LogOutput(station.GetOutputPort("measured_arm_position"), builder)
+    q_logger = LogVectorOutput(station.GetOutputPort("measured_arm_position"), builder)
     q_logger.set_name("arm_position_logger")
-    qd_logger = LogOutput(station.GetOutputPort("measured_arm_velocity"), builder)
+    qd_logger = LogVectorOutput(station.GetOutputPort("measured_arm_velocity"), builder)
     qd_logger.set_name("arm_velocity_logger")
-    tau_logger = LogOutput(station.GetOutputPort("measured_arm_torque"), builder)
+    tau_logger = LogVectorOutput(station.GetOutputPort("measured_arm_torque"), builder)
     tau_logger.set_name("arm_torque_logger")
 
-    pose_logger = LogOutput(station.GetOutputPort("measured_ee_pose"), builder)
+    pose_logger = LogVectorOutput(station.GetOutputPort("measured_ee_pose"), builder)
     pose_logger.set_name("pose_logger")
-    twist_logger = LogOutput(station.GetOutputPort("measured_ee_twist"), builder)
+    twist_logger = LogVectorOutput(station.GetOutputPort("measured_ee_twist"), builder)
     twist_logger.set_name("twist_logger")
-    wrench_logger = LogOutput(station.GetOutputPort("measured_ee_wrench"), builder)
+    wrench_logger = LogVectorOutput(station.GetOutputPort("measured_ee_wrench"), builder)
     wrench_logger.set_name("wrench_logger")
 
-    #gp_logger = LogOutput(station.GetOutputPort("measured_gripper_position"), builder)
+    #gp_logger = LogVectorOutput(station.GetOutputPort("measured_gripper_position"), builder)
     #gp_logger.set_name("gripper_position_logger")
-    #gv_logger = LogOutput(station.GetOutputPort("measured_gripper_velocity"), builder)
+    #gv_logger = LogVectorOutput(station.GetOutputPort("measured_gripper_velocity"), builder)
     #gv_logger.set_name("gripper_velocity_logger")
 
     # Build the system diagram

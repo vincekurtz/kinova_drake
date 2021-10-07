@@ -147,16 +147,16 @@ gripper_target_source.set_name("gripper_command_source")
 gripper_target_type_source.set_name("gripper_type_source")
 
 # Loggers force certain outputs to be computed
-wrench_logger = LogOutput(station.GetOutputPort("measured_ee_wrench"),builder)
+wrench_logger = LogVectorOutput(station.GetOutputPort("measured_ee_wrench"),builder)
 wrench_logger.set_name("wrench_logger")
 
-pose_logger = LogOutput(station.GetOutputPort("measured_ee_pose"), builder)
+pose_logger = LogVectorOutput(station.GetOutputPort("measured_ee_pose"), builder)
 pose_logger.set_name("pose_logger")
 
-twist_logger = LogOutput(station.GetOutputPort("measured_ee_twist"), builder)
+twist_logger = LogVectorOutput(station.GetOutputPort("measured_ee_twist"), builder)
 twist_logger.set_name("twist_logger")
 
-gripper_logger = LogOutput(station.GetOutputPort("measured_gripper_velocity"), builder)
+gripper_logger = LogVectorOutput(station.GetOutputPort("measured_gripper_velocity"), builder)
 gripper_logger.set_name("gripper_logger")
 
 if include_camera:

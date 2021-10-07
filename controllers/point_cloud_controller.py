@@ -287,13 +287,13 @@ class PointCloudController(CommandSequenceController):
         if query_object.HasCollisions():
             cost = np.inf
 
-        ## Penalize deviations from a nominal orientation
-        #rpy_nom = np.array([0.75, 0, 0.5])*np.pi
-        #R_nom = RotationMatrix(RollPitchYaw(rpy_nom))
-        #R_diff = R_WG.multiply(R_nom.transpose())
-        #theta = np.arccos( (np.trace(R_diff.matrix()) - 1)/2 )  # angle between current and desired rotation
+        # Penalize deviations from a nominal orientation
+        rpy_nom = np.array([0.75, 0, 0.5])*np.pi
+        R_nom = RotationMatrix(RollPitchYaw(rpy_nom))
+        R_diff = R_WG.multiply(R_nom.transpose())
+        theta = np.arccos( (np.trace(R_diff.matrix()) - 1)/2 )  # angle between current and desired rotation
 
-        #cost += 1*(theta**2)
+        cost += 1*(theta**2)
 
         # Visualize the candidate grasp point with meshcat
         if self.show_candidate_grasp:
@@ -341,6 +341,39 @@ class PointCloudController(CommandSequenceController):
             print("===> Failed to converge to an optimal grasp: retrying.")
             return self.FindGrasp()
 
+    def FindGraspSimple(self, N=50, seed=None):
+        """
+        Use a very simple grasp-search heursitic, where we simply
+        generate a bunch of semi-random grasps and pick the best one. 
+        """
+        print("===> Searching for a suitable grasp...")
+        assert self.merged_point_cloud is not None, "Merged point cloud must be created before finding a grasp"
+
+        # Generate several semi-random candidate grasps
+        np.random.seed(seed)
+        grasps = []
+        for i in range(N):
+            grasps.append(self.GenerateGraspCandidate())
+       
+        # Score each of them
+        scores = [self.ScoreGraspCandidate(grasp) for grasp in grasps]
+
+        # Pick the highest-scoring grasp
+        idx = np.argmin(scores)
+        best_grasp = grasps[idx]
+
+        # Score this grasp again. This forces meshcat to visualize this grasp
+        best_score = self.ScoreGraspCandidate(best_grasp)
+
+        if best_score < 0:
+            print("===> Found satisfying grasp with cost %s" % best_score)
+            return best_grasp
+        else:
+            print("===> Failed to find a satisfying grasp: retrying.")
+            return self.FindGraspSimple()
+
+        return best_grasp
+
     def CalcEndEffectorCommand(self, context, output):
         """
         Compute and send an end-effector twist command.
@@ -364,8 +397,8 @@ class PointCloudController(CommandSequenceController):
 
             self.merged_point_cloud = self.merged_point_cloud.voxel_down_sample(voxel_size=0.005)
             
-            # Find a collision-free grasp location using a genetic algorithm
-            grasp = self.FindGrasp()
+            # Find a collision-free grasp location
+            grasp = self.FindGraspSimple()
 
             # Modify the stored command sequence to pick up the object from this grasp location 
             self.AppendPickupToStoredCommandSequence(grasp)
