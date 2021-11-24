@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt  # DEBUG
 
 class KinovaStationHardwareInterface(LeafSystem):
     """
-    A system block for controlling a 7 DoF Kinova Gen3 robot, modeled 
+    A system block for controlling a 6 or 7 DoF Kinova Gen3 robot, modeled 
     after Drake's ManipulationStationHardwareInterface, but with the kinova 
     instead of a kuka arm.
    
@@ -66,9 +66,12 @@ class KinovaStationHardwareInterface(LeafSystem):
     by gripper_target_type. 
    
     """
-    def __init__(self):
+    def __init__(self,n_dof):
         LeafSystem.__init__(self) 
         self.set_name("kinova_hardware_interface")
+
+        # Save the number of degrees of freedom of the robot
+        self.n_dof = n_dof
 
         # Declare input ports
         self.ee_target_port = self.DeclareVectorInputPort(
@@ -88,15 +91,15 @@ class KinovaStationHardwareInterface(LeafSystem):
         # Declare output ports
         self.DeclareVectorOutputPort(
                 "measured_arm_position",
-                BasicVector(7),
+                BasicVector(self.n_dof),
                 self.CalcArmPosition)
         self.DeclareVectorOutputPort(
                 "measured_arm_velocity",
-                BasicVector(7),
+                BasicVector(self.n_dof),
                 self.CalcArmVelocity)
         self.DeclareVectorOutputPort(
                 "measured_arm_torque",
-                BasicVector(7),
+                BasicVector(self.n_dof),
                 self.CalcArmTorque)
 
         self.DeclareVectorOutputPort(
@@ -438,8 +441,8 @@ class KinovaStationHardwareInterface(LeafSystem):
         t = context.get_time()
         if (self.last_feedback_time != t): self.GetFeedback(t)
 
-        q = np.zeros(7)
-        for i in range(7):
+        q = np.zeros(self.n_dof)
+        for i in range(self.n_dof):
             q[i] = np.radians(self.feedback.actuators[i].position)  # Kortex provides joint angles
                                                                     # in degrees for some reason
         output.SetFromVector(q)
@@ -451,8 +454,8 @@ class KinovaStationHardwareInterface(LeafSystem):
         t = context.get_time()
         if (self.last_feedback_time != t): self.GetFeedback(t)
 
-        qd = np.zeros(7)
-        for i in range(7):
+        qd = np.zeros(self.n_dof)
+        for i in range(self.n_dof):
             qd[i] = np.radians(self.feedback.actuators[i].velocity)  # Kortex provides joint angles
                                                                      # in degrees for some reason
         output.SetFromVector(qd)
@@ -464,8 +467,8 @@ class KinovaStationHardwareInterface(LeafSystem):
         t = context.get_time()
         if (self.last_feedback_time != t): self.GetFeedback(t)
 
-        tau = np.zeros(7)
-        for i in range(7):
+        tau = np.zeros(self.n_dof)
+        for i in range(self.n_dof):
             tau[i] = np.radians(self.feedback.actuators[i].torque)  # in Nm
 
         output.SetFromVector(tau)
