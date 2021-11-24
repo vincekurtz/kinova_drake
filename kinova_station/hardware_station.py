@@ -31,7 +31,7 @@ import matplotlib.pyplot as plt  # DEBUG
 
 class KinovaStationHardwareInterface(LeafSystem):
     """
-    A system block for controlling a 7 DoF Kinova Gen3 robot, modeled 
+    A system block for controlling a 6 or 7 DoF Kinova Gen3 robot, modeled 
     after Drake's ManipulationStationHardwareInterface, but with the kinova 
     instead of a kuka arm.
    
@@ -70,6 +70,9 @@ class KinovaStationHardwareInterface(LeafSystem):
         LeafSystem.__init__(self) 
         self.set_name("kinova_hardware_interface")
 
+        # Identify the Number of Joints
+        self.num_joints = self.FindNumberOfRobotJoints()
+
         # Declare input ports
         self.ee_target_port = self.DeclareVectorInputPort(
                                         "ee_target",
@@ -88,15 +91,15 @@ class KinovaStationHardwareInterface(LeafSystem):
         # Declare output ports
         self.DeclareVectorOutputPort(
                 "measured_arm_position",
-                BasicVector(7),
+                BasicVector(self.num_joints),
                 self.CalcArmPosition)
         self.DeclareVectorOutputPort(
                 "measured_arm_velocity",
-                BasicVector(7),
+                BasicVector(self.num_joints),
                 self.CalcArmVelocity)
         self.DeclareVectorOutputPort(
                 "measured_arm_torque",
-                BasicVector(7),
+                BasicVector(self.num_joints),
                 self.CalcArmTorque)
 
         self.DeclareVectorOutputPort(
@@ -210,6 +213,11 @@ class KinovaStationHardwareInterface(LeafSystem):
         # Set up the color image pipeline using OpenCV
         color_command = 'rtspsrc location=rtsp://192.168.1.10/color latency=30 ! rtph264depay ! avdec_h264 ! videoconvert ! appsink drop=true max-buffers=2'
         self.color_stream = cv2.VideoCapture(color_command)
+        if (self.color_stream.isOpened()== False):
+            print("ERROR: Error opening video stream for Gen3 Camera.")
+            # While it might be nice to immediately stop when this is the case,
+            # we allow the user to potentially control the joints of the robot with no visual image.
+            # sys.exit(0)
 
         # DEBUG: set color and depth image sizes
         #device_manager = DeviceManagerClient(self.router)
@@ -438,8 +446,8 @@ class KinovaStationHardwareInterface(LeafSystem):
         t = context.get_time()
         if (self.last_feedback_time != t): self.GetFeedback(t)
 
-        q = np.zeros(7)
-        for i in range(7):
+        q = np.zeros(self.num_joints)
+        for i in range(self.num_joints):
             q[i] = np.radians(self.feedback.actuators[i].position)  # Kortex provides joint angles
                                                                     # in degrees for some reason
         output.SetFromVector(q)
@@ -451,8 +459,8 @@ class KinovaStationHardwareInterface(LeafSystem):
         t = context.get_time()
         if (self.last_feedback_time != t): self.GetFeedback(t)
 
-        qd = np.zeros(7)
-        for i in range(7):
+        qd = np.zeros(self.num_joints)
+        for i in range(self.num_joints):
             qd[i] = np.radians(self.feedback.actuators[i].velocity)  # Kortex provides joint angles
                                                                      # in degrees for some reason
         output.SetFromVector(qd)
@@ -464,8 +472,8 @@ class KinovaStationHardwareInterface(LeafSystem):
         t = context.get_time()
         if (self.last_feedback_time != t): self.GetFeedback(t)
 
-        tau = np.zeros(7)
-        for i in range(7):
+        tau = np.zeros(self.num_joints)
+        for i in range(self.num_joints):
             tau[i] = np.radians(self.feedback.actuators[i].torque)  # in Nm
 
         output.SetFromVector(tau)
@@ -674,3 +682,51 @@ class KinovaStationHardwareInterface(LeafSystem):
             raise RuntimeError("Invalid end-effector target type %s" % ee_target_type)
 
 
+    def FindNumberOfRobotJoints(self):
+        '''
+        This function creates all required objects and connections to use the arm's services.
+        It is easier to use the DeviceConnection utility class to create the router and then 
+        create the services you need (as done in the other examples).
+        However, if you want to create all objects yourself, this function tells you how to do it.
+        '''
+
+        # Constants
+        PORT = 10000
+        username0   = "admin"
+        pw0         = "admin"
+        ip0         = '192.168.1.10'
+
+        # Setup API
+        error_callback = lambda kException: print("_________ callback error _________ {}".format(kException))
+        transport = TCPTransport()
+        router = RouterClient(transport, error_callback)
+        transport.connect(ip0, PORT)
+
+        # Create session
+        session_info = Session_pb2.CreateSessionInfo()
+        session_info.username = username0
+        session_info.password = pw0
+        session_info.session_inactivity_timeout = 60000   # (milliseconds)
+        session_info.connection_inactivity_timeout = 2000 # (milliseconds)
+
+        # print("Creating session for communication")
+        session_manager = SessionManager(router)
+        session_manager.CreateSession(session_info)
+        # print("Session created")
+
+        # Create required services
+        base = BaseClient(router)
+
+        # print(base.GetArmState())
+
+        gmja_out = base.GetMeasuredJointAngles()
+        num_joints = len(gmja_out.joint_angles)
+        print("There are " + str(num_joints) + " joints on this robot!")
+
+        # Close API session
+        session_manager.CloseSession()
+
+        # Disconnect from the transport object
+        transport.disconnect()
+
+        return num_joints
