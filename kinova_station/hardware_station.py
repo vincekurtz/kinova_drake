@@ -66,7 +66,7 @@ class KinovaStationHardwareInterface(LeafSystem):
     by gripper_target_type. 
    
     """
-    def __init__(self,n_dof):
+    def __init__(self, n_dof=7):
         LeafSystem.__init__(self) 
         self.set_name("kinova_hardware_interface")
 
