@@ -27,7 +27,7 @@ gripper_type = "hande"
 ########################################################################
 
 # Set up the kinova station
-station = KinovaStation(time_step=0.002)
+station = KinovaStation(time_step=0.002, n_dof=7)
 station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False, peg_position=[0.7,-0.05,0.1])
 station.AddCamera()
 station.ConnectToMeshcatVisualizer(zmq_url="tcp://127.0.0.1:6000")

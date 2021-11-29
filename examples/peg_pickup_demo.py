@@ -27,7 +27,7 @@ gripper_type = "hande"
 ########################################################################
 
 # Set up the kinova station
-station = KinovaStation(time_step=0.002)
+station = KinovaStation(time_step=0.002, n_dof=7)
 station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False)
 station.Finalize()
 

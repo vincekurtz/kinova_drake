@@ -8,7 +8,7 @@ package_dir = os.path.dirname(os.path.abspath(__file__))
 
 class KinovaStation(Diagram):
     """
-    A template system diagram for controlling a 7 DoF Kinova Gen3 robot, modeled 
+    A template system diagram for controlling a 6 or 7 DoF Kinova Gen3 robot, modeled 
     after Drake's ManipulationStation, but with the kinova instead of a kuka arm.
    
                                ---------------------------------
@@ -42,7 +42,7 @@ class KinovaStation(Diagram):
     by gripper_target_type. 
    
     """
-    def __init__(self, time_step=0.002):
+    def __init__(self, time_step=0.002, n_dof=7):
         Diagram.__init__(self)
         self.set_name("kinova_manipulation_station")
 
@@ -54,6 +54,10 @@ class KinovaStation(Diagram):
         self.plant = self.builder.AddSystem(MultibodyPlant(time_step=time_step))
         self.plant.RegisterAsSourceForSceneGraph(self.scene_graph)
         self.plant.set_name("plant")
+
+        # Number of degrees of freedom must be 6 or 7. Default is 7.
+        assert n_dof == 6 or n_dof == 7, "n_dof must be 6 or 7"
+        self.n_dof = n_dof
 
         # A separate plant which only has access to the robot arm + gripper mass,
         # and not any other objects in the scene
@@ -272,14 +276,20 @@ class KinovaStation(Diagram):
 
     def AddArm(self, include_damping=False):
         """
-        Add the 7-dof gen3 arm to the system.
+        Add the gen3 arm to the system.
         """
-        if include_damping:
-            # The hardware system has lots of damping so this is more realistic,
-            # but requires a simulation with small timesteps.
-            arm_urdf = package_dir + "/../models/gen3_7dof/urdf/GEN3_URDF_V12_with_damping.urdf"
-        else:
-            arm_urdf = package_dir + "/../models/gen3_7dof/urdf/GEN3_URDF_V12.urdf"
+        if self.n_dof == 7:
+            if include_damping:
+                # The hardware system has lots of damping so this is more realistic,
+                # but requires a simulation with small timesteps.
+                arm_urdf = package_dir + "/../models/gen3_7dof/urdf/GEN3_URDF_V12_with_damping.urdf"
+            else:
+                arm_urdf = package_dir + "/../models/gen3_7dof/urdf/GEN3_URDF_V12.urdf"
+        elif self.n_dof == 6:
+            if include_damping:
+                raise ValueError("damping not yet supported for 6-DoF model")
+            else:
+                arm_urdf = package_dir + "/../models/gen3_6dof/urdf/GEN3-6DOF.urdf"
 
         self.arm = Parser(plant=self.plant).AddModelFromFile(arm_urdf, "arm")
         self.controller_arm = Parser(plant=self.controller_plant).AddModelFromFile(arm_urdf, "arm")
@@ -385,14 +395,14 @@ class KinovaStation(Diagram):
         
     def AddArmWithHandeGripper(self, arm_damping=False):
         """
-        Add the 7-dof arm and a model of the hande gripper to the system.
+        Add the arm and a model of the hande gripper to the system.
         """
         self.AddArm(include_damping=arm_damping)
         self.AddHandeGripper()
     
     def AddArmWith2f85Gripper(self, arm_damping=False):
         """
-        Add the 7-dof arm and a model of the 2F-85 gripper to the system.
+        Add the arm and a model of the 2F-85 gripper to the system.
         """
         self.AddArm(include_damping=arm_damping)
         self.Add2f85Gripper()
@@ -457,18 +467,27 @@ class KinovaStation(Diagram):
         Move the arm to the specified home position. Must be one of
         'Home', 'Retract', or 'Zero'.
         """
-        if name == "Home":
-            q0 = np.array([0, np.pi/12, np.pi, 4.014-2*np.pi, 0, 0.9599, np.pi/2])
-        elif name == "Retract":
-            q0 = np.array([0, 5.93-2*np.pi, np.pi, 3.734-2*np.pi, 0, 5.408-2*np.pi, np.pi/2])
-        elif name == "Zero":
-            q0 = np.zeros(7)
-        else:
-            raise RuntimeError("Home position name must be one of ['Home', 'Retract', 'Zero']")
+        if self.n_dof == 7:
+            if name == "Home":
+                q0 = np.array([0, np.pi/12, np.pi, 4.014-2*np.pi, 0, 0.9599, np.pi/2])
+            elif name == "Retract":
+                q0 = np.array([0, 5.93-2*np.pi, np.pi, 3.734-2*np.pi, 0, 5.408-2*np.pi, np.pi/2])
+            elif name == "Zero":
+                q0 = np.zeros(7)
+            else:
+                raise RuntimeError("Home position name must be one of ['Home', 'Retract', 'Zero']")
+
+        if self.n_dof == 6:
+            if name == "Home":
+                q0 = np.array([0, np.pi/12, 4.014-2*np.pi, 0, 0.9599, np.pi/2])
+            elif name == "Retract":
+                q0 = np.array([0, 5.93-2*np.pi, 3.734-2*np.pi, 0, 5.408-2*np.pi, np.pi/2])
+            elif name == "Zero":
+                q0 = np.zeros(6)
+            else:
+                raise RuntimeError("Home position name must be one of ['Home', 'Retract', 'Zero']")
 
         self.SetArmPositions(diagram, diagram_context, q0)
-
-
 
 class GripperController(LeafSystem):
     """
@@ -876,10 +895,10 @@ class CartesianController(LeafSystem):
                 qd_nom = result.joint_velocities
             else:
                 print("Differential inverse kinematics failed!")
-                qd_nom = np.zeros(7)
+                qd_nom = np.zeros(self.plant.num_velocities())
 
             # Select desired accelerations using a proportional controller
-            Kp = 10*np.eye(7)
+            Kp = 10*np.eye(self.plant.num_velocities())
             qdd_nom = Kp@(qd_nom - qd)
 
             # Compute joint torques consistent with these desired accelerations
@@ -919,7 +938,7 @@ class CartesianController(LeafSystem):
 
                 if not result.is_success():
                     print("Inverse Kinematics Failed!")
-                    q_nom = np.zeros(7)
+                    q_nom = np.zeros(self.plant.num_positions())
                 else:
                     q_nom = result.GetSolution(q_var)
 
@@ -930,10 +949,10 @@ class CartesianController(LeafSystem):
             else:
                 q_nom = self.last_q_target
 
-            qd_nom = np.zeros(7)
+            qd_nom = np.zeros(self.plant.num_velocities())
 
             # Use PD controller to map desired q, qd to desired qdd
-            Kp = 1*np.eye(7)
+            Kp = 1*np.eye(self.plant.num_positions())
             Kd = 2*np.sqrt(Kp)  # critical damping
             qdd_nom = Kp@(q_nom - q) + Kd@(qd_nom - qd)
 

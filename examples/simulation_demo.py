@@ -74,7 +74,7 @@ gripper_type = "hande"
 ########################################################################
 
 # Set up the kinova station
-station = KinovaStation(time_step=0.002)
+station = KinovaStation(time_step=0.002, n_dof=7)
 station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False)
 if include_camera:
     station.AddCamera(show_window=show_camera_window)
@@ -206,8 +206,6 @@ if show_toplevel_diagram:
 
 if simulate:
     # Set default arm positions
-    #q0 = np.array([0.0, -np.pi/5, np.pi, -0.8*np.pi, np.pi, 0.2*np.pi, 0.5*np.pi])  # to point camera at the peg
-    #station.SetArmPositions(diagram, diagram_context, q0)
     station.go_home(diagram, diagram_context, name="Home")
 
     # Set starting position for any objects in the scene
