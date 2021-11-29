@@ -17,6 +17,9 @@ from controllers import CommandSequenceController, CommandSequence, Command
 # Make a plot of the inner workings of the station
 show_station_diagram = False
 
+# Number of DoF should be known for your robot (there are 6 and 7-DoF Versions of the Gen3)
+n_dof = 7
+
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
 show_toplevel_diagram = False
@@ -27,7 +30,7 @@ gripper_type = "hande"
 ########################################################################
 
 # Set up the kinova station
-with KinovaStationHardwareInterface() as station:
+with KinovaStationHardwareInterface(n_dof) as station:
 
     if show_station_diagram:
         # Show the station's system diagram

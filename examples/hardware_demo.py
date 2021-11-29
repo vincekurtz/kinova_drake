@@ -48,6 +48,9 @@ from kinova_station import KinovaStationHardwareInterface, EndEffectorTarget, Gr
 # Make a plot of the system diagram for this example
 show_toplevel_diagram = False
 
+# Number of DoF should be known for your robot (there are 6 and 7-DoF Versions of the Gen3)
+n_dof = 7
+
 # Run the example
 run = True
 
@@ -63,7 +66,7 @@ gripper_command_type = GripperTarget.kVelocity  # kPosition or kVelocity
 # handling, since the connection with the hardware needs to be closed 
 # properly even if there is an error (e.g. KeyboardInterrupt) during
 # execution.
-with KinovaStationHardwareInterface() as station:
+with KinovaStationHardwareInterface(n_dof) as station:
    
     # Set up the diagram builder
     builder = DiagramBuilder()
