@@ -78,7 +78,7 @@ class EndEffectorWrenchCalculator(LeafSystem):
 
         # Compute jacobian pseudoinverse
         Minv = np.linalg.inv(M)
-        Lambda = np.linalg.inv(J@Minv@J.T)
+        Lambda = np.linalg.pinv(J@Minv@J.T)
         Jbar = Lambda@J@Minv
 
         # Compute wrench (spatial force) applied at end-effector
