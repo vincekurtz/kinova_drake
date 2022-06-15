@@ -1,4 +1,5 @@
-<robot name="GEN3-6DOF_VISION_URDF_ARM_V01" version="1.0">
+<?xml version="1.0"?>
+<robot name="GEN3-6DOF_VISION_URDF_ARM_V01">
   <link name="base_link">
     <inertial>
       <origin xyz="-0.000648 -0.000166 0.084487" rpy="0 0 0" />

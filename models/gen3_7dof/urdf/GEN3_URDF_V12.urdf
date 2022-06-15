@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<robot name="GEN3_URDF_V12" version="1.0">
+<robot name="GEN3_URDF_V12">
     <link name="base_link">
         <inertial>
             <origin xyz="-0.000648 -0.000166 0.084487" rpy="0 0 0" />
