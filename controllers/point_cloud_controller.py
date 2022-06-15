@@ -12,7 +12,6 @@ class PointCloudController(CommandSequenceController):
     def __init__(self, start_sequence=None, 
                        command_type=EndEffectorTarget.kTwist, 
                        Kp=10*np.eye(6), Kd=2*np.sqrt(10)*np.eye(6),
-                       show_candidate_grasp=False,
                        hardware=False):
         """
         Parameters:
@@ -23,9 +22,6 @@ class PointCloudController(CommandSequenceController):
             command_type         : the type of command that we'll send (kTwist or kWrench)
 
             Kp/Kd                : PD gains
-
-            show_candidate_grasp : whether or not to display candidate grasps over meshcat each
-                                   time the grasp cost function is evaluated. 
 
             hardware             : whether we're applying this on hardware (simulation default)
         """
@@ -92,17 +88,6 @@ class PointCloudController(CommandSequenceController):
                 "ground_collision",
                 CoulombFriction())
 
-        # Connect to meshcat so we can show this floating gripper
-        self.show_candidate_grasp = show_candidate_grasp
-        if self.show_candidate_grasp:
-            self.meshcat = ConnectMeshcatVisualizer(builder=builder, 
-                                               zmq_url="tcp://127.0.0.1:6000",
-                                               scene_graph=self.scene_graph,
-                                               output_port=self.scene_graph.get_query_output_port(),
-                                               prefix="candidate_grasp")
-            self.meshcat.vis.delete()  # clear the meshcat display
-            self.meshcat.load()
-        
         self.plant.Finalize()
         self.diagram = builder.Build()
         self.diagram_context = self.diagram.CreateDefaultContext()
@@ -295,19 +280,6 @@ class PointCloudController(CommandSequenceController):
 
         cost += 1*(theta**2)
 
-        # Visualize the candidate grasp point with meshcat
-        if self.show_candidate_grasp:
-
-            # Draw the point cloud 
-            v = self.meshcat.vis["merged_point_cloud"]
-            draw_open3d_point_cloud(v, cloud, normals_scale=0.01)
-
-            # Highlight the points on the point cloud that are between the
-            # grippers
-            v = self.meshcat.vis["grip_location"]
-            p_WC_between = X_WG.multiply(p_GC_between)
-            draw_points(v, p_WC_between, [1.,0.,0.], size=0.01)  # Red points
-       
         return cost
 
     def FindGrasp(self, seed=None):
@@ -361,9 +333,7 @@ class PointCloudController(CommandSequenceController):
         # Pick the highest-scoring grasp
         idx = np.argmin(scores)
         best_grasp = grasps[idx]
-
-        # Score this grasp again. This forces meshcat to visualize this grasp
-        best_score = self.ScoreGraspCandidate(best_grasp)
+        best_score = scores[idx]
 
         if best_score < 0:
             print("===> Found satisfying grasp with cost %s" % best_score)
