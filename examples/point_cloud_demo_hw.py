@@ -13,8 +13,6 @@ import matplotlib.pyplot as plt
 from kinova_station import KinovaStationHardwareInterface, EndEffectorTarget
 from controllers import CommandSequenceController, CommandSequence, Command, PointCloudController
 
-from meshcat.servers.zmqserver import start_zmq_server_as_subprocess
-
 ########################### Parameters #################################
 
 # Make a plot of the inner workings of the station
@@ -48,7 +46,6 @@ with KinovaStationHardwareInterface(n_dof) as station:
 
     controller = builder.AddSystem(PointCloudController(
         command_type=EndEffectorTarget.kWrench,  # wrench commands work best on hardware
-        show_candidate_grasp=True,
         hardware=True,
         Kp=Kp,
         Kd=Kd))
@@ -80,22 +77,18 @@ with KinovaStationHardwareInterface(n_dof) as station:
             controller.GetInputPort("camera_transform"))
 
     # Connect meshcat visualizer
-    #proc, zmq_url, web_url = start_zmq_server_as_subprocess()  # start meshcat from here
-    # Alternative: start meshcat (in drake dir) with bazel run @meshcat_python//:meshcat-server
-    zmq_url = "tcp://127.0.0.1:6000"
-
-    meshcat = ConnectMeshcatVisualizer(
-            builder=builder, 
-            scene_graph=scene_graph,
-            zmq_url=zmq_url)
+    meshcat = Meshcat()
+    mcpp = MeshcatVisualizerCpp(meshcat)
+    mcpp.AddToBuilder(builder, scene_graph, meshcat)
 
     meshcat_point_cloud = builder.AddSystem(MeshcatPointCloudVisualizer(
                                                 meshcat,
-                                                draw_period=0.2))
+                                                "point_cloud",
+                                                0.2))
     meshcat_point_cloud.set_name("point_cloud_viz")
     builder.Connect(
             point_cloud_generator.point_cloud_output_port(),
-            meshcat_point_cloud.get_input_port())
+            meshcat_point_cloud.cloud_input_port())
 
     # Build the system diagram
     diagram = builder.Build()

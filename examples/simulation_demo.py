@@ -79,6 +79,7 @@ station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False)
 if include_camera:
     station.AddCamera(show_window=show_camera_window)
     station.ConnectToMeshcatVisualizer()
+
 station.Finalize()
 
 if show_station_diagram:
@@ -175,7 +176,7 @@ if include_camera:
     # Convert the depth image to a point cloud
     point_cloud_generator = builder.AddSystem(DepthImageToPointCloud(
                                         CameraInfo(width=480, height=270, fov_y=np.radians(40)),
-                                        pixel_type=PixelType.kDepth32F))
+                                        fields=BaseField.kXYZs | BaseField.kRGBs))
     point_cloud_generator.set_name("point_cloud_generator")
     builder.Connect(
             station.GetOutputPort("camera_depth_image"),
@@ -187,11 +188,12 @@ if include_camera:
             point_cloud_generator.GetInputPort("camera_pose"))
 
     # Visualize the point cloud with meshcat
-    meshcat_point_cloud = builder.AddSystem(MeshcatPointCloudVisualizer(station.meshcat))
+    meshcat_point_cloud = builder.AddSystem(
+            MeshcatPointCloudVisualizer(station.meshcat, "point_cloud", 0.2))
     meshcat_point_cloud.set_name("point_cloud_viz")
     builder.Connect(
             point_cloud_generator.point_cloud_output_port(),
-            meshcat_point_cloud.get_input_port())
+            meshcat_point_cloud.cloud_input_port())
 
 # Build the system diagram
 diagram = builder.Build()

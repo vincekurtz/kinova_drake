@@ -10,7 +10,6 @@ Code for controlling a Kinova Gen3 Manipulator via Drake.
 
 - OpenCV
 - [Drake](https://drake.mit.edu/)
-- [Meshcat](https://github.com/rdeits/meshcat) visualizer
 - [Open3d](http://www.open3d.org/docs/latest/introduction.html) point cloud library
 - matplotlib
 - numpy
@@ -71,8 +70,6 @@ Examples of using the robot's depth camera to pick up an object at an a-priori u
 can be found in `examples/point_cloud_demo.py` (simulation) and `examples/point_cloud_demo_hw.py` 
 (hardware). 
 
-We use a genetic algorithm and a simple geometric heuristic (described [here](http://manipulation.csail.mit.edu/clutter.html))
+We use a simple geometric heuristic (described [here](http://manipulation.csail.mit.edu/clutter.html))
 to select a grasp location. 
 
-Note that you need to run a meshcat server before running the point cloud example. This is as simple as
-running `meshcat-server` in a terminal, assuming `drake/bin` has been added to the `$PATH`.

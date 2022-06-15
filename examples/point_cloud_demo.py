@@ -30,7 +30,7 @@ gripper_type = "hande"
 station = KinovaStation(time_step=0.002, n_dof=7)
 station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False, peg_position=[0.7,-0.05,0.1])
 station.AddCamera()
-station.ConnectToMeshcatVisualizer(zmq_url="tcp://127.0.0.1:6000")
+station.ConnectToMeshcatVisualizer()
 station.Finalize()
 
 if show_station_diagram:
@@ -43,7 +43,7 @@ builder = DiagramBuilder()
 builder.AddSystem(station)
 
 # Add the controller
-controller = builder.AddSystem(PointCloudController(show_candidate_grasp=True))
+controller = builder.AddSystem(PointCloudController())
 controller.set_name("controller")
 controller.ConnectToStation(builder, station)
 
@@ -76,11 +76,12 @@ builder.Connect(
 # Visualize the point cloud with meshcat
 meshcat_point_cloud = builder.AddSystem(MeshcatPointCloudVisualizer(
                                             station.meshcat,
-                                            draw_period=0.2))
+                                            "point_cloud",
+                                            0.2))
 meshcat_point_cloud.set_name("point_cloud_viz")
 builder.Connect(
         point_cloud_generator.point_cloud_output_port(),
-        meshcat_point_cloud.get_input_port())
+        meshcat_point_cloud.cloud_input_port())
 
 # Build the system diagram
 diagram = builder.Build()
