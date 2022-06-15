@@ -448,19 +448,12 @@ class KinovaStation(Diagram):
                                        scene_graph=self.scene_graph,
                                        params=visualizer_params)
 
-    def ConnectToMeshcatVisualizer(self, zmq_url=None):
-        if zmq_url is None:
-            # Start meshcat server. This saves the step of opening meshcat separately,
-            # but does mean you need to refresh the page each time you re-run something.
-            from meshcat.servers.zmqserver import start_zmq_server_as_subprocess
-            proc, zmq_url, web_url = start_zmq_server_as_subprocess()
+    def ConnectToMeshcatVisualizer(self, port=None):
+        self.meshcat = Meshcat(port)
+        mcpp = MeshcatVisualizerCpp(self.meshcat)
+        mcpp.AddToBuilder(self.builder, self.scene_graph, self.meshcat)
 
-        # Defining self.meshcat in this way allows us to connect to 
-        # things like a point-cloud visualizer later
-        self.meshcat = ConnectMeshcatVisualizer(builder=self.builder,
-                                 zmq_url = zmq_url,
-                                 scene_graph=self.scene_graph,
-                                 output_port=self.scene_graph.get_query_output_port())
+        print("Open %s in a browser to view the meshcat visualizer." % self.meshcat.web_url())
 
     def go_home(self, diagram, diagram_context, name="Home"):
         """
