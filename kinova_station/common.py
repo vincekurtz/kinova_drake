@@ -3,7 +3,6 @@
 from pydrake.all import *
 import numpy as np
 from enum import Enum
-import meshcat.geometry as g
 
 class EndEffectorTarget(Enum):
     kPose = 1
