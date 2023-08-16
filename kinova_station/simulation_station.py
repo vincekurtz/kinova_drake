@@ -874,7 +874,7 @@ class CartesianController(LeafSystem):
             # Use DoDifferentialInverseKinematics to determine desired qd
             params = DifferentialInverseKinematicsParameters(self.plant.num_positions(),
                                                              self.plant.num_velocities())
-            params.set_timestep(0.005)
+            params.set_time_step(0.005)
             params.set_joint_velocity_limits((self.qd_min, self.qd_max))
             params.set_joint_position_limits((self.q_min, self.q_max))
 
