@@ -450,7 +450,7 @@ class KinovaStation(Diagram):
 
     def ConnectToMeshcatVisualizer(self, port=None):
         self.meshcat = Meshcat(port)
-        mcpp = MeshcatVisualizerCpp(self.meshcat)
+        mcpp = MeshcatVisualizer(self.meshcat)
         mcpp.AddToBuilder(self.builder, self.scene_graph, self.meshcat)
 
         print("Open %s in a browser to view the meshcat visualizer." % self.meshcat.web_url())

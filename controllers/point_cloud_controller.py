@@ -256,7 +256,7 @@ class PointCloudController(CommandSequenceController):
         cost -= np.sum(n_GC_between[0,:]**2)
 
         # Penalize collisions between the point cloud and the gripper
-        self.diagram.Publish(self.diagram_context)   # updates scene_graph_context
+        self.diagram.ForcedPublish(self.diagram_context)   # updates scene_graph_context
         query_object = self.scene_graph.get_query_output_port().Eval(self.scene_graph_context)
 
         for pt in cloud.points:
