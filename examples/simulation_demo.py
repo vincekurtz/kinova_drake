@@ -43,8 +43,8 @@ from pydrake.all import *
 import numpy as np
 import matplotlib.pyplot as plt
 
-from kinova_station import KinovaStation, EndEffectorTarget, GripperTarget
-from observers.camera_viewer import CameraViewer
+from kinova_drake.kinova_station import KinovaStation, EndEffectorTarget, GripperTarget
+from kinova_drake.observers.camera_viewer import CameraViewer
 
 ########################### Parameters #################################
 

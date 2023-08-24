@@ -4,13 +4,12 @@
 # at an a-priori known location. Runs in simulation.
 #
 ##
-
 from pydrake.all import *
 import numpy as np
 import matplotlib.pyplot as plt
 
-from kinova_station import KinovaStation, EndEffectorTarget, GripperTarget
-from controllers import CommandSequenceController, CommandSequence, Command
+from kinova_drake.kinova_station import KinovaStation, EndEffectorTarget
+from kinova_drake.controllers import CommandSequenceController, CommandSequence, Command
 
 ########################### Parameters #################################
 
@@ -28,6 +27,7 @@ gripper_type = "hande"
 
 # Set up the kinova station
 station = KinovaStation(time_step=0.002, n_dof=7)
+
 station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False)
 station.Finalize()
 

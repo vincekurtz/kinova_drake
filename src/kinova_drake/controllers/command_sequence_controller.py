@@ -1,6 +1,8 @@
-from kinova_station import EndEffectorTarget
-from controllers.basic_controller import *
-from controllers.command_sequence import *
+import numpy as np
+
+from .basic_controller import BasicController
+from ..kinova_station import EndEffectorTarget
+
 
 class CommandSequenceController(BasicController):
     """

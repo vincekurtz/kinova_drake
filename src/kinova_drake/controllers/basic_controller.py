@@ -6,7 +6,7 @@
 ##
 
 from pydrake.all import *
-from kinova_station import EndEffectorTarget, GripperTarget
+from kinova_drake.kinova_station import EndEffectorTarget, GripperTarget
 
 class BasicController(LeafSystem):
     """
