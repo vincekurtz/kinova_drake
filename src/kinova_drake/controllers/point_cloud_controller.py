@@ -1,8 +1,17 @@
-from controllers.command_sequence_controller import *
-from kinova_station.common import draw_open3d_point_cloud, draw_points
+from meshcat.geometry import PointCloud
+from pydrake import *
+from pydrake.systems.framework import DiagramBuilder
+
 
 import open3d as o3d
+import numpy as np
+
+from .command_sequence_controller import CommandSequenceController
+from .command_sequence import Command, CommandSequence
 from scipy.optimize import differential_evolution
+
+from ..kinova_station import EndEffectorTarget
+
 
 class PointCloudController(CommandSequenceController):
     """

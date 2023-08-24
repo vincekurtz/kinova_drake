@@ -1,32 +1,25 @@
 from pydrake.all import *
 
-import time
 import sys
 import threading
 
-from kinova_station.common import (EndEffectorTarget, 
-                                   GripperTarget, 
-                                   EndEffectorWrenchCalculator)
+from kinova_drake.kinova_station.common import (EndEffectorTarget, GripperTarget)
 
 from kortex_api.TCPTransport import TCPTransport
 from kortex_api.RouterClient import RouterClient, RouterClientSendOptions
 from kortex_api.SessionManager import SessionManager
 
 from kortex_api.autogen.client_stubs.DeviceConfigClientRpc import DeviceConfigClient
-from kortex_api.autogen.client_stubs.DeviceManagerClientRpc import DeviceManagerClient
-from kortex_api.autogen.client_stubs.VisionConfigClientRpc import VisionConfigClient
 
 from kortex_api.autogen.client_stubs.BaseClientRpc import BaseClient
 from kortex_api.autogen.client_stubs.BaseCyclicClientRpc import BaseCyclicClient
 
-from kortex_api.autogen.messages import DeviceConfig_pb2, Session_pb2, Base_pb2, VisionConfig_pb2
+from kortex_api.autogen.messages import Session_pb2, Base_pb2
 
 import gi
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst
 import cv2
-
-import matplotlib.pyplot as plt  # DEBUG
 
 
 class KinovaStationHardwareInterface(LeafSystem):
