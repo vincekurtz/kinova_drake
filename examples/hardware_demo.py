@@ -41,7 +41,7 @@ from pydrake.all import *
 import numpy as np
 import matplotlib.pyplot as plt
 
-from kinova_station import KinovaStationHardwareInterface, EndEffectorTarget, GripperTarget
+from kinova_drake.kinova_station import KinovaStationHardwareInterface, EndEffectorTarget, GripperTarget
 
 ########################### Parameters #################################
 

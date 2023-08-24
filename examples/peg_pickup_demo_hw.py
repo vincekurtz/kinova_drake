@@ -9,8 +9,8 @@ from pydrake.all import *
 import numpy as np
 import matplotlib.pyplot as plt
 
-from kinova_station import KinovaStationHardwareInterface, EndEffectorTarget, GripperTarget
-from controllers import CommandSequenceController, CommandSequence, Command
+from kinova_drake.kinova_station import KinovaStationHardwareInterface, EndEffectorTarget
+from kinova_drake.controllers import CommandSequenceController, CommandSequence, Command
 
 ########################### Parameters #################################
 
