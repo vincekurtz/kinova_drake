@@ -8,7 +8,7 @@ from kinova_station.common import (EndEffectorTarget,
                                    GripperTarget, 
                                    EndEffectorWrenchCalculator,
                                    CameraPosePublisher)
-from simulation_station import KinovaStation, CartesianController, GripperController, JointController, add_2f_85_bushings
+from kinova_station.simulation_station import KinovaStation, CartesianController, GripperController, JointController, add_2f_85_bushings
 
 import os
 package_dir = os.path.dirname(os.path.abspath(__file__))
@@ -98,9 +98,9 @@ class ICLKinovaStation(KinovaStation):
             
             self.builder.AddSystem(arm_controller)
             # Arm (Joint) target and target type go to the controller
-            self.builder.ExportInput(arm_controller.ee_target_port,
+            self.builder.ExportInput(arm_controller.arm_target_port,
                                     "arm_target")
-            self.builder.ExportInput(arm_controller.ee_target_type_port,
+            self.builder.ExportInput(arm_controller.arm_target_type_port,
                                     "arm_target_type")
         else:
             raise ValueError(f"Invalid arm_controller_type: {self.arm_controller_type}")

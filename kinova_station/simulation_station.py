@@ -856,7 +856,7 @@ class CartesianController(LeafSystem):
         tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
 
         # Indicate what type of command we're recieving
-        target_type = self.arm_target_type_port.Eval(context)
+        target_type = self.ee_target_type_port.Eval(context)
 
         if target_type == EndEffectorTarget.kWrench:
             # Compute joint torques consistent with the desired wrench
@@ -999,8 +999,8 @@ class JointController(CartesianController):
         self.arm_target_port = self.DeclareVectorInputPort("arm_target", 
                                                                      BasicVector(self.plant.num_positions()))
         
-        self.arm_target_type_port = self.DeclareVectorInputPort("arm_target_type",
-                                                                     AbstractValue.Make(JointTarget.kPose))
+        self.arm_target_type_port = self.DeclareAbstractInputPort("arm_target_type",
+                                                                     AbstractValue.Make(JointTarget.kPosition))
 
         self.arm_position_port = self.DeclareVectorInputPort(
                                         "arm_position",
