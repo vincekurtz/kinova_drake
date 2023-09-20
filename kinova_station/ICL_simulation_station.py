@@ -228,3 +228,45 @@ class ICLKinovaStation(KinovaStation):
 
         # Build the diagram
         self.builder.BuildInto(self)
+        
+    def SetupGoalReachingScenario(self, gripper_type="hande", arm_damping=False):
+        """
+        Set up a scenario with the robot arm, a gripper, and a single peg. 
+        And connect to the Drake visualizer while we're at it.
+        """
+        goal_position = np.random.rand(3)
+        goal_rotation = [0,np.pi/2,0]
+        obs_position = goal_position + np.random.rand(3) * 0.1
+        obs_rotation = [0,np.pi/2,0]
+        self.AddGround()
+        if gripper_type == "hande":
+            self.AddArmWithHandeGripper(arm_damping=arm_damping)
+        elif gripper_type == "2f_85":
+            self.AddArmWith2f85Gripper(arm_damping=arm_damping)
+        else:
+            raise RuntimeError("Invalid gripper type: %s" % gripper_type)
+
+        X_goal = RigidTransform()
+        X_goal.set_translation(goal_position)
+        X_goal.set_rotation(RotationMatrix(RollPitchYaw(goal_rotation)))
+        self.AddManipulandFromFile(package_dir + "/../models/manipulands/peg.sdf", X_goal, 'goal')
+        
+        X_obs = RigidTransform()
+        X_obs.set_translation(obs_position)
+        X_obs.set_rotation(RotationMatrix(RollPitchYaw(obs_rotation)))
+        self.AddManipulandFromFile(package_dir + "/../models/manipulands/peg.sdf", X_obs, 'obs')
+
+        self.ConnectToDrakeVisualizer()
+
+
+    def AddManipulandFromFile(self, model_file, X_WObject, name):
+        """
+        Add an object to the simulation and place it in the given pose in the world
+        """
+        manipuland = Parser(plant=self.plant).AddModelFromFile(model_file, name)
+        body_indices = self.plant.GetBodyIndices(manipuland)
+
+        assert len(body_indices) == 1, "Only single-body objects are supported for now"
+        
+        self.object_ids.append(body_indices[0])
+        self.object_poses.append(X_WObject)

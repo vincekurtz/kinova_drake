@@ -1,5 +1,12 @@
+####
+#
+# This is a simple demo of how to use joint controller in simulation
+#
+####
+
 import numpy as np
 import matplotlib.pyplot as plt
+from copy import deepcopy
 
 from pydrake.all import *
 from pydrake.geometry import MeshcatPointCloudVisualizer
@@ -11,13 +18,9 @@ from observers.camera_viewer import CameraViewer
 
 # Make a plot of the inner workings of the station
 show_station_diagram = False
-
 # Make a plot of the diagram for this example, where only the inputs
 # and outputs of the station are shown
 show_toplevel_diagram = False
-
-# Run a quick simulation
-simulate = True
 
 # Set arm_controller_type
 arm_controller_type='joint'  # 'joint' or 'cartesian', here we use 'joint'
@@ -35,8 +38,8 @@ gripper_type = "2f_85"
 ########################################################################
 
 # Set up the kinova station
-station = ICLKinovaStation(time_step=0.002, arm_controller_type=arm_controller_type)
-station.SetupSinglePegScenario(gripper_type=gripper_type, arm_damping=False)
+station = ICLKinovaStation(time_step=0.001, arm_controller_type=arm_controller_type)
+station.SetupGoalReachingScenario(gripper_type=gripper_type, arm_damping=False)
 if include_camera:
     station.AddCamera(show_window=show_camera_window)
     station.ConnectToMeshcatVisualizer()
@@ -78,7 +81,7 @@ target_type_source.set_name("arm_type_source")
 
 # Set gripper command
 if gripper_command_type == GripperTarget.kPosition:
-    q_grip_des = np.array([0])   # open at 0, closed at 1
+    q_grip_des = np.array([0.8])   # open at 0, closed at 1
     gripper_target_source = builder.AddSystem(ConstantVectorSource(q_grip_des))
 
 elif gripper_command_type == GripperTarget.kVelocity:
@@ -158,18 +161,17 @@ if show_toplevel_diagram:
     plot_system_graphviz(diagram,max_depth=1)
     plt.show()
 
-if simulate:
-    # Set default arm positions
-    station.go_home(diagram, diagram_context, name="Home")
+# Set default arm positions
+station.go_home(diagram, diagram_context, name="Home")
 
-    # Set starting position for any objects in the scene
-    station.SetManipulandStartPositions(diagram, diagram_context)
+# Set starting position for any objects in the scene
+station.SetManipulandStartPositions(diagram, diagram_context)
 
-    # Set up simulation
-    simulator = Simulator(diagram, diagram_context)
-    simulator.set_target_realtime_rate(1.0)
-    simulator.set_publish_every_time_step(False)
+# Set up simulation
+simulator = Simulator(diagram, diagram_context)
+simulator.set_target_realtime_rate(1.0)
+simulator.set_publish_every_time_step(False)
 
-    # Run simulation
-    simulator.Initialize()
-    simulator.AdvanceTo(30.0)
+# Run simulation
+simulator.Initialize()
+simulator.AdvanceTo(30.0)

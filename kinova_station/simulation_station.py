@@ -1059,7 +1059,7 @@ class JointController(CartesianController):
             qd_nom = np.zeros(self.plant.num_velocities())
 
             # Use PD controller to map desired q, qd to desired qdd
-            Kp = 1*np.eye(self.plant.num_positions())
+            Kp = 10*np.eye(self.plant.num_positions())
             Kd = 2*np.sqrt(Kp)  # critical damping
             qdd_nom = Kp@(q_nom - q) + Kd@(qd_nom - qd)
 
