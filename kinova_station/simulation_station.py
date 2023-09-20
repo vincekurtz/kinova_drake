@@ -1,5 +1,10 @@
+import numpy as np
 from pydrake.all import *
-from kinova_station.common import (EndEffectorTarget, 
+from pydrake.geometry import (SceneGraph, MakeRenderEngineVtk, RenderEngineVtkParams, ClippingRange, RenderCameraCore, 
+                              DepthRange, ColorRenderCamera, DepthRenderCamera, DrakeVisualizer, DrakeVisualizerParams,
+                              Meshcat, MeshcatVisualizer)
+from kinova_station.common import (EndEffectorTarget,
+                                   JointTarget,
                                    GripperTarget, 
                                    EndEffectorWrenchCalculator,
                                    CameraPosePublisher)
@@ -851,7 +856,7 @@ class CartesianController(LeafSystem):
         tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
 
         # Indicate what type of command we're recieving
-        target_type = self.ee_target_type_port.Eval(context)
+        target_type = self.arm_target_type_port.Eval(context)
 
         if target_type == EndEffectorTarget.kWrench:
             # Compute joint torques consistent with the desired wrench
@@ -952,6 +957,130 @@ class CartesianController(LeafSystem):
             # Compute joint torques consistent with these desired qdd
             f_ext = MultibodyForces(self.plant)
             tau = tau_g + self.plant.CalcInverseDynamics(self.context, qdd_nom, f_ext)
+
+        else:
+            raise RuntimeError("Invalid target type %s" % target_type)
+
+        output.SetFromVector(tau)
+
+class JointController(CartesianController):
+    """
+    A controller which imitates the cartesian control mode of the Kinova gen3 arm.
+ 
+                         -------------------------
+                         |                       |
+                         |                       |
+    arm_target --------> |    JointController    | ----> applied_arm_torque
+    arm_target_type ---> |                       |
+                         |                       |
+                         |                       | ----> measured_ee_pose
+    arm_position ------> |                       | ----> measured_ee_twist
+    arm_velocity ------> |                       |
+                         |                       |
+                         |                       |
+                         -------------------------
+
+    The type of target is determined by joint_target_type, and can be
+        JointTarget.kPosition,
+        JointTarget.kVelocity,
+        JointTarget.kTorque
+
+    JointController is inherited from CartesianController so we can still calculate CalcEndEffectorPose etc.
+    To define different input ports, we need to overwrite __init__
+    """
+    def __init__(self, plant, arm_model):
+        LeafSystem.__init__(self)
+
+        self.plant: MultibodyPlant = plant
+        self.arm = arm_model
+        self.context = self.plant.CreateDefaultContext()
+
+        # Define input ports
+        self.arm_target_port = self.DeclareVectorInputPort("arm_target", 
+                                                                     BasicVector(self.plant.num_positions()))
+        
+        self.arm_target_type_port = self.DeclareVectorInputPort("arm_target_type",
+                                                                     AbstractValue.Make(JointTarget.kPose))
+
+        self.arm_position_port = self.DeclareVectorInputPort(
+                                        "arm_position",
+                                        BasicVector(self.plant.num_positions(self.arm)))
+        self.arm_velocity_port = self.DeclareVectorInputPort(
+                                        "arm_velocity",
+                                        BasicVector(self.plant.num_velocities(self.arm)))
+
+        # Define output ports
+        self.DeclareVectorOutputPort(
+                "applied_arm_torque",
+                BasicVector(self.plant.num_actuators()),
+                self.CalcArmTorques)
+
+        self.DeclareVectorOutputPort(
+                "measured_ee_pose",
+                BasicVector(6),
+                self.CalcEndEffectorPose,
+                {self.time_ticket()}   # indicate that this doesn't depend on any inputs,
+                )                      # but should still be updated each timestep
+        self.DeclareVectorOutputPort(
+                "measured_ee_twist",
+                BasicVector(6),
+                self.CalcEndEffectorTwist,
+                {self.time_ticket()})
+
+        # Define some relevant frames
+        self.world_frame = self.plant.world_frame()
+        self.ee_frame = self.plant.GetFrameByName("end_effector")
+
+        # Set joint limits (set self.{q,qd}_{min,max})
+        self.GetJointLimits()
+           
+        # Store desired end-effector pose and corresponding joint
+        # angles so we only run full IK when we need to
+        self.last_ee_pose_target = None
+        self.last_q_target = None
+    
+    def CalcArmTorques(self, context, output):
+        """
+        This method is called each timestep to determine output torques
+        """
+        q = self.arm_position_port.Eval(context)
+        qd = self.arm_velocity_port.Eval(context)
+        self.plant.SetPositions(self.context,q)
+        self.plant.SetVelocities(self.context,qd)
+
+        # Some dynamics computations
+        tau_g = -self.plant.CalcGravityGeneralizedForces(self.context)
+
+        # Indicate what type of command we're recieving
+        target_type = self.arm_target_type_port.Eval(context)
+
+        if target_type == JointTarget.kPosition:
+            q_nom = self.arm_target_port.Eval(context)
+            qd_nom = np.zeros(self.plant.num_velocities())
+
+            # Use PD controller to map desired q, qd to desired qdd
+            Kp = 1*np.eye(self.plant.num_positions())
+            Kd = 2*np.sqrt(Kp)  # critical damping
+            qdd_nom = Kp@(q_nom - q) + Kd@(qd_nom - qd)
+
+            # Compute joint torques consistent with these desired qdd
+            f_ext = MultibodyForces(self.plant)
+            tau = tau_g + self.plant.CalcInverseDynamics(self.context, qdd_nom, f_ext)
+
+        elif target_type == JointTarget.kVelocity:
+            qd_nom = self.arm_target_port.Eval(context)
+
+            # Select desired accelerations using a proportional controller
+            Kp = 10*np.eye(self.plant.num_velocities())
+            qdd_nom = Kp@(qd_nom - qd)
+
+            # Compute joint torques consistent with these desired accelerations
+            f_ext = MultibodyForces(self.plant)
+            tau = tau_g + self.plant.CalcInverseDynamics(self.context, qdd_nom, f_ext)
+
+        elif target_type == JointTarget.kTorque:
+            tau_nom = self.arm_target_port.Eval(context)
+            tau = tau_g + tau_nom
 
         else:
             raise RuntimeError("Invalid target type %s" % target_type)
