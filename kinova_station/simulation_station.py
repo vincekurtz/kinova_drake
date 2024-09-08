@@ -291,8 +291,8 @@ class KinovaStation(Diagram):
             else:
                 arm_urdf = package_dir + "/../models/gen3_6dof/urdf/GEN3-6DOF.urdf"
 
-        self.arm = Parser(plant=self.plant).AddModelFromFile(arm_urdf, "arm")
-        self.controller_arm = Parser(plant=self.controller_plant).AddModelFromFile(arm_urdf, "arm")
+        self.arm = Parser(plant=self.plant).AddModels(arm_urdf)[0]
+        self.controller_arm = Parser(plant=self.controller_plant).AddModels(arm_urdf)[0]
 
         # Fix the base of the arm to the world
         self.plant.WeldFrames(self.plant.world_frame(),
@@ -321,7 +321,7 @@ class KinovaStation(Diagram):
 
         # Add a gripper with actuation to the full simulated plant
         gripper_urdf = package_dir + "/../models/hande_gripper/urdf/robotiq_hande.urdf"
-        self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf,"gripper")
+        self.gripper = Parser(plant=self.plant).AddModels(gripper_urdf)[0]
 
         self.plant.WeldFrames(self.plant.GetFrameByName("end_effector_link",self.arm),
                               self.plant.GetFrameByName("hande_base_link", self.gripper))
@@ -330,7 +330,7 @@ class KinovaStation(Diagram):
         gripper_static_urdf = package_dir + "/../models/hande_gripper/urdf/robotiq_hande_static.urdf"
         static_gripper = Parser(plant=self.controller_plant).AddModelFromFile(
                                                                 gripper_static_urdf,
-                                                                "gripper")
+                                                                )[0]
 
         self.controller_plant.WeldFrames(
                 self.controller_plant.GetFrameByName("end_effector_link",self.controller_arm),
@@ -344,7 +344,7 @@ class KinovaStation(Diagram):
 
         # Add a gripper with actuation to the full simulated plant
         gripper_urdf = package_dir + "/../models/2f_85_gripper/urdf/robotiq_2f_85.urdf"
-        self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf,"gripper")
+        self.gripper = Parser(plant=self.plant).AddModels(gripper_urdf)[0]
 
         X_grip = RigidTransform()
         X_grip.set_rotation(RotationMatrix(RollPitchYaw([0,0,np.pi/2])))
@@ -354,9 +354,9 @@ class KinovaStation(Diagram):
 
         # Add a gripper without actuation to the controller plant
         gripper_static_urdf = package_dir + "/../models/2f_85_gripper/urdf/robotiq_2f_85_static.urdf"
-        static_gripper = Parser(plant=self.controller_plant).AddModelFromFile(
+        static_gripper = Parser(plant=self.controller_plant).AddModels(
                                                                 gripper_static_urdf,
-                                                                "gripper")
+                                                                )[0]
 
         self.controller_plant.WeldFrames(
                 self.controller_plant.GetFrameByName("end_effector_link",self.controller_arm),
@@ -411,7 +411,7 @@ class KinovaStation(Diagram):
         """
         Add an object to the simulation and place it in the given pose in the world
         """
-        manipuland = Parser(plant=self.plant).AddModelFromFile(model_file)
+        manipuland = Parser(plant=self.plant).AddModels(model_file)[0]
         body_indices = self.plant.GetBodyIndices(manipuland)
 
         assert len(body_indices) == 1, "Only single-body objects are supported for now"
@@ -515,7 +515,7 @@ class GripperController(LeafSystem):
             # This will allow us to compute the distance between fingers.
             self.plant = MultibodyPlant(1.0)  # timestep doesn't matter
             gripper_urdf = package_dir + "/../models/2f_85_gripper/urdf/robotiq_2f_85.urdf"
-            self.gripper = Parser(plant=self.plant).AddModelFromFile(gripper_urdf, "gripper")
+            self.gripper = Parser(plant=self.plant).AddModels(gripper_urdf)[0]
             self.plant.WeldFrames(self.plant.world_frame(),
                                   self.plant.GetFrameByName("robotiq_arg2f_base_link",self.gripper))
             self.plant.Finalize()
